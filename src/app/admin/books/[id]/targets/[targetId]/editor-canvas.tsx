@@ -1,7 +1,7 @@
 "use client";
 
-// 3D stage for placing content on a page. The page lies flat on a table (target +Z = world up),
-// which is how students see it when holding a phone over the book.
+// 3D stage for placing content on a page. The page lies flat on a table (target +Z = up), which is
+// how students see it when holding a phone over the book.
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Grid, OrbitControls, TransformControls, useTexture } from "@react-three/drei";
 import { Suspense, useEffect, useMemo, useState } from "react";
@@ -158,9 +158,13 @@ export default function EditorCanvas({
   onTransform: (id: string, t: Transform) => void;
   onClips: (id: string, clips: string[]) => void;
 }) {
+  // The scene is authored directly in target space (X right, Y towards the top of the page, Z out of
+  // the page) with a Z-up camera, rather than rotating a parent group to lay the page flat:
+  // TransformControls' gizmo must live in world space, and this way its X/Y/Z arrows match the
+  // inspector's X/Y/Z fields and the AR anchor exactly.
   return (
     <Canvas
-      camera={{ position: [0, 1.15, 1.25 + aspect * 0.35], fov: 40, near: 0.01, far: 50 }}
+      camera={{ position: [0, -1.25 - aspect * 0.35, 1.15], up: [0, 0, 1], fov: 40, near: 0.01, far: 50 }}
       dpr={[1, 2]}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
       onPointerMissed={(e) => {
@@ -169,11 +173,12 @@ export default function EditorCanvas({
     >
       <color attach="background" args={["#eceef6"]} />
       <Environment />
-      <hemisphereLight args={[0xffffff, 0x8888aa, 1.1]} />
-      <directionalLight position={[0.6, 2, 1.2]} intensity={1.6} />
+      <hemisphereLight args={[0xffffff, 0x8888aa, 1.1]} position={[0, 0, 1]} />
+      <directionalLight position={[0.6, -1.2, 2]} intensity={1.6} />
       <Grid
         infiniteGrid
-        position={[0, -0.003, 0]}
+        rotation={[Math.PI / 2, 0, 0]}
+        position={[0, 0, -0.003]}
         cellSize={0.05}
         sectionSize={0.25}
         cellColor="#d6d8e6"
@@ -181,23 +186,21 @@ export default function EditorCanvas({
         fadeDistance={5}
         fadeStrength={1.5}
       />
-      <group rotation={[-Math.PI / 2, 0, 0]}>
-        <Suspense fallback={null}>
-          <Page url={imageUrl} aspect={aspect} onDeselect={() => onSelect(null)} />
-        </Suspense>
-        {contents.map((content) => (
-          <ContentNode
-            key={content.id}
-            data={content}
-            selected={content.id === selectedId}
-            mode={mode}
-            onSelect={onSelect}
-            onTransform={onTransform}
-            onClips={onClips}
-          />
-        ))}
-      </group>
-      <OrbitControls makeDefault minDistance={0.3} maxDistance={6} maxPolarAngle={Math.PI * 0.49} target={[0, 0.08, 0]} />
+      <Suspense fallback={null}>
+        <Page url={imageUrl} aspect={aspect} onDeselect={() => onSelect(null)} />
+      </Suspense>
+      {contents.map((content) => (
+        <ContentNode
+          key={content.id}
+          data={content}
+          selected={content.id === selectedId}
+          mode={mode}
+          onSelect={onSelect}
+          onTransform={onTransform}
+          onClips={onClips}
+        />
+      ))}
+      <OrbitControls makeDefault minDistance={0.3} maxDistance={6} maxPolarAngle={Math.PI * 0.49} target={[0, 0, 0.08]} />
     </Canvas>
   );
 }

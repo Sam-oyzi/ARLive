@@ -269,6 +269,8 @@ export function TargetEditor({ target, initialContents }: { target: Target; init
   );
 }
 
+const AXIS_COLOR: Record<string, string> = { X: "text-rose-500", Y: "text-emerald-500", Z: "text-blue-500" };
+
 function NumberInput({ value, onChange, step, label, suffix }: { value: number; onChange: (v: number) => void; step: number; label: string; suffix?: string }) {
   const decimals = step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3;
   const [text, setText] = useState(value.toFixed(decimals));
@@ -278,7 +280,8 @@ function NumberInput({ value, onChange, step, label, suffix }: { value: number; 
   }, [value, focused, decimals]);
   return (
     <label className="flex h-9 items-center rounded-xl border border-ink-200 bg-white pl-2.5 text-xs focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-100">
-      <span className="w-3 font-bold text-ink-400">{label}</span>
+      {/* Same colours as the gizmo arrows: X red, Y green, Z blue */}
+      <span className={cn("w-3 font-bold", AXIS_COLOR[label] ?? "text-ink-400")}>{label}</span>
       <input
         type="number"
         step={step}
