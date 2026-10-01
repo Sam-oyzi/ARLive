@@ -1,13 +1,14 @@
 "use client";
 
-import { ArrowDown, ArrowUp, MoreHorizontal, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ImageUp, MoreHorizontal, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useOptimistic, useState, useTransition } from "react";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 import { Confirm } from "@/components/confirm";
 import { Button } from "@/components/ui/button";
 import { Dropdown, DropdownContent, DropdownItem, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
 import { Switch } from "@/components/ui/switch";
 import { runAction } from "@/lib/action-client";
+import { replaceTargetImageFromFile, TARGET_IMAGE_ACCEPT } from "@/lib/target-image-client";
 import { deleteBook, deleteTarget, moveTarget, setBookPublished } from "@/server/actions/books";
 
 export function PublishSwitch({ bookId, published, disabled }: { bookId: string; published: boolean; disabled?: boolean }) {
@@ -63,6 +64,7 @@ export function BookMenu({ bookId, title }: { bookId: string; title: string }) {
 
 export function TargetMenu({ targetId, name, first, last }: { targetId: string; name: string; first: boolean; last: boolean }) {
   const [deleting, setDeleting] = useState(false);
+  const imageInput = useRef<HTMLInputElement>(null);
   return (
     <>
       <Dropdown>
@@ -75,6 +77,9 @@ export function TargetMenu({ targetId, name, first, last }: { targetId: string; 
           </button>
         </DropdownTrigger>
         <DropdownContent>
+          <DropdownItem onSelect={() => imageInput.current?.click()}>
+            <ImageUp /> Replace image
+          </DropdownItem>
           {!first && (
             <DropdownItem onSelect={() => runAction(moveTarget(targetId, -1))}>
               <ArrowUp /> Move earlier
@@ -85,7 +90,7 @@ export function TargetMenu({ targetId, name, first, last }: { targetId: string; 
               <ArrowDown /> Move later
             </DropdownItem>
           )}
-          {(!first || !last) && <DropdownSeparator />}
+          <DropdownSeparator />
           <DropdownItem danger onSelect={() => setDeleting(true)}>
             <Trash2 /> Delete page
           </DropdownItem>
@@ -97,6 +102,18 @@ export function TargetMenu({ targetId, name, first, last }: { targetId: string; 
         title={`Delete “${name}”?`}
         description="The page image and everything placed on it are deleted. Recompile the book afterwards."
         onConfirm={() => runAction(deleteTarget(targetId))}
+      />
+      {/* Lives outside the menu: the menu unmounts when it closes, before the file picker returns. */}
+      <input
+        ref={imageInput}
+        type="file"
+        accept={TARGET_IMAGE_ACCEPT}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) replaceTargetImageFromFile(targetId, file);
+          e.target.value = "";
+        }}
       />
     </>
   );

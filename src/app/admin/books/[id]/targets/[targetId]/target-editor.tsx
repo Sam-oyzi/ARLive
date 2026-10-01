@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import {
   Box,
   Crosshair,
@@ -27,6 +28,7 @@ import { Progress } from "@/components/ui/misc";
 import { Switch } from "@/components/ui/switch";
 import { runAction } from "@/lib/action-client";
 import { CONTENT_META, defaultTransform, type ContentData, type ContentType } from "@/lib/content";
+import { replaceTargetImageFromFile, TARGET_IMAGE_ACCEPT } from "@/lib/target-image-client";
 import { uploadFile } from "@/lib/upload-client";
 import { cn } from "@/lib/utils";
 import { addContent, deleteContent, saveContents, updateTarget } from "@/server/actions/books";
@@ -265,6 +267,7 @@ export function TargetEditor({ target, initialContents }: { target: Target; init
 
         {selected && <Inspector key={selected.id} content={selected} clips={clips[selected.id] ?? []} onChange={(c) => patch(selected.id, c)} onDelete={() => remove(selected.id)} />}
 
+        <TargetImageCard target={target} />
         <PageDetails target={target} />
       </div>
     </div>
@@ -422,6 +425,49 @@ function Inspector({
             )}
           </div>
         )}
+      </div>
+    </Card>
+  );
+}
+
+function TargetImageCard({ target }: { target: Target }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [progress, setProgress] = useState<number | null>(null);
+  const router = useRouter();
+
+  async function onFile(file: File) {
+    setProgress(0);
+    const ok = await replaceTargetImageFromFile(target.id, file, setProgress);
+    setProgress(null);
+    if (ok) router.refresh();
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="mb-3 text-xs font-semibold tracking-wide text-ink-500 uppercase">Target image</div>
+      <input
+        ref={input}
+        type="file"
+        accept={TARGET_IMAGE_ACCEPT}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onFile(file);
+          e.target.value = "";
+        }}
+      />
+      <div className="flex gap-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={target.imageUrl} alt="" className="h-24 w-[72px] shrink-0 rounded-xl object-cover ring-1 ring-ink-200" />
+        <div className="flex min-w-0 flex-col justify-between gap-2">
+          <p className="text-xs leading-relaxed text-ink-500">
+            The picture students point their camera at. Replacing it keeps everything placed on this page; recompile the book afterwards.
+          </p>
+          <Button variant="outline" size="sm" disabled={progress !== null} onClick={() => input.current?.click()}>
+            {progress !== null ? <LoaderCircle className="animate-spin" /> : <ImageIcon />}
+            {progress !== null ? `Uploading ${Math.round(progress)}%` : "Replace image"}
+          </Button>
+        </div>
       </div>
     </Card>
   );

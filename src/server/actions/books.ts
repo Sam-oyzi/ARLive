@@ -117,7 +117,10 @@ export async function updateTarget(_prev: ActionState, formData: FormData): Prom
 }
 
 /** Swap the image of a page (e.g. a better scan). The book will need recompiling. */
-export async function replaceTargetImage(targetId: string, image: { imageUrl: string; width: number; height: number }) {
+export async function replaceTargetImage(
+  targetId: string,
+  image: { imageUrl: string; width: number; height: number },
+): Promise<ActionState> {
   try {
     await assertRole(["SUPER_ADMIN"]);
     if (!image.imageUrl.startsWith("/files/targets/")) return { error: "Invalid image" };
