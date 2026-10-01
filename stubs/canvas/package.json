@@ -1,0 +1,6 @@
+{
+  "name": "canvas",
+  "version": "2.11.2",
+  "description": "Stub: mind-ar lists node-canvas for its Node-side tooling, but ARLive only uses the browser bundles. Avoids a native build.",
+  "main": "index.js"
+}

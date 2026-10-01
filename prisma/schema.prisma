@@ -1,0 +1,188 @@
+// ARLive data model.
+// SQLite for local development; switch `provider` to "postgresql" for production.
+// Roles and statuses are stored as strings so the schema stays portable (see src/lib/roles.ts).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model School {
+  id           String          @id @default(cuid())
+  name         String
+  slug         String          @unique
+  city         String?
+  country      String?
+  logoUrl      String?
+  color        String          @default("#5b5bf6")
+  /// Code students type on /join to create their own account in this school.
+  joinCode     String          @unique
+  active       Boolean         @default(true)
+  maxStudents  Int?
+  contactEmail String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  users        User[]
+  access       SchoolBook[]
+  requests     AccessRequest[]
+  scans        ScanEvent[]
+}
+
+model User {
+  id           String      @id @default(cuid())
+  name         String
+  /// Login identifier: an email for staff, a short handle for students.
+  username     String      @unique
+  passwordHash String
+  /// SUPER_ADMIN | SCHOOL_ADMIN | STUDENT
+  role         String      @default("STUDENT")
+  grade        String?
+  active       Boolean     @default(true)
+  schoolId     String?
+  school       School?     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  lastLoginAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  scans        ScanEvent[]
+
+  @@index([schoolId, role])
+}
+
+model Subject {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  /// Key into SUBJECT_ICONS (src/lib/subject-icons.tsx)
+  icon        String   @default("atom")
+  color       String   @default("#5b5bf6")
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  books       Book[]
+}
+
+/// A printed book (or chapter). All of its pages are compiled into one .mind file.
+model Book {
+  id          String          @id @default(cuid())
+  title       String
+  description String?
+  gradeLevel  String?
+  coverUrl    String?
+  published   Boolean         @default(false)
+  subjectId   String
+  subject     Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  mindUrl     String?
+  /// Signature of the targets that went into mindUrl; differs from the live signature when a recompile is needed.
+  mindHash    String?
+  compiledAt  DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  targets     Target[]
+  access      SchoolBook[]
+  requests    AccessRequest[]
+  scans       ScanEvent[]
+
+  @@index([subjectId])
+}
+
+/// One scannable page/image in a book.
+model Target {
+  id          String      @id @default(cuid())
+  bookId      String
+  book        Book        @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  imageUrl    String
+  width       Int
+  height      Int
+  order       Int         @default(0)
+  /// Position of this target inside the book's compiled .mind file.
+  targetIndex Int?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  contents    Content[]
+  scans       ScanEvent[]
+
+  @@index([bookId, order])
+}
+
+/// Something shown when a target is recognised. Transforms are in target space:
+/// 1 unit = target width, origin = target centre, +Z = out of the page. Rotations in degrees.
+model Content {
+  id        String   @id @default(cuid())
+  targetId  String
+  target    Target   @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  /// MODEL | VIDEO | IMAGE | AUDIO | TEXT
+  type      String
+  name      String
+  url       String?
+  text      String?
+  color     String?
+  posX      Float    @default(0)
+  posY      Float    @default(0)
+  posZ      Float    @default(0)
+  rotX      Float    @default(0)
+  rotY      Float    @default(0)
+  rotZ      Float    @default(0)
+  scale     Float    @default(1)
+  autoplay  Boolean  @default(true)
+  loop      Boolean  @default(true)
+  /// Animation clip to play for MODEL; null plays every clip.
+  animation String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([targetId])
+}
+
+/// Which books a school's students can use.
+model SchoolBook {
+  schoolId  String
+  bookId    String
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  grantedAt DateTime @default(now())
+
+  @@id([schoolId, bookId])
+  @@index([bookId])
+}
+
+/// A school asking the platform admin for access to a book.
+model AccessRequest {
+  id        String    @id @default(cuid())
+  schoolId  String
+  bookId    String
+  school    School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  book      Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  /// PENDING | APPROVED | REJECTED
+  status    String    @default("PENDING")
+  message   String?
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+
+  @@index([status])
+  @@index([schoolId, bookId])
+}
+
+model ScanEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  schoolId  String?
+  school    School?  @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  bookId    String
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  targetId  String
+  target    Target   @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([schoolId, createdAt])
+  @@index([bookId, createdAt])
+  @@index([createdAt])
+}
