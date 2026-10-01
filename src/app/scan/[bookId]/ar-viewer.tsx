@@ -274,8 +274,9 @@ export function ARViewer({ book, targets, backHref }: Props) {
         />
       )}
 
-      {/* top bar */}
-      <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 px-4 safe-top">
+      {/* top bar — above the intro/loading/error screens (z-20) so Back is always reachable,
+          below the photo preview (z-30) which has its own close button */}
+      <div className="absolute inset-x-0 top-0 z-[25] flex items-center gap-3 px-4 safe-top">
         <Link href={backHref} className={cn("grid size-11 shrink-0 place-items-center rounded-full", glass)} aria-label="Back">
           <ArrowLeft className="size-5" />
         </Link>
