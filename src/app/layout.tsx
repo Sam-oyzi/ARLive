@@ -23,8 +23,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${jakarta.variable} ${bricolage.variable}`}>
-      <body className="min-h-dvh">
+    // suppressHydrationWarning: browser extensions (ColorZilla, Grammarly, password managers) add
+    // attributes to <html>/<body> before React loads. Only these two elements' own attributes are
+    // exempted; mismatches anywhere inside are still reported.
+    <html lang="en" className={`${jakarta.variable} ${bricolage.variable}`} suppressHydrationWarning>
+      <body className="min-h-dvh" suppressHydrationWarning>
         {children}
         <Toaster
           position="top-center"
