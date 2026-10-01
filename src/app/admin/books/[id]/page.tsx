@@ -7,7 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { compileState } from "@/lib/books";
 import { db } from "@/lib/db";
 import { SubjectIcon } from "@/lib/subject-icons";
-import { plural } from "@/lib/utils";
+import { plural, timeAgo } from "@/lib/utils";
 import { BookDialog } from "../book-dialog";
 import { BookMenu, PublishSwitch, TargetMenu } from "./book-controls";
 import { CompileCard } from "./compile-card";
@@ -138,7 +138,7 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
           <CompileCard
             bookId={book.id}
             state={state}
-            compiledAt={book.compiledAt?.toISOString() ?? null}
+            compiledLabel={book.compiledAt ? `Last compiled ${timeAgo(book.compiledAt)}` : "Not compiled yet"}
             targets={book.targets.map((t) => ({ id: t.id, imageUrl: t.imageUrl }))}
           />
 

@@ -10,19 +10,20 @@ import { Card, CardBody } from "@/components/ui/card";
 import { Progress } from "@/components/ui/misc";
 import { compileTargets } from "@/ar/compile";
 import type { CompileState } from "@/lib/books";
-import { plural, timeAgo } from "@/lib/utils";
+import { plural } from "@/lib/utils";
 
 /** Runs MindAR's target compiler in this browser tab, then uploads the .mind file. */
 export function CompileCard({
   bookId,
   targets,
   state,
-  compiledAt,
+  compiledLabel,
 }: {
   bookId: string;
   targets: { id: string; imageUrl: string }[];
   state: CompileState;
-  compiledAt: string | null;
+  /** e.g. "Last compiled 3 minutes ago", computed on the server so it can't mismatch on hydration */
+  compiledLabel: string;
 }) {
   const [progress, setProgress] = useState<number | null>(null);
   const [stage, setStage] = useState("");
@@ -68,7 +69,7 @@ export function CompileCard({
             <div>
               <div className="font-display font-semibold">AR compiler</div>
               <div className="text-xs text-white/60">
-                {compiledAt ? `Last compiled ${timeAgo(compiledAt)}` : "Not compiled yet"}
+                {compiledLabel}
               </div>
             </div>
           </div>

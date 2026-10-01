@@ -6,9 +6,10 @@ import type { DayCount } from "@/lib/stats";
 /** Single-series column chart: scans per day. Hover any column for its value. */
 export function ScansChart({ data, height = 180 }: { data: DayCount[]; height?: number }) {
   const [hover, setHover] = useState<number | null>(null);
-  const max = Math.max(1, ...data.map((d) => d.count));
+  // Round the axis up to an even number so the midline tick is a whole number.
+  const max = Math.max(2, Math.ceil(Math.max(...data.map((d) => d.count)) / 2) * 2);
   const peak = data.reduce((best, d, i) => (d.count > (data[best]?.count ?? -1) ? i : best), 0);
-  const ticks = [max, Math.round(max / 2), 0];
+  const ticks = [max, max / 2, 0];
 
   return (
     <div>

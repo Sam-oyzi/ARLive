@@ -152,7 +152,9 @@ export class ARSession {
     video.setAttribute("playsinline", "");
     video.setAttribute("autoplay", "");
     video.muted = true;
-    Object.assign(video.style, { position: "absolute", zIndex: "0", objectFit: "cover" });
+    // maxWidth: CSS resets (Tailwind preflight) cap videos at 100% width, which would crop the
+    // feed and misalign it with the 3D overlay; resize() sizes it exactly instead.
+    Object.assign(video.style, { position: "absolute", zIndex: "0", maxWidth: "none", maxHeight: "none" });
     this.container.prepend(video);
     this.video = video;
 

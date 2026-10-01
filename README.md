@@ -58,17 +58,27 @@ The demo school's join code is `DEMO2026`.
 
 If the sample book shows **Not compiled**, open it under *Books & targets* and click **Compile**.
 
-### Testing on a phone
+### Testing on a phone (laptop without a camera)
 
-Browsers only open the camera on HTTPS. Run the dev server with a self-signed certificate and open
-it from a phone on the same Wi-Fi:
+Browsers only open the camera over HTTPS, so start the dev server in phone mode:
 
 ```bash
-npm run dev:https
+npm run dev:phone
 ```
 
-Then browse to `https://<your-computer-ip>:3000` and accept the certificate warning. A tunnel
-(ngrok, Cloudflare Tunnel) also works and gives you a real certificate.
+It creates a self-signed certificate for `localhost` and your laptop's Wi-Fi IP (nothing is
+installed on your computer) and prints the phone URL. Then:
+
+1. On the laptop, open `https://localhost:3000` (accept the certificate warning) and sign in.
+2. Open a book's scanner (`Test in AR` in the admin, or a subject page as a student). A
+   **Continue on your phone** QR code appears.
+3. Scan it with the phone (same Wi-Fi). Accept the certificate warning once
+   (Chrome: *Advanced → Proceed*; Safari: *Show details → visit this website*). The phone is
+   signed in as you for that page (the link expires after 5 minutes).
+4. Tap **Start scanning** and point the phone at the target — printed, or just shown full screen
+   on the laptop's monitor.
+
+If the phone can't connect, allow Node.js through the Windows firewall on private networks.
 
 ## How AR content works
 

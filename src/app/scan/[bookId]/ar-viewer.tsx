@@ -76,7 +76,8 @@ export function ARViewer({ book, targets, backHref }: Props) {
   useEffect(() => {
     // Start downloading the tracking engine while the student reads the intro.
     loadMindAR().catch(() => {});
-    setIsDesktop(window.matchMedia("(pointer: fine)").matches && window.innerWidth >= 900);
+    // A mouse/trackpad means a laptop or desktop: offer the phone QR code up front.
+    setIsDesktop(window.matchMedia("(pointer: fine)").matches);
     setInsecure(!window.isSecureContext);
   }, []);
 
@@ -407,11 +408,7 @@ export function ARViewer({ book, targets, backHref }: Props) {
             </button>
             <p className="mt-3 text-xs text-white/45">We&apos;ll ask for camera access. Nothing is recorded.</p>
 
-            {isDesktop && (
-              <div className="mt-8 w-full text-left text-ink-900">
-                <PhoneQR path={`/scan/${book.id}`} />
-              </div>
-            )}
+            {isDesktop && <PhoneQR path={`/scan/${book.id}`} dark className="mt-8 w-full text-left" />}
           </div>
         </div>
       )}
@@ -450,6 +447,8 @@ export function ARViewer({ book, targets, backHref }: Props) {
                 </button>
               )}
             </div>
+            {/* No usable camera here (typical on laptops): hand over to a phone. */}
+            {error.code !== "targets" && <PhoneQR path={`/scan/${book.id}`} dark size={120} className="mt-6 w-full text-left" />}
           </div>
         </div>
       )}

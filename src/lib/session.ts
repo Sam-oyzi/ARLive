@@ -25,10 +25,34 @@ export async function signSession(payload: SessionPayload): Promise<string> {
     .sign(key());
 }
 
+export const HANDOFF_TTL = 5 * 60; // seconds
+
+/** Short-lived token in a QR code that signs the same user in on their phone. */
+export async function signHandoff(uid: string, path: string): Promise<string> {
+  return new SignJWT({ uid, path, purpose: "handoff" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${HANDOFF_TTL}s`)
+    .sign(key());
+}
+
+export async function verifyHandoff(token: string | null): Promise<{ uid: string; path: string } | null> {
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, key(), { algorithms: ["HS256"] });
+    if (payload.purpose !== "handoff" || typeof payload.uid !== "string" || typeof payload.path !== "string") return null;
+    return { uid: payload.uid, path: payload.path };
+  } catch {
+    return null;
+  }
+}
+
 export async function verifySession(token: string | undefined): Promise<SessionPayload | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, key(), { algorithms: ["HS256"] });
+    // Handoff tokens share the signing key but must never work as a session.
+    if (payload.purpose !== undefined) return null;
     if (typeof payload.uid !== "string" || typeof payload.role !== "string") return null;
     return {
       uid: payload.uid,
