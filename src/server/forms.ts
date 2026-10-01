@@ -9,8 +9,19 @@ export type ActionState<T = undefined> =
       message?: string;
       fieldErrors?: Record<string, string[] | undefined>;
       data?: T;
+      /** What the user typed (never passwords), so a form can refill itself after an error. */
+      values?: Record<string, string>;
     }
   | undefined;
+
+/** The submitted text fields minus secrets, to echo back with an error. */
+export function echoValues(formData: FormData, omit: string[] = ["password"]): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const [key, value] of formData.entries()) {
+    if (typeof value === "string" && !key.startsWith("$ACTION") && !omit.includes(key)) values[key] = value;
+  }
+  return values;
+}
 
 /** Parse FormData into a zod schema; empty strings become undefined so optional fields work. */
 export function parseForm<S extends z.ZodType>(schema: S, formData: FormData) {

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { createSession, destroySession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { homeFor } from "@/lib/roles";
-import { failure, invalid, parseForm, type ActionState } from "../forms";
+import { echoValues, failure, invalid, parseForm, type ActionState } from "../forms";
 
 // Compared against when the username doesn't exist, so response time doesn't reveal valid usernames.
 const DUMMY_HASH = "$2b$10$CwTycUXWue0Thq9StjUM0uJ8.Y5Yb6dO7kQ6wV4G1oCrZQ5Kk7v2e";
@@ -21,7 +21,16 @@ const loginSchema = z.object({
   next: z.string().optional(),
 });
 
+/** On error, echo the typed values back so the form doesn't come back empty. */
+function keepValues(result: ActionState, formData: FormData): ActionState {
+  return result?.error ? { ...result, values: echoValues(formData) } : result;
+}
+
 export async function login(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  return keepValues(await attemptLogin(formData), formData);
+}
+
+async function attemptLogin(formData: FormData): Promise<ActionState> {
   const parsed = parseForm(loginSchema, formData);
   if (!parsed.success) return invalid(parsed.error);
   const { username, password, next } = parsed.data;
@@ -43,7 +52,10 @@ export async function login(_prev: ActionState, formData: FormData): Promise<Act
 }
 
 const joinSchema = z.object({
-  joinCode: z.string({ error: "Enter your school code" }).toUpperCase(),
+  // Forgiving about case, spaces and dashes: "demo 2026" works too.
+  joinCode: z
+    .string({ error: "Enter your school code" })
+    .transform((code) => code.toUpperCase().replace(/[\s-]/g, "")),
   name: z.string({ error: "Enter your full name" }).min(2, "Enter your full name").max(80),
   username: z
     .string({ error: "Choose a username" })
@@ -54,6 +66,10 @@ const joinSchema = z.object({
 });
 
 export async function joinSchool(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  return keepValues(await attemptJoin(formData), formData);
+}
+
+async function attemptJoin(formData: FormData): Promise<ActionState> {
   const parsed = parseForm(joinSchema, formData);
   if (!parsed.success) return invalid(parsed.error);
   const { joinCode, name, username, password, grade } = parsed.data;
