@@ -146,7 +146,7 @@ export function TargetEditor({ target, initialContents }: { target: Target; init
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
+    <div className="grid gap-4 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_380px]">
       <input
         ref={fileInput}
         type="file"
@@ -159,7 +159,8 @@ export function TargetEditor({ target, initialContents }: { target: Target; init
       />
 
       {/* Stage */}
-      <Card className="relative h-[min(72vh,720px)] min-h-[420px] overflow-hidden">
+      {/* Stage: fixed height when stacked, fills the workspace height on wide screens */}
+      <Card className="relative h-[65vh] min-h-[420px] overflow-hidden xl:h-full xl:min-h-0">
         <EditorCanvas
           imageUrl={target.imageUrl}
           aspect={target.height / target.width}
@@ -197,8 +198,9 @@ export function TargetEditor({ target, initialContents }: { target: Target; init
         </div>
       </Card>
 
-      {/* Panel */}
-      <div className="flex flex-col gap-4">
+      {/* Panel: scrolls on its own so the 3D view stays in place */}
+      <div className="flex flex-col gap-4 xl:min-h-0 xl:overflow-y-auto xl:pr-1 xl:pb-1 [&>*]:shrink-0">
+
         <Card className="p-5">
           <div className="mb-3 text-xs font-semibold tracking-wide text-ink-500 uppercase">Add to this page</div>
           <div className="grid grid-cols-5 gap-2">

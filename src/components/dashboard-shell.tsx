@@ -142,6 +142,7 @@ export function DashboardShell({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   useEffect(() => setOpen(false), [pathname]);
+  const workspace = /^\/admin\/books\/[^/]+\/targets\//.test(pathname);
 
   const sidebar = (
     <div className="flex h-full flex-col gap-6 px-4 py-5">
@@ -178,7 +179,15 @@ export function DashboardShell({
         </Sheet.Root>
       </header>
 
-      <main className="mx-auto w-full max-w-[1280px] px-4 py-8 sm:px-8 lg:py-10">{children}</main>
+      <main
+        className={cn(
+          "w-full",
+          // The 3D scene editor is a workspace: use the whole screen instead of the reading column.
+          workspace ? "px-4 py-4 sm:px-6" : "mx-auto max-w-[1280px] px-4 py-8 sm:px-8 lg:py-10",
+        )}
+      >
+        {children}
+      </main>
     </div>
   );
 }

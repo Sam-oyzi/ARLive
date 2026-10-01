@@ -25,15 +25,25 @@ export default async function TargetEditorPage({ params }: { params: Promise<{ i
   const next = siblings[index + 1];
 
   return (
-    <>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <Link href={`/admin/books/${id}`} className="mb-2 inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-900">
-            <ArrowLeft className="size-4" /> {target.book.title}
+    // On wide screens the editor is a full-height workspace: compact header, then the editor fills
+    // the rest of the viewport (main has 1rem padding top and bottom).
+    <div className="flex flex-col xl:h-[calc(100dvh-2rem)]">
+      <div className="mb-4 flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link
+            href={`/admin/books/${id}`}
+            className="grid size-9 shrink-0 place-items-center rounded-xl border border-ink-200 bg-white text-ink-600 shadow-soft hover:text-ink-900"
+            aria-label={`Back to ${target.book.title}`}
+            title={target.book.title}
+          >
+            <ArrowLeft className="size-4" />
           </Link>
-          <h1 className="truncate font-display text-2xl font-bold tracking-tight text-ink-900">
-            <span className="text-ink-400">#{index + 1}</span> {target.name}
-          </h1>
+          <div className="min-w-0">
+            <div className="truncate text-xs font-medium text-ink-500">{target.book.title}</div>
+            <h1 className="truncate font-display text-lg font-bold tracking-tight text-ink-900">
+              <span className="text-ink-400">#{index + 1}</span> {target.name}
+            </h1>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-xl border border-ink-200 bg-white shadow-soft">
@@ -67,6 +77,6 @@ export default async function TargetEditorPage({ params }: { params: Promise<{ i
         target={{ id: target.id, name: target.name, description: target.description, imageUrl: target.imageUrl, width: target.width, height: target.height }}
         initialContents={target.contents as ContentData[]}
       />
-    </>
+    </div>
   );
 }
