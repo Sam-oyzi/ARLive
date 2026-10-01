@@ -138,6 +138,7 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
           <CompileCard
             bookId={book.id}
             state={state}
+            published={book.published}
             compiledLabel={book.compiledAt ? `Last compiled ${timeAgo(book.compiledAt)}` : "Not compiled yet"}
             targets={book.targets.map((t) => ({ id: t.id, imageUrl: t.imageUrl }))}
           />

@@ -18,12 +18,14 @@ export function CompileCard({
   targets,
   state,
   compiledLabel,
+  published,
 }: {
   bookId: string;
   targets: { id: string; imageUrl: string }[];
   state: CompileState;
   /** e.g. "Last compiled 3 minutes ago", computed on the server so it can't mismatch on hydration */
   compiledLabel: string;
+  published: boolean;
 }) {
   const [progress, setProgress] = useState<number | null>(null);
   const [stage, setStage] = useState("");
@@ -47,7 +49,9 @@ export function CompileCard({
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? "Upload failed");
-      toast.success(`Compiled ${plural(targets.length, "page")} — AR is ready`);
+      toast.success(`Compiled ${plural(targets.length, "page")} — AR is ready`, {
+        description: published ? undefined : "Switch on Published (top right) so students can see this book.",
+      });
       router.refresh();
     } catch (error) {
       toast.error((error as Error).message || "Compilation failed");
