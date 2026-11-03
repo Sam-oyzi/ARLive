@@ -14,7 +14,7 @@ export function PrintBook({
   format,
   pages,
 }: {
-  book: { id: string; title: string; color: string };
+  book: { id: string; title: string };
   format: { label: string; widthMm: number; heightMm: number };
   pages: PrintPage[];
 }) {
@@ -105,8 +105,8 @@ export function PrintBook({
               <img src={page.imageUrl} alt="" className="absolute inset-0 size-full object-cover" />
               {badges && page.ar && (
                 <div
-                  className={cn("absolute bottom-[5mm] flex items-center gap-[1.5mm] rounded-[2mm] px-[2mm] py-[1.2mm] text-white", recto ? "right-[5mm]" : "left-[5mm]")}
-                  style={{ background: book.color, fontSize: "2.6mm", fontWeight: 700, printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}
+                  className={cn("absolute bottom-[5mm] flex items-center gap-[1.5mm] rounded-[2mm] border border-[#a88b61] bg-[#f6eddb] px-[2mm] py-[1.2mm] text-[#624631]", recto ? "right-[5mm]" : "left-[5mm]")}
+                  style={{ fontSize: "2.6mm", fontWeight: 700, printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}
                 >
                   <ScanLine style={{ width: "3.4mm", height: "3.4mm" }} /> AR · scan this page
                 </div>

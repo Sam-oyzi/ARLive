@@ -9,7 +9,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="flex flex-1 items-center justify-center py-10">
           <div className="w-full max-w-sm animate-fade-up">{children}</div>
         </div>
-        <p className="text-xs text-ink-400">© {new Date().getFullYear()} ARLive · Augmented reality for every classroom</p>
+        <p className="text-xs text-ink-400">© {new Date().getFullYear()} Sketchling · Illustrated stories for kids</p>
       </div>
 
       <div className="relative hidden overflow-hidden bg-ink-950 lg:flex lg:items-center lg:justify-center">

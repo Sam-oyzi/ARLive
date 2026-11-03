@@ -12,14 +12,14 @@ export default async function PrintPage({ params }: { params: Promise<{ bookId: 
   const { bookId } = await params;
   const book = await db.book.findUnique({
     where: { id: bookId },
-    include: { subject: true, targets: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
+    include: { targets: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
   });
   if (!book) notFound();
   const format = bookFormat(book.format);
 
   return (
     <PrintBook
-      book={{ id: book.id, title: book.title, color: book.subject.color }}
+      book={{ id: book.id, title: book.title }}
       format={{ label: format.label, widthMm: format.widthMm, heightMm: format.heightMm }}
       pages={book.targets.map((t) => ({ id: t.id, imageUrl: t.imageUrl, title: t.name, ar: t.ar }))}
     />

@@ -34,7 +34,7 @@ export default async function CatalogPage() {
     <>
       <PageHeader
         title="Book catalog"
-        description="Every AR book available on ARLive. Request the ones your classes use — the ARLive team will enable them for your school."
+        description="Browse Sketchling’s storybooks and request the ones you’d like to share with your classes."
       />
       {withBooks.length === 0 ? (
         <EmptyState icon={Library} title="The catalog is empty" description="New books will appear here as soon as they're published." />

@@ -53,7 +53,7 @@ export default async function AdminDashboard() {
       <PageHeader
         eyebrow={new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date())}
         title={`Hello, ${user.name.split(" ")[0]}`}
-        description="Here's how ARLive is being used across your schools."
+        description="Here's how your schools are using Sketchling."
         actions={
           <>
             <ButtonLink href="/admin/schools" variant="outline">

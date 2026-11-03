@@ -1,11 +1,11 @@
 import type { MetadataRoute } from "next";
 
-// Lets students "Add to Home Screen" so ARLive opens full-screen like an app.
+// Lets students "Add to Home Screen" so Sketchling opens full-screen like an app.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "ARLive",
-    short_name: "ARLive",
-    description: "Scan your textbook and explore it in 3D.",
+    name: "Sketchling",
+    short_name: "Sketchling",
+    description: "Read illustrated stories for kids and explore selected pages in 3D.",
     start_url: "/learn",
     display: "standalone",
     orientation: "portrait",

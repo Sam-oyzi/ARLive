@@ -9,11 +9,11 @@ const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-br
 const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-instrument", display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "ARLive — Augmented reality for every classroom", template: "%s · ARLive" },
+  title: { default: "Sketchling — Illustrated stories for kids", template: "%s · Sketchling" },
   description:
-    "Scan a textbook page and watch molecules, organs and planets come alive in 3D. ARLive lets schools bring augmented reality to every subject.",
-  applicationName: "ARLive",
-  appleWebApp: { capable: true, title: "ARLive", statusBarStyle: "black-translucent" },
+    "Read illustrated children's stories together and use your phone to bring selected pages to life in 3D.",
+  applicationName: "Sketchling",
+  appleWebApp: { capable: true, title: "Sketchling", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

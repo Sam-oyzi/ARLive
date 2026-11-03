@@ -21,26 +21,26 @@ import { getSession } from "@/lib/auth";
 import { homeFor } from "@/lib/roles";
 import { SubjectIcon } from "@/lib/subject-icons";
 
-const SUBJECTS = [
-  { name: "Chemistry", icon: "flask", color: "#8b5cf6" },
-  { name: "Biology", icon: "dna", color: "#10b981" },
-  { name: "Physics", icon: "atom", color: "#3b82f6" },
-  { name: "Geography", icon: "earth", color: "#0ea5e9" },
-  { name: "History", icon: "landmark", color: "#f59e0b" },
-  { name: "Astronomy", icon: "orbit", color: "#6366f1" },
-  { name: "Mathematics", icon: "sigma", color: "#ec4899" },
-  { name: "Anatomy", icon: "heart", color: "#ef4444" },
-  { name: "Engineering", icon: "cpu", color: "#14b8a6" },
-  { name: "Botany", icon: "leaf", color: "#84cc16" },
+const GENRES = [
+  { name: "Bedtime", icon: "book", color: "#8b5cf6" },
+  { name: "Animal stories", icon: "paw", color: "#10b981" },
+  { name: "Adventure", icon: "atom", color: "#3b82f6" },
+  { name: "Fairy tales", icon: "earth", color: "#0ea5e9" },
+  { name: "Mystery", icon: "landmark", color: "#f59e0b" },
+  { name: "Space stories", icon: "orbit", color: "#6366f1" },
+  { name: "Funny stories", icon: "sigma", color: "#ec4899" },
+  { name: "Friendship", icon: "heart", color: "#ef4444" },
+  { name: "Imagination", icon: "cpu", color: "#14b8a6" },
+  { name: "Science and nature", icon: "leaf", color: "#84cc16" },
 ];
 
 const FEATURES = [
   { icon: Wand2, title: "AR studio for your team", text: "Upload book pages, drop in GLB models, videos, images, audio and labels, then place them on the page in a live 3D editor." },
   { icon: Zap, title: "Live, no app to install", text: "Students open a link in Chrome or Safari. Publish a change and every classroom gets it instantly." },
-  { icon: Lock, title: "Per-school access", text: "Decide exactly which subjects and books each school receives. Schools request more from the catalog." },
+  { icon: Lock, title: "Per-school access", text: "Choose which storybooks each school receives. Schools request more from the catalog." },
   { icon: Box, title: "Animated 3D that looks real", text: "Physically-based lighting, contact shadows and animation clips. Students spin and pinch to explore." },
   { icon: BarChart3, title: "Usage analytics", text: "See scans per day, the most explored books and the most curious students, per school and overall." },
-  { icon: Layers, title: "Many pages per book", text: "Every page of a book compiles into one tracking file. Students scan any page and the right model appears." },
+  { icon: Layers, title: "Many pages per book", text: "Mark the pages that have a 3D scene. Readers can scan those pages as they follow the story." },
 ];
 
 export default async function Landing() {
@@ -75,20 +75,20 @@ export default async function Landing() {
         <div className="relative mx-auto grid max-w-6xl items-center gap-14 px-5 lg:grid-cols-[1.15fr_1fr]">
           <div className="text-center lg:text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80">
-              <Sparkles className="size-3.5 text-brand-300" /> Augmented reality for every subject
+              <Sparkles className="size-3.5 text-brand-300" /> Illustrated stories for kids
             </span>
             <h1 className="mt-6 font-display text-5xl leading-[1.02] font-bold tracking-tight sm:text-6xl lg:text-7xl">
-              Point. Scan.
+              Stories that jump
               <br />
-              <span className="bg-gradient-to-r from-brand-300 via-fuchsia-300 to-amber-200 bg-clip-text text-transparent">Watch it come alive.</span>
+              <span className="bg-gradient-to-r from-brand-300 via-fuchsia-300 to-amber-200 bg-clip-text text-transparent">off the page.</span>
             </h1>
             <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-white/65 lg:mx-0">
-              ARLive turns printed textbooks into interactive 3D lessons. Students aim their phone at a page — a molecule, a heart, a
-              volcano rises from the paper.
+              Read bedtime tales, animal adventures, and stories about how the world works. Scan a marked page with a phone
+              to see a character or scene come to life in 3D.
             </p>
             <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start">
               <ButtonLink href={appHref} size="lg" className="shadow-glow">
-                <Camera /> {session ? "Open ARLive" : "Sign in to start"}
+                <BookOpen /> {session ? "Open Sketchling" : "Sign in to read"}
               </ButtonLink>
               <ButtonLink href="/join" size="lg" variant="outline" className="border-white/15 bg-white/5 text-white shadow-none hover:bg-white/10 hover:text-white">
                 I have a school code
@@ -105,11 +105,11 @@ export default async function Landing() {
           </div>
 
           <div className="relative flex justify-center">
-            <PhoneMockup color="#8b5cf6" icon="flask" found={{ title: "Water molecule · H₂O", subtitle: "Chemistry · page 12" }} />
+            <PhoneMockup color="#8b5cf6" icon="droplets" found={{ title: "Lou the Water Drop", subtitle: "The Journey of a Water Drop" }} />
             {[
-              { name: "Biology", icon: "dna", color: "#10b981", cls: "top-10 -left-2 sm:left-4" },
-              { name: "Physics", icon: "atom", color: "#3b82f6", cls: "top-1/2 -right-2 sm:right-0" },
-              { name: "Geography", icon: "earth", color: "#0ea5e9", cls: "bottom-16 left-0 sm:left-6" },
+              { name: "Animal stories", icon: "paw", color: "#10b981", cls: "top-10 -left-2 sm:left-4" },
+              { name: "Adventure", icon: "atom", color: "#3b82f6", cls: "top-1/2 -right-2 sm:right-0" },
+              { name: "Fairy tales", icon: "earth", color: "#0ea5e9", cls: "bottom-16 left-0 sm:left-6" },
             ].map((chip, i) => (
               <span
                 key={chip.name}
@@ -126,11 +126,11 @@ export default async function Landing() {
         </div>
       </section>
 
-      {/* subjects marquee */}
+      {/* story genres */}
       <section className="border-y border-ink-200/70 bg-white py-6">
         <div className="flex gap-3 overflow-hidden [mask-image:linear-gradient(90deg,transparent,black_10%,black_90%,transparent)]">
           <div className="flex shrink-0 animate-[marquee_40s_linear_infinite] gap-3">
-            {[...SUBJECTS, ...SUBJECTS].map((s, i) => (
+            {[...GENRES, ...GENRES].map((s, i) => (
               <span key={i} className="flex shrink-0 items-center gap-2.5 rounded-full border border-ink-200/70 bg-ink-50 py-1.5 pr-4 pl-1.5 text-sm font-semibold text-ink-700">
                 <span className="grid size-7 place-items-center rounded-full text-white" style={{ background: s.color }}>
                   <SubjectIcon icon={s.icon} className="size-3.5" />
@@ -145,14 +145,14 @@ export default async function Landing() {
       {/* how */}
       <section id="how" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-24">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="font-display text-4xl font-bold tracking-tight text-ink-900">Three taps from page to 3D</h2>
-          <p className="mt-4 text-lg text-ink-500">No markers to print, no app store. The book itself is the trigger.</p>
+          <h2 className="font-display text-4xl font-bold tracking-tight text-ink-900">From storytime to discovery</h2>
+          <p className="mt-4 text-lg text-ink-500">Read illustrated stories together and explore selected pages in 3D.</p>
         </div>
         <div className="mt-14 grid gap-5 md:grid-cols-3">
           {[
-            { icon: BookOpen, title: "Choose a subject", text: "Students see only the subjects and books their school unlocked: Chemistry, Biology, History…" },
-            { icon: Camera, title: "Scan any page", text: "Point the phone at a page of the book. ARLive recognises it in a fraction of a second." },
-            { icon: Box, title: "Explore in 3D", text: "Models, animations, videos and narration appear on the page. Spin, zoom, replay, take a photo." },
+            { icon: BookOpen, title: "Pick a story", text: "Open an illustrated story in your browser and turn the pages together." },
+            { icon: Camera, title: "Scan a marked page", text: "Look for the AR badge, then point your phone camera at that page." },
+            { icon: Box, title: "Explore in 3D", text: "See a character or scene rise from the page. Spin, zoom, replay, or take a photo." },
           ].map((step, i) => (
             <div key={step.title} className="relative rounded-[28px] border border-ink-200/70 bg-white p-7 shadow-soft">
               <span className="absolute top-6 right-7 font-display text-6xl font-bold text-ink-100">{i + 1}</span>
@@ -171,9 +171,9 @@ export default async function Landing() {
         <div className="mx-auto max-w-6xl px-5">
           <div className="max-w-2xl">
             <span className="text-sm font-semibold text-brand-300">For schools & publishers</span>
-            <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">One platform. Every subject. Every school.</h2>
+            <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">A library of stories for young readers</h2>
             <p className="mt-4 text-lg text-white/60">
-              Your team builds the AR content once; you choose which schools get which books; students scan from any phone.
+              Build a collection of illustrated stories and choose which books each school can share with its readers.
             </p>
           </div>
           <div className="mt-14 grid gap-px overflow-hidden rounded-[28px] bg-white/10 ring-1 ring-white/10 sm:grid-cols-2 lg:grid-cols-3">
@@ -194,9 +194,9 @@ export default async function Landing() {
           <div className="absolute inset-0 bg-grid-dark opacity-60" />
           <div className="relative">
             <School className="mx-auto size-10 text-white/80" />
-            <h2 className="mx-auto mt-5 max-w-2xl font-display text-4xl font-bold tracking-tight">Bring augmented reality to your school</h2>
+            <h2 className="mx-auto mt-5 max-w-2xl font-display text-4xl font-bold tracking-tight">Bring storytime to your school</h2>
             <p className="mx-auto mt-4 max-w-xl text-lg text-white/75">
-              Students join with your school code in seconds. Teachers see who&apos;s exploring and which pages spark curiosity.
+              Readers join with a school code and open the stories their school has shared.
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <ButtonLink href="/join" size="lg" className="bg-white text-brand-700 shadow-none hover:bg-white/90">
@@ -213,7 +213,7 @@ export default async function Landing() {
       <footer className="border-t border-ink-200/70 py-10">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 sm:flex-row">
           <Logo />
-          <p className="text-sm text-ink-500">© {new Date().getFullYear()} ARLive. Built on MindAR image tracking.</p>
+          <p className="text-sm text-ink-500">© {new Date().getFullYear()} Sketchling. Built on MindAR image tracking.</p>
           <Link href="/login" className="text-sm font-semibold text-ink-600 hover:text-ink-900">
             Sign in
           </Link>

@@ -279,7 +279,7 @@ export function ARViewer({ book, targets, backHref }: Props) {
   async function sharePhoto() {
     if (!photo) return;
     const blob = await (await fetch(photo)).blob();
-    const file = new File([blob], `arlive-${Date.now()}.jpg`, { type: "image/jpeg" });
+    const file = new File([blob], `sketchling-${Date.now()}.jpg`, { type: "image/jpeg" });
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({ files: [file], title: active?.name ?? book.title }).catch(() => {});
     } else {
@@ -502,7 +502,7 @@ export function ARViewer({ book, targets, backHref }: Props) {
             <img src={photo} alt="AR snapshot" className="max-h-full max-w-full rounded-3xl shadow-lift" />
           </div>
           <div className="mx-auto flex w-full max-w-sm gap-2">
-            <a href={photo} download={`arlive-${book.id}.jpg`} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-white/10 text-sm font-semibold">
+            <a href={photo} download={`sketchling-${book.id}.jpg`} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-white/10 text-sm font-semibold">
               <Download className="size-4" /> Save
             </a>
             <button onClick={sharePhoto} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-white text-sm font-bold text-ink-950">
