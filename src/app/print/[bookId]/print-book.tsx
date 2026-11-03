@@ -5,6 +5,7 @@ import { ArrowLeft, Printer, ScanLine } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { recordDownload } from "@/server/actions/library";
 
 type PrintPage = { id: string; imageUrl: string; title: string; ar: boolean };
 
@@ -13,8 +14,10 @@ export function PrintBook({
   book,
   format,
   pages,
+  countDownload,
 }: {
   book: { id: string; title: string };
+  countDownload: boolean;
   format: { label: string; widthMm: number; heightMm: number };
   pages: PrintPage[];
 }) {
@@ -63,7 +66,7 @@ export function PrintBook({
             <ArrowLeft className="size-4" />
           </Link>
           <div className="min-w-0">
-            <div className="truncate font-display font-bold text-ink-900">Print “{book.title}”</div>
+            <div className="truncate font-display font-bold text-ink-900">Download “{book.title}”</div>
             <div className="text-xs text-ink-500">
               {pages.length} pages · {format.label}
             </div>
@@ -76,17 +79,20 @@ export function PrintBook({
               <Switch checked={numbers} onCheckedChange={setNumbers} /> Page numbers
             </label>
             <button
-              onClick={() => window.print()}
+              onClick={() => {
+                if (countDownload) recordDownload(book.id).catch(() => {});
+                window.print();
+              }}
               disabled={!ready}
               className="flex h-10 items-center gap-2 rounded-xl bg-ink-900 px-4 font-semibold text-white hover:bg-ink-800 disabled:opacity-50"
             >
-              <Printer className="size-4" /> {ready ? "Print / Save as PDF" : `Loading ${loaded}/${pages.length}…`}
+              <Printer className="size-4" /> {ready ? "Save as PDF / Print" : `Loading ${loaded}/${pages.length}…`}
             </button>
           </div>
         </div>
         <p className="mx-auto max-w-5xl px-6 pb-3 text-xs text-ink-500">
           In the print dialog choose <b>Save as PDF</b> (or your printer), <b>Margins: None</b>, <b>Scale: 100%</b> and turn on <b>Background graphics</b>.
-          For a bound book, send the PDF to a print shop at {format.label}. Matte paper scans best: glossy reflections confuse the camera.
+          Print it at home or at a print shop at {format.label}, then scan the pages marked AR with your phone. Matte paper scans best: glossy reflections confuse the camera.
         </p>
       </header>
 

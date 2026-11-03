@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BookOpen, ScanLine } from "lucide-react";
-import { PhoneQR } from "@/components/phone-qr";
+import { PhoneQRDisclosure } from "@/components/phone-qr";
+import { Thumb } from "@/components/thumb";
 import { ButtonLink } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import { readableBooksWhere } from "@/lib/books";
@@ -71,8 +72,7 @@ export default async function SubjectPage({ params }: { params: Promise<{ subjec
                   style={{ background: subject.color }}
                 >
                   {cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={cover} alt="" className="size-full object-cover" />
+                    <Thumb src={cover} width={80} height={112} className="size-full object-cover" />
                   ) : (
                     <SubjectIcon icon={subject.icon} className="size-8" />
                   )}
@@ -84,8 +84,7 @@ export default async function SubjectPage({ params }: { params: Promise<{ subjec
                   <p className="mt-2 text-xs font-semibold text-ink-600">{plural(book.targets.length, "page")}{canScan && ` · ${arCount} with AR`}</p>
                   <div className="mt-3 flex -space-x-2">
                     {book.targets.slice(0, 5).map((t) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img key={t.id} src={t.imageUrl} alt={t.name} title={t.name} className="h-10 w-8 rounded-md object-cover ring-2 ring-white" />
+                      <Thumb key={t.id} src={t.imageUrl} alt={t.name} title={t.name} width={32} height={40} className="h-10 w-8 rounded-md object-cover ring-2 ring-white" />
                     ))}
                     {book.targets.length > 5 && (
                       <span className="grid h-10 w-8 place-items-center rounded-md bg-ink-100 text-[10px] font-bold text-ink-600 ring-2 ring-white">
@@ -101,10 +100,7 @@ export default async function SubjectPage({ params }: { params: Promise<{ subjec
                 </ButtonLink>
                 {canScan && <>
                   <ButtonLink href={`/scan/${book.id}`} variant="outline" size="lg"><ScanLine /> Start scanning</ButtonLink>
-                  <details className="hidden rounded-xl border border-ink-200/70 bg-ink-50 px-3 py-2 text-xs text-ink-600 lg:block">
-                    <summary className="cursor-pointer rounded-sm font-semibold text-ink-700">Continue on your phone</summary>
-                    <div className="mt-2"><PhoneQR path={`/scan/${book.id}`} size={64} /></div>
-                  </details>
+                  <PhoneQRDisclosure path={`/scan/${book.id}`} size={64} className="hidden rounded-xl border border-ink-200/70 bg-ink-50 px-3 py-2 text-xs text-ink-600 lg:block" />
                 </>}
               </div>
             </div>

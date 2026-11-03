@@ -9,7 +9,7 @@ import { failure, hexColor, invalid, optionalInt, parseForm, refreshAll, type Ac
 
 const subjectSchema = z.object({
   id: z.string().optional(),
-  name: z.string({ error: "Enter a subject name" }).min(2).max(60),
+  name: z.string({ error: "Enter a category name" }).min(2).max(60),
   description: z.string().max(300).optional(),
   icon: z.string().refine((icon) => icon in SUBJECT_ICONS, "Pick an icon"),
   color: hexColor,
@@ -33,7 +33,7 @@ export async function saveSubject(_prev: ActionState, formData: FormData): Promi
       await db.subject.create({ data: { ...data, order, slug } });
     }
     refreshAll();
-    return { ok: true, message: id ? "Subject updated" : "Subject created" };
+    return { ok: true, message: id ? "Category updated" : "Category created" };
   } catch (error) {
     return failure(error);
   }
@@ -46,7 +46,7 @@ export async function deleteSubject(id: string): Promise<ActionState> {
     if (books > 0) return { error: `Move or delete its ${books} book(s) first.` };
     await db.subject.delete({ where: { id } });
     refreshAll();
-    return { ok: true, message: "Subject deleted" };
+    return { ok: true, message: "Category deleted" };
   } catch (error) {
     return failure(error);
   }

@@ -1,17 +1,21 @@
 import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { pageAspect } from "@/lib/book-format";
 import { canUserReadBook, compileState } from "@/lib/books";
 import { db } from "@/lib/db";
 import { pageTranslationsSchema } from "@/lib/page-translations";
 import { Reader } from "./reader";
 
-export const metadata: Metadata = { title: "Read" };
+export async function generateMetadata({ params }: { params: Promise<{ bookId: string }> }): Promise<Metadata> {
+  const { bookId } = await params;
+  const book = await db.book.findFirst({ where: { id: bookId, published: true, ownerId: null }, select: { title: true } });
+  return { title: book ? `Read “${book.title}”` : "Read" };
+}
 export const viewport: Viewport = { themeColor: "#efe8da" };
 
 export default async function ReadPage({ params }: { params: Promise<{ bookId: string }> }) {
-  const user = await requireUser();
+  const user = await getCurrentUser();
   const { bookId } = await params;
   if (!(await canUserReadBook(user, bookId))) notFound();
 
@@ -26,8 +30,12 @@ export default async function ReadPage({ params }: { params: Promise<{ bookId: s
   });
   if (!book) notFound();
 
-  const editable = user.role === "SUPER_ADMIN";
-  const backHref = editable ? `/admin/books/${book.id}` : user.role === "SCHOOL_ADMIN" ? "/school/catalog" : `/learn/${book.subject.slug}`;
+  const editable = user?.role === "SUPER_ADMIN";
+  const backHref = editable
+    ? `/admin/books/${book.id}`
+    : user?.role === "SCHOOL_ADMIN" ? "/school/catalog"
+    : user?.role === "STUDENT" && !book.ownerId ? `/learn/${book.subject.slug}`
+    : book.ownerId ? "/account" : `/library/${book.id}`;
   const state = compileState(book, book.targets);
 
   return (

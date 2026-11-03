@@ -1,34 +1,42 @@
-# ARLive
+# Sketchling
 
-Augmented reality for every classroom. Students pick a subject, point their phone at a page of their
-textbook, and the page comes alive with 3D models, animations, video, audio and labels. A platform
-admin builds the AR content and decides which schools get which books; school admins manage their
-students.
+A free library of illustrated stories for kids. Families read the books on a phone or a laptop,
+download them as a PDF to print at home, and scan the pages marked AR with a phone to watch the
+characters pop out in 3D. Parents can also ask for a **custom story** starring their child, built
+around something they want the child to learn or think about (sharing, bedtime, being brave…).
 
 Built on [MindAR](https://hiukim.github.io/mind-ar-js-doc/) image tracking. Runs in the browser, so
 nobody installs an app.
 
 ## Features
 
-**Platform admin (`/admin`)**
-- Subjects (matières) with icons and colours
-- Books: upload page images as targets, then compile them into a MindAR `.mind` file in the browser
+**Library (public, `/`, `/library`, `/library/:bookId`)**
+- Home page with featured, most-loved, top-rated and new books, and browsing by category
+- Search, category filters and sorting (most popular, top rated, newest)
+- Each book shows its star rating, downloads and likes; signed-in readers rate (1–5 stars) and like
+- Read online (`/read/:bookId`), download / print (`/print/:bookId`) and scan AR pages
+  (`/scan/:bookId`) without an account
+
+**Families (`/signup`, `/account`, `/stories`)**
+- Free parent accounts: profile, children (first name, age, what they love) and liked books
+- Custom story requests: who it's for, the lesson (from a list or "something else"), the parent's
+  own words, the child's interests and the story language
+- Request status and notes from the team; the finished story appears in the account, private to
+  that family
+
+**Admin studio (`/admin`)**
+- Dashboard: library books, families, downloads, likes, AR scans and open story requests
+- Story requests: start a draft book owned by the family, build it in the studio, then deliver it
+  (publishes it for that family only)
+- Books: upload page images, mark AR pages, compile them into a MindAR `.mind` file in the browser,
+  publish, and feature on the home page; library stats per book
 - 3D scene editor per page: add GLB models (with animation clips), video, images, audio and text
   labels, then place them with move/rotate/scale gizmos
-- Schools: seats, join code, per-book or per-subject access, school admins
-- Access requests from schools, users, and usage analytics
+- Categories, users, and the school channel (schools, join codes, access requests)
 
-**School admin (`/school`)**
-- Overview with scans per day and most active students
-- Students: paste a class list to create accounts, print login slips, reset passwords
-- Join code + QR so students can sign up on their own
-- Catalog: request more books from the platform
-
-**Student (`/learn`, `/scan/:bookId`)**
-- Subject grid → subject page with a phone mockup and the books available to their school
-- Full-screen AR scanner: scanning guide, info card for the recognised page, replay, mute,
-  drag to spin, pinch to zoom, take and share a photo
-- Installable as an app (web manifest)
+**Schools (`/school`, `/learn`)**
+- Still supported: school admins manage students and request books; students join with a code and
+  read their school's books
 
 ## Stack
 
@@ -42,21 +50,22 @@ Radix primitives · JWT sessions (jose) with bcrypt.
 npm install
 cp .env.example .env          # then set SESSION_SECRET to a long random string
 npx prisma db push            # creates prisma/dev.db
-npm run db:seed               # demo school, users, subjects and a sample book
+npm run db:seed               # demo accounts, categories, sample books and a story request
 npm run dev
 ```
 
 Open http://localhost:3000 and sign in with a demo account (local development only):
 
-| Role           | Username            | Password     |
-| -------------- | ------------------- | ------------ |
-| Platform admin | `admin@arlive.app`  | `admin1234`  |
-| School admin   | `school@arlive.app` | `school1234` |
-| Student        | `student`           | `student123` |
+| Role           | Username                | Password     |
+| -------------- | ----------------------- | ------------ |
+| Platform admin | `admin@arlive.app`      | `admin1234`  |
+| Parent         | `parent@sketchling.app` | `parent1234` |
+| School admin   | `school@arlive.app`     | `school1234` |
+| Student        | `student`               | `student123` |
 
 The demo school's join code is `DEMO2026`.
 
-If the sample book shows **Not compiled**, open it under *Books & targets* and click **Compile**.
+If the sample book shows **Not compiled**, open it under *Books & AR pages* and click **Compile**.
 
 ### Testing on a phone (laptop without a camera)
 
@@ -83,7 +92,16 @@ Then:
 4. Tap **Start scanning** and point the phone at the target — printed, or just shown full screen
    on the laptop's monitor.
 
-If the phone can't connect, allow Node.js through the Windows firewall on private networks.
+If the phone can't connect, allow Node.js through your computer's firewall on private networks.
+
+### Checks
+
+```bash
+npm test             # unit tests (Node's built-in test runner)
+npm run typecheck
+```
+
+CI runs these plus a production build on every push to `main` and every pull request.
 
 ## How AR content works
 
@@ -113,9 +131,9 @@ src/lib              auth, storage, shared helpers
 
 ## Making a book (read, AR, print)
 
-The seed installs **"Example: The Journey of a Water Drop"** (Chemistry): a cover + 6 two-page
+The seed installs **"Example: The Journey of a Water Drop"** (Science & nature): a cover + 6 two-page
 spreads in the sketchbook format, with three AR pages that already have 3D content (molecule model,
-3D text with animations). Open it from *Books & targets → Preview book* to see the result before
+3D text with animations). Open it from *Books & AR pages → Preview book* to see the result before
 making your own. Its pages are drawn by `scripts/make-example-book.ts`.
 
 1. Plan it with Claude: ask for a book on any topic. The `arlive-book` skill
@@ -144,3 +162,9 @@ hand: `npm run optimize:glb -- model.glb`.
 - Uploads are written to `storage/uploads`; mount it on a persistent volume, or replace
   `src/lib/storage.ts` with S3/R2 (same function signatures).
 - Set a strong `SESSION_SECRET`; cookies are `Secure` when `NODE_ENV=production`.
+- Never use the demo accounts: their passwords are public in this README, and `npm run db:seed` refuses to
+  run when `NODE_ENV=production`. Create the first platform admin with
+  `npm run admin:create -- you@example.com "Your Name"`, which prints a generated password once. Anyone
+  can change their own password from their account menu, which signs out their other devices.
+- Sign-in and join attempts are rate limited in memory (`src/lib/rate-limit.ts`). That covers one server
+  process; with several instances, move the counters to Redis or the database.

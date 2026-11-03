@@ -14,7 +14,7 @@ export function LoginForm({ next }: { next?: string }) {
     <form action={action} className="mt-8 flex flex-col gap-4">
       {next && <input type="hidden" name="next" value={next} />}
       <FormError message={state?.error} />
-      <Field label="Username or email" htmlFor="username">
+      <Field label="Email or username" htmlFor="username">
         <Input id="username" name="username" defaultValue={state?.values?.username} autoComplete="username" autoCapitalize="none" required autoFocus className="h-11" />
       </Field>
       <Field label="Password" htmlFor="password">

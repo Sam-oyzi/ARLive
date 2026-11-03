@@ -23,6 +23,7 @@ import { applyTransform, createContent, type ContentHandle } from "@/ar/content-
 import { MotionPlayer } from "@/ar/motion";
 import { parseMotion } from "@/lib/motion-schema";
 import { PhoneQR } from "@/components/phone-qr";
+import { Thumb } from "@/components/thumb";
 import type { ContentData } from "@/lib/content";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { cn, plural } from "@/lib/utils";
@@ -59,7 +60,7 @@ export function ARViewer({ book, targets, backHref }: Props) {
   const sessionRef = useRef<ARSession | null>(null);
   const loadedRef = useRef(new Map<string, Loaded>());
   const lastLogged = useRef(new Map<string, number>());
-  const wakeLock = useRef<{ release(): Promise<void> } | null>(null);
+  const wakeLock = useRef<WakeLockSentinel | null>(null);
 
   const [phase, setPhase] = useState<Phase>("intro");
   const [stage, setStage] = useState<ARStage>("camera");
@@ -95,12 +96,26 @@ export function ARViewer({ book, targets, backHref }: Props) {
 
   useEffect(() => teardown, [teardown]);
 
+  /** Keeps the screen on while scanning. Browsers drop the lock whenever the page is hidden. */
+  const keepScreenOn = useCallback(async () => {
+    if (wakeLock.current && !wakeLock.current.released) return;
+    try {
+      const lock = await navigator.wakeLock?.request("screen");
+      if (sessionRef.current) wakeLock.current = lock ?? null;
+      else lock?.release().catch(() => {}); // left the scanner while waiting
+    } catch {
+      // not supported or denied; the screen may dim
+    }
+  }, []);
+
   useEffect(() => {
     if (phase !== "running") return;
     // Quick Look is a native overlay. Keep the tracking session and resume its
     // video if the browser paused it while the overlay had focus.
     const resume = () => {
-      if (!document.hidden) sessionRef.current?.resumeCamera();
+      if (document.hidden) return;
+      sessionRef.current?.resumeCamera();
+      void keepScreenOn();
     };
     document.addEventListener("visibilitychange", resume);
     window.addEventListener("focus", resume);
@@ -110,7 +125,7 @@ export function ARViewer({ book, targets, backHref }: Props) {
       window.removeEventListener("focus", resume);
       window.removeEventListener("pageshow", resume);
     };
-  }, [phase]);
+  }, [phase, keepScreenOn]);
 
   const logScan = useCallback(
     (targetId: string) => {
@@ -135,76 +150,80 @@ export function ARViewer({ book, targets, backHref }: Props) {
     setPhase("starting");
     setStage("camera");
 
-    const session = new ARSession(container, { mindUrl: book.mindUrl, onTrackingChange: setTracking });
-    sessionRef.current = session;
+    const fail = (err: unknown) => {
+      teardown();
+      setError(
+        err instanceof ARError
+          ? { message: err.message, code: err.code }
+          : { message: "AR couldn't start on this device. Try Chrome on Android or Safari on iPhone." },
+      );
+      setPhase("error");
+    };
 
-    // Everything up to the first await runs inside the tap, so media can be unlocked for sound.
-    for (const target of targets) {
-      const anchor = session.addAnchor(target.targetIndex);
-      const handles: ContentHandle[] = [];
-      const motions: MotionPlayer[] = [];
-      for (const content of target.contents) {
-        const handle = createContent(content, "ar");
-        // wrapper = authored placement (keyframes drive it) → motion group (presets drive it) → content
-        const wrapper = new THREE.Group();
-        applyTransform(wrapper, content);
-        const motionGroup = new THREE.Group();
-        motionGroup.add(handle.object);
-        wrapper.add(motionGroup);
-        anchor.gesture.add(wrapper);
-        handle.unlock();
-        handle.setMuted(muted);
-        handles.push(handle);
-        motions.push(new MotionPlayer(parseMotion(content.motion), content.type, wrapper, motionGroup));
-      }
-      session.onTick((delta) => {
-        if (!anchor.visible) return;
-        handles.forEach((h) => h.update(delta));
-        motions.forEach((m) => m.update(delta));
-      });
-      anchor.onFound = () => {
-        handles.forEach((h) => {
-          h.load().catch(() => {});
-          h.play();
+    let session: ARSession;
+    try {
+      session = new ARSession(container, { mindUrl: book.mindUrl, onTrackingChange: setTracking });
+      sessionRef.current = session;
+
+      // Everything up to the first await runs inside the tap, so media can be unlocked for sound.
+      for (const target of targets) {
+        const anchor = session.addAnchor(target.targetIndex);
+        const handles: ContentHandle[] = [];
+        const motions: MotionPlayer[] = [];
+        for (const content of target.contents) {
+          const handle = createContent(content, "ar");
+          // wrapper = authored placement (keyframes drive it) → motion group (presets drive it) → content
+          const wrapper = new THREE.Group();
+          applyTransform(wrapper, content);
+          const motionGroup = new THREE.Group();
+          motionGroup.add(handle.object);
+          wrapper.add(motionGroup);
+          anchor.gesture.add(wrapper);
+          handle.unlock();
+          handle.setMuted(muted);
+          handles.push(handle);
+          motions.push(new MotionPlayer(parseMotion(content.motion), content.type, wrapper, motionGroup));
+        }
+        session.onTick((delta) => {
+          if (!anchor.visible) return;
+          handles.forEach((h) => h.update(delta));
+          motions.forEach((m) => m.update(delta));
         });
-        motions.forEach((m) => m.found());
-        setActiveId(target.id);
-        setExpanded(false);
-        navigator.vibrate?.(25);
-        logScan(target.id);
-      };
-      anchor.onLost = () => {
-        handles.forEach((h) => h.pause());
-        motions.forEach((m) => m.lost());
-      };
-      loadedRef.current.set(target.id, { anchor, handles, motions });
+        anchor.onFound = () => {
+          handles.forEach((h) => {
+            h.load().catch(() => {});
+            h.play();
+          });
+          motions.forEach((m) => m.found());
+          setActiveId(target.id);
+          setExpanded(false);
+          navigator.vibrate?.(25);
+          logScan(target.id);
+        };
+        anchor.onLost = () => {
+          handles.forEach((h) => h.pause());
+          motions.forEach((m) => m.lost());
+        };
+        loadedRef.current.set(target.id, { anchor, handles, motions });
+      }
+    } catch (err) {
+      fail(err);
+      return;
     }
 
     session
       .start(setStage)
       .then(async () => {
+        if (sessionRef.current !== session) return; // left the scanner while it was starting
         setPhase("running");
-        try {
-          const nav = navigator as Navigator & { wakeLock?: { request(type: "screen"): Promise<{ release(): Promise<void> }> } };
-          wakeLock.current = (await nav.wakeLock?.request("screen")) ?? null;
-        } catch {
-          // not supported or denied; the screen may dim
-        }
+        await keepScreenOn();
         // Warm up the remaining content in page order so the first scan feels instant.
         for (const { handles } of loadedRef.current.values()) {
           if (sessionRef.current !== session) return;
           await Promise.all(handles.map((h) => h.load().catch(() => {})));
         }
       })
-      .catch((err: unknown) => {
-        teardown();
-        setError(
-          err instanceof ARError
-            ? { message: err.message, code: err.code }
-            : { message: "AR couldn't start on this device. Try Chrome on Android or Safari on iPhone." },
-        );
-        setPhase("error");
-      });
+      .catch(fail);
   }
 
   function toggleMute() {
@@ -244,9 +263,11 @@ export function ARViewer({ book, targets, backHref }: Props) {
       const [a, b] = [...pointers.current.values()];
       pinch.current = { distance: Math.hypot(a!.x - b!.x, a!.y - b!.y), scale: activeGesture()?.scale.x ?? 1 };
     }
+    // A second finger starts a pinch, so it must not count as a double tap.
+    const singleFinger = pointers.current.size === 1;
     const now = Date.now();
-    if (now - lastTap.current < 300) resetGesture();
-    lastTap.current = now;
+    if (singleFinger && now - lastTap.current < 300) resetGesture();
+    lastTap.current = singleFinger ? now : 0;
   }
 
   function onPointerMove(e: React.PointerEvent) {
@@ -362,8 +383,7 @@ export function ARViewer({ book, targets, backHref }: Props) {
           <div className="flex gap-2.5 overflow-x-auto px-4 pb-1 scrollbar-none">
             {targets.map((t) => (
               <div key={t.id} className="w-16 shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={t.imageUrl} alt={t.name} className="aspect-[3/4] w-full rounded-xl object-cover ring-2 ring-white/30" />
+                <Thumb src={t.imageUrl} alt={t.name} width={64} height={85} className="aspect-[3/4] w-full rounded-xl object-cover ring-2 ring-white/30" />
               </div>
             ))}
           </div>
@@ -419,8 +439,7 @@ export function ARViewer({ book, targets, backHref }: Props) {
               <div className="absolute inset-0 animate-pulse-ring rounded-[28px] bg-[var(--accent)]" />
               <div className="relative grid h-36 w-28 place-items-center overflow-hidden rounded-[22px] bg-[var(--accent)] shadow-[0_30px_60px_-20px_var(--accent)] ring-1 ring-white/20">
                 {book.coverUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={book.coverUrl} alt="" className="size-full object-cover" />
+                  <Thumb src={book.coverUrl} width={112} height={144} className="size-full object-cover" />
                 ) : (
                   <SubjectIcon icon={book.subject.icon} className="size-12" />
                 )}

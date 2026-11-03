@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { assertRole, AuthError, type CurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { ROLES } from "@/lib/roles";
+import { needsSchool, ROLES } from "@/lib/roles";
 import { randomPassword, slugify } from "@/lib/utils";
 import { failure, invalid, parseForm, refreshAll, type ActionState } from "../forms";
 
@@ -30,7 +30,7 @@ const userSchema = z
     schoolId: z.string().optional(),
     grade: z.string().max(40).optional(),
   })
-  .refine((u) => u.role === "SUPER_ADMIN" || !!u.schoolId, { message: "Pick a school", path: ["schoolId"] });
+  .refine((u) => !needsSchool(u.role) || !!u.schoolId, { message: "Pick a school", path: ["schoolId"] });
 
 export async function createUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
@@ -42,7 +42,7 @@ export async function createUser(_prev: ActionState, formData: FormData): Promis
     await db.user.create({
       data: {
         ...data,
-        schoolId: data.role === "SUPER_ADMIN" ? null : data.schoolId,
+        schoolId: needsSchool(data.role) ? data.schoolId : null,
         passwordHash: await bcrypt.hash(password, 10),
       },
     });
@@ -70,7 +70,7 @@ export async function resetPassword(userId: string): Promise<ActionState<{ passw
     const actor = await assertRole(["SUPER_ADMIN", "SCHOOL_ADMIN"]);
     await assertCanManage(actor, userId);
     const password = randomPassword(8);
-    await db.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(password, 10) } });
+    await db.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(password, 10), passwordChangedAt: new Date() } });
     return { ok: true, data: { password } };
   } catch (error) {
     return failure(error);
@@ -99,10 +99,11 @@ async function studentCapacity(schoolId: string) {
   return school.maxStudents ? school.maxStudents - school._count.users : Infinity;
 }
 
-async function freeUsername(base: string) {
+async function freeUsername(base: string, reserved: Set<string>) {
   const clean = base.replace(/[^a-z0-9.]/g, "").slice(0, 24) || "student";
   let username = clean;
-  for (let i = 2; await db.user.findUnique({ where: { username } }); i++) username = `${clean}${i}`;
+  for (let i = 2; reserved.has(username) || (await db.user.findUnique({ where: { username } })); i++) username = `${clean}${i}`;
+  reserved.add(username);
   return username;
 }
 
@@ -140,14 +141,16 @@ export async function createStudents(
     if (names.length > capacity) return { error: `Your plan allows ${Math.max(0, capacity)} more student(s).` };
 
     const created: CreatedStudent[] = [];
+    const reserved = new Set<string>();
     for (const name of names) {
-      const username = await freeUsername(usernameFromName(name));
-      const password = randomPassword(8);
-      await db.user.create({
-        data: { name, username, role: "STUDENT", schoolId, grade: parsed.data.grade, passwordHash: await bcrypt.hash(password, 10) },
-      });
-      created.push({ name, username, password });
+      created.push({ name, username: await freeUsername(usernameFromName(name), reserved), password: randomPassword(8) });
     }
+    // All or nothing: the passwords are only ever shown in this response, so a partial failure
+    // would leave accounts nobody can sign in to.
+    const hashes = await Promise.all(created.map((s) => bcrypt.hash(s.password, 10)));
+    await db.user.createMany({
+      data: created.map((s, i) => ({ name: s.name, username: s.username, role: "STUDENT", schoolId, grade: parsed.data.grade, passwordHash: hashes[i]! })),
+    });
     refreshAll();
     return { ok: true, data: created, message: `${created.length} student account(s) created` };
   } catch (error) {

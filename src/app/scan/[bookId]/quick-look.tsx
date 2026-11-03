@@ -16,7 +16,7 @@ async function loadPreviewObject(content: ContentData) {
   if (content.type === "TEXT3D" && content.text?.trim()) {
     const { createTextGeometry } = await import("@/ar/text3d");
     const geometry = await createTextGeometry(content.text);
-    return new Mesh(geometry, new MeshStandardMaterial({ color: content.color || "#5b5bf6" }));
+    return new Mesh(geometry, new MeshStandardMaterial({ color: content.color || "#f26a1a" }));
   }
   throw new Error("No 3D object to preview");
 }

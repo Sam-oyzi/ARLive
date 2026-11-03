@@ -19,6 +19,9 @@ type Book = {
   subjectId: string;
   coverUrl: string | null;
   format: string;
+  featured: boolean;
+  /** Custom stories never appear in the library, so they can't be featured. */
+  custom: boolean;
 };
 
 export function BookDialog({
@@ -48,11 +51,11 @@ export function BookDialog({
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent
         title={book ? "Edit book" : "New book"}
-        description="A book groups the printed pages students will scan. All its pages compile into one AR file."
+        description="A book's pages are read online, downloaded as a PDF, and its AR pages compile into one file that phones scan."
         wide
       >
         {subjects.length === 0 ? (
-          <p className="text-sm text-ink-600">Create a subject first — every book belongs to one.</p>
+          <p className="text-sm text-ink-600">Create a category first: every book belongs to one.</p>
         ) : (
           <form action={action} className="flex flex-col gap-5">
             {book && <input type="hidden" name="id" value={book.id} />}
@@ -61,10 +64,10 @@ export function BookDialog({
               <ImageUploadField name="coverUrl" kind="covers" defaultValue={book?.coverUrl} label="Cover" aspect="aspect-[3/4]" />
               <div className="flex flex-col gap-4">
                 <Field label="Title" htmlFor="title">
-                  <Input id="title" name="title" defaultValue={book?.title} required placeholder="Chemistry — 1st year Baccalaureate" />
+                  <Input id="title" name="title" defaultValue={book?.title} required placeholder="Lina and the Brave Little Cloud" />
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Subject" htmlFor="subjectId">
+                  <Field label="Category" htmlFor="subjectId">
                     <Select id="subjectId" name="subjectId" defaultValue={book?.subjectId ?? defaultSubjectId ?? subjects[0]?.id} required>
                       {subjects.map((s) => (
                         <option key={s.id} value={s.id}>
@@ -73,8 +76,8 @@ export function BookDialog({
                       ))}
                     </Select>
                   </Field>
-                  <Field label="Grade level" htmlFor="gradeLevel">
-                    <Input id="gradeLevel" name="gradeLevel" defaultValue={book?.gradeLevel ?? ""} placeholder="Grade 10" />
+                  <Field label="Ages" htmlFor="gradeLevel">
+                    <Input id="gradeLevel" name="gradeLevel" defaultValue={book?.gradeLevel ?? ""} placeholder="Ages 4–7" />
                   </Field>
                 </div>
                 <Field label="Printed page size" htmlFor="format" hint="The reader and the print file use this size.">
@@ -86,9 +89,15 @@ export function BookDialog({
                     ))}
                   </Select>
                 </Field>
-                <Field label="Description" htmlFor="description">
+                <Field label="Description" htmlFor="description" hint="Shown on the book's library page.">
                   <Textarea id="description" name="description" defaultValue={book?.description ?? ""} className="min-h-20" />
                 </Field>
+                {!book?.custom && (
+                  <label className="flex items-center gap-2.5 text-sm font-medium text-ink-700">
+                    <input type="checkbox" name="featured" defaultChecked={book?.featured} className="size-4 rounded accent-brand-500" />
+                    Feature on the home page
+                  </label>
+                )}
               </div>
             </div>
             <div className="flex justify-end gap-2">

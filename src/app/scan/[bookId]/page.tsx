@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { canUserOpenBook } from "@/lib/books";
 import type { ContentData } from "@/lib/content";
 import { db } from "@/lib/db";
@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Scan" };
 export const viewport: Viewport = { themeColor: "#000000", maximumScale: 1, userScalable: false };
 
 export default async function ScanPage({ params }: { params: Promise<{ bookId: string }> }) {
-  const user = await requireUser();
+  const user = await getCurrentUser();
   const { bookId } = await params;
   if (!(await canUserOpenBook(user, bookId))) notFound();
 
@@ -28,7 +28,10 @@ export default async function ScanPage({ params }: { params: Promise<{ bookId: s
   if (!book?.mindUrl) notFound();
 
   const backHref =
-    user.role === "SUPER_ADMIN" ? `/admin/books/${book.id}` : user.role === "SCHOOL_ADMIN" ? "/school" : `/learn/${book.subject.slug}`;
+    user?.role === "SUPER_ADMIN" ? `/admin/books/${book.id}`
+    : user?.role === "SCHOOL_ADMIN" ? "/school"
+    : user?.role === "STUDENT" && !book.ownerId ? `/learn/${book.subject.slug}`
+    : `/read/${book.id}`;
 
   return (
     <ARViewer

@@ -46,7 +46,7 @@ export function SubjectDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {children && <DialogTrigger asChild>{children}</DialogTrigger>}
-      <DialogContent title={subject ? "Edit subject" : "New subject"} description="Students pick a subject first, then scan its books." wide>
+      <DialogContent title={subject ? "Edit category" : "New category"} description="Readers browse the library by category." wide>
         <form action={action} className="flex flex-col gap-5">
           {subject && <input type="hidden" name="id" value={subject.id} />}
           <input type="hidden" name="icon" value={icon} />
@@ -59,7 +59,7 @@ export function SubjectDialog({
             </span>
             <div className="grid flex-1 gap-3 sm:grid-cols-[1fr_96px]">
               <Field label="Name" htmlFor="name">
-                <Input id="name" name="name" defaultValue={subject?.name} placeholder="Chemistry" required />
+                <Input id="name" name="name" defaultValue={subject?.name} placeholder="Bedtime stories" required />
               </Field>
               <Field label="Order" htmlFor="order">
                 <Input id="order" name="order" type="number" min={0} defaultValue={subject?.order} />
@@ -68,7 +68,7 @@ export function SubjectDialog({
           </div>
 
           <Field label="Description" htmlFor="description">
-            <Textarea id="description" name="description" defaultValue={subject?.description ?? ""} placeholder="Atoms, molecules and reactions in 3D." className="min-h-20" />
+            <Textarea id="description" name="description" defaultValue={subject?.description ?? ""} placeholder="Calm, cosy stories to end the day." className="min-h-20" />
           </Field>
 
           <Field label="Icon">
@@ -113,7 +113,7 @@ export function SubjectDialog({
             <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <SubmitButton pendingText="Saving…">{subject ? "Save changes" : "Create subject"}</SubmitButton>
+            <SubmitButton pendingText="Saving…">{subject ? "Save changes" : "Create category"}</SubmitButton>
           </div>
         </form>
       </DialogContent>
@@ -128,7 +128,7 @@ export function SubjectActions({ subject }: { subject: Subject }) {
     <>
       <Dropdown>
         <DropdownTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label="Subject actions">
+          <Button variant="ghost" size="icon-sm" aria-label="Category actions">
             <MoreHorizontal />
           </Button>
         </DropdownTrigger>
@@ -146,7 +146,7 @@ export function SubjectActions({ subject }: { subject: Subject }) {
         open={deleting}
         onOpenChange={setDeleting}
         title={`Delete ${subject.name}?`}
-        description="Only empty subjects can be deleted."
+        description="Only empty categories can be deleted."
         onConfirm={() => runAction(deleteSubject(subject.id))}
       />
     </>

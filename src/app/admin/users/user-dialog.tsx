@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/client-bits";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
-import { ROLE_LABEL, ROLES, type Role } from "@/lib/roles";
+import { needsSchool, ROLE_LABEL, ROLES, type Role } from "@/lib/roles";
 import { createUser } from "@/server/actions/users";
 
 export function UserDialog({ schools }: { schools: { id: string; name: string }[] }) {
@@ -27,7 +27,7 @@ export function UserDialog({ schools }: { schools: { id: string; name: string }[
           <UserPlus /> New user
         </Button>
       </DialogTrigger>
-      <DialogContent title="New user" description="Create a platform admin, school admin or student account.">
+      <DialogContent title="New user" description="Create a platform admin, parent, school admin or student account.">
         <form action={action} className="flex flex-col gap-4">
           <FormError message={state?.error} />
           <div className="grid grid-cols-2 gap-3">
@@ -40,7 +40,7 @@ export function UserDialog({ schools }: { schools: { id: string; name: string }[
                 ))}
               </Select>
             </Field>
-            {role !== "SUPER_ADMIN" && (
+            {needsSchool(role) && (
               <Field label="School" htmlFor="schoolId">
                 <Select id="schoolId" name="schoolId" required>
                   {schools.map((s) => (

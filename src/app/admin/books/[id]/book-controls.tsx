@@ -46,7 +46,7 @@ export function ArToggle({ targetId, ar }: { targetId: string; ar: boolean }) {
       }
       className={cn(
         "flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold shadow-sm ring-1 backdrop-blur transition",
-        value ? "bg-brand-500 text-white ring-white/30" : "bg-white/90 text-ink-600 ring-ink-200",
+        value ? "bg-brand-600 text-white ring-white/30" : "bg-white/90 text-ink-600 ring-ink-200",
       )}
       title={value ? "Compiled as an AR target — click to make it a story page" : "Story page — click to compile it as an AR target"}
     >

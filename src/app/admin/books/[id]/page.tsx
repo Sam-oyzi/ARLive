@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BookOpen, Box, Printer, Image as ImageIcon, Lightbulb, Pencil, ScanLine, Type, TypeOutline, Video, Volume2, type LucideIcon } from "lucide-react";
+import { ArrowLeft, BookOpen, Box, Download, ExternalLink, Heart, Printer, Image as ImageIcon, Lightbulb, Pencil, ScanLine, Sparkles, Star, Type, TypeOutline, Video, Volume2, type LucideIcon } from "lucide-react";
 import { ButtonLink, Button } from "@/components/ui/button";
 import { Card, CardBody, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Thumb } from "@/components/thumb";
 import { requireUser } from "@/lib/auth";
 import { bookFormat } from "@/lib/book-format";
-import { arTargets, compileState } from "@/lib/books";
+import { arTargets, canPublish, compileState } from "@/lib/books";
 import type { ContentType } from "@/lib/content";
 import { db } from "@/lib/db";
 import { SubjectIcon } from "@/lib/subject-icons";
@@ -34,6 +35,8 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
         subject: true,
         targets: { orderBy: [{ order: "asc" }, { createdAt: "asc" }], include: { contents: { select: { type: true } } } },
         access: { include: { school: { select: { id: true, name: true } } } },
+        owner: { select: { id: true, name: true, username: true } },
+        storyRequest: { select: { id: true, childName: true, status: true } },
         _count: { select: { scans: true } },
       },
     }),
@@ -48,12 +51,27 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
         <ArrowLeft className="size-4" /> Books
       </Link>
 
+      {book.owner && (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <span className="flex items-center gap-2">
+            <Sparkles className="size-4 shrink-0 text-amber-500" />
+            <span>
+              Custom story for <span className="font-semibold">{book.owner.name}</span> ({book.owner.username}). Only this family can open it; it never appears in the library.
+            </span>
+          </span>
+          {book.storyRequest && (
+            <Link href={`/admin/stories/${book.storyRequest.id}`} className="shrink-0 font-semibold underline underline-offset-2">
+              Open the request
+            </Link>
+          )}
+        </div>
+      )}
+
       <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex items-center gap-4">
           <div className="grid h-20 w-16 shrink-0 place-items-center overflow-hidden rounded-xl shadow-lift" style={{ background: book.subject.color }}>
             {book.coverUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={book.coverUrl} alt="" className="size-full object-cover" />
+              <Thumb src={book.coverUrl} width={64} height={80} className="size-full object-cover" />
             ) : (
               <SubjectIcon icon={book.subject.icon} className="size-7 text-white" />
             )}
@@ -65,15 +83,15 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
             </div>
             <h1 className="font-display text-2xl font-bold tracking-tight text-ink-900">{book.title}</h1>
             <p className="mt-0.5 text-sm text-ink-500">
-              {plural(book.targets.length, "page")} ({arTargets(book.targets).length} AR) · {bookFormat(book.format).label} · {plural(book.access.length, "school")} · {plural(book._count.scans, "scan")}
+              {plural(book.targets.length, "page")} ({arTargets(book.targets).length} AR) · {bookFormat(book.format).label} · {plural(book._count.scans, "scan")}
             </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <PublishSwitch bookId={book.id} published={book.published} disabled={!book.mindUrl} />
+          <PublishSwitch bookId={book.id} published={book.published} disabled={!canPublish(state, book.targets.length)} />
           <BookDialog
             subjects={subjects}
-            book={{ id: book.id, title: book.title, description: book.description, gradeLevel: book.gradeLevel, subjectId: book.subjectId, coverUrl: book.coverUrl, format: book.format }}
+            book={{ id: book.id, title: book.title, description: book.description, gradeLevel: book.gradeLevel, subjectId: book.subjectId, coverUrl: book.coverUrl, format: book.format, featured: book.featured, custom: !!book.ownerId }}
           >
             <Button variant="outline">
               <Pencil /> Edit
@@ -92,6 +110,11 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
           {book.mindUrl && (
             <ButtonLink href={`/scan/${book.id}`} target="_blank" variant="secondary">
               <ScanLine /> Test in AR
+            </ButtonLink>
+          )}
+          {book.published && !book.ownerId && (
+            <ButtonLink href={`/library/${book.id}`} target="_blank" variant="ghost">
+              <ExternalLink /> Library page
             </ButtonLink>
           )}
           <BookMenu bookId={book.id} title={book.title} />
@@ -117,10 +140,10 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
                     className="relative flex h-full flex-col overflow-hidden rounded-3xl border border-ink-200/70 bg-white shadow-soft transition group-hover:-translate-y-0.5 group-hover:shadow-lift"
                   >
                     <div className="relative aspect-[3/4] overflow-hidden bg-ink-100">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <Thumb
                         src={target.imageUrl}
-                        alt=""
+                        width={320}
+                        height={427}
                         className={cn("size-full object-cover transition duration-500 group-hover:scale-105", !target.ar && "opacity-75 saturate-50")}
                       />
                       <span className="absolute top-2.5 left-2.5 rounded-full bg-ink-950/75 px-2 py-0.5 text-[11px] font-bold text-white backdrop-blur">
@@ -169,32 +192,59 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
             targets={arTargets(book.targets).map((t) => ({ id: t.id, imageUrl: t.imageUrl }))}
           />
 
-          <Card>
-            <CardHeader>
-              <div>
-                <CardTitle>Schools with access</CardTitle>
-                <CardDescription>Grant access from each school&apos;s page.</CardDescription>
-              </div>
-            </CardHeader>
-            <CardBody>
-              {book.access.length === 0 ? (
-                <p className="text-sm text-ink-500">No school has this book yet.</p>
-              ) : (
-                <ul className="flex flex-wrap gap-2">
-                  {book.access.map(({ school }) => (
-                    <li key={school.id}>
-                      <Link
-                        href={`/admin/schools/${school.id}`}
-                        className="inline-block rounded-full border border-ink-200 px-3 py-1 text-xs font-semibold text-ink-700 hover:border-brand-300 hover:text-brand-700"
-                      >
-                        {school.name}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardBody>
-          </Card>
+          {!book.ownerId && (
+            <Card>
+              <CardHeader>
+                <div>
+                  <CardTitle>In the library</CardTitle>
+                  <CardDescription>{book.published ? (book.featured ? "Published and featured on the home page" : "Published, free for everyone") : "Not visible until published"}</CardDescription>
+                </div>
+              </CardHeader>
+              <CardBody className="grid grid-cols-3 gap-3 text-center">
+                {[
+                  { icon: Star, label: "Rating", value: book.ratingCount ? book.ratingAvg.toFixed(1) : "–", hint: plural(book.ratingCount, "rating") },
+                  { icon: Download, label: "Downloads", value: book.downloads.toLocaleString(), hint: "PDF / print" },
+                  { icon: Heart, label: "Likes", value: book.likeCount.toLocaleString(), hint: "families" },
+                ].map((stat) => (
+                  <div key={stat.label} className="rounded-2xl bg-ink-50 px-2 py-3">
+                    <stat.icon className="mx-auto size-4 text-ink-400" />
+                    <div className="mt-1 font-display text-xl font-bold text-ink-900 tabular-nums">{stat.value}</div>
+                    <div className="text-[11px] font-medium text-ink-500">{stat.label}</div>
+                    <div className="text-[10px] text-ink-400">{stat.hint}</div>
+                  </div>
+                ))}
+              </CardBody>
+            </Card>
+          )}
+
+          {!book.ownerId && (
+            <Card>
+              <CardHeader>
+                <div>
+                  <CardTitle>Schools with access</CardTitle>
+                  <CardDescription>Grant access from each school&apos;s page.</CardDescription>
+                </div>
+              </CardHeader>
+              <CardBody>
+                {book.access.length === 0 ? (
+                  <p className="text-sm text-ink-500">No school has this book yet.</p>
+                ) : (
+                  <ul className="flex flex-wrap gap-2">
+                    {book.access.map(({ school }) => (
+                      <li key={school.id}>
+                        <Link
+                          href={`/admin/schools/${school.id}`}
+                          className="inline-block rounded-full border border-ink-200 px-3 py-1 text-xs font-semibold text-ink-700 hover:border-brand-300 hover:text-brand-700"
+                        >
+                          {school.name}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardBody>
+            </Card>
+          )}
 
           <Card className="bg-amber-50/60">
             <CardBody className="flex gap-3">
@@ -205,7 +255,7 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
                   <li>Rich detail and contrast: illustrations, photos, diagrams.</li>
                   <li>Avoid plain text-only pages and repeating patterns.</li>
                   <li>Use flat, straight scans (not photos taken at an angle).</li>
-                  <li>Keep a book under ~30 pages; split big books into chapters.</li>
+                  <li>Keep a book under ~30 pages; split long stories into parts.</li>
                 </ul>
               </div>
             </CardBody>

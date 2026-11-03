@@ -1,13 +1,15 @@
 // Demo data for local development. Safe to re-run.
-//   Platform admin  admin@arlive.app   / admin1234
-//   School admin    school@arlive.app  / school1234
-//   Student         student            / student123
+//   Platform admin  admin@arlive.app      / admin1234
+//   Parent          parent@sketchling.app / parent1234
+//   School admin    school@arlive.app     / school1234
+//   Student         student               / student123
 //   School join code DEMO2026
 import fs from "node:fs";
 import path from "node:path";
 import bcrypt from "bcryptjs";
 import { PrismaClient, type Prisma } from "@prisma/client";
 import { targetsSignature } from "../src/lib/books";
+import { averageStars } from "../src/lib/library";
 
 const db = new PrismaClient();
 const SAMPLE = path.join(__dirname, "sample");
@@ -22,16 +24,25 @@ function install(file: string, kind: string, name: string) {
   return `/files/${kind}/${name}`;
 }
 
+/** Library categories. */
 const SUBJECTS = [
-  { name: "Chemistry", slug: "chemistry", icon: "flask", color: "#8b5cf6", description: "Atoms, molecules and reactions you can walk around." },
-  { name: "Biology", slug: "biology", icon: "dna", color: "#10b981", description: "Cells, organs and living systems in 3D." },
-  { name: "Physics", slug: "physics", icon: "atom", color: "#3b82f6", description: "Forces, waves and energy made visible." },
-  { name: "Geography", slug: "geography", icon: "earth", color: "#0ea5e9", description: "Landforms, volcanoes and the planet up close." },
-  { name: "History", slug: "history", icon: "landmark", color: "#f59e0b", description: "Monuments and artefacts rebuilt on your desk." },
-  { name: "Mathematics", slug: "mathematics", icon: "sigma", color: "#ec4899", description: "Solids, graphs and geometry you can turn around." },
+  { name: "Science & nature", slug: "science-nature", icon: "droplets", color: "#0ea5e9", description: "How the world works, told as a story." },
+  { name: "Bedtime stories", slug: "bedtime", icon: "moon", color: "#3b82f6", description: "Calm, cosy stories to end the day." },
+  { name: "Animal friends", slug: "animals", icon: "paw", color: "#10b981", description: "Furry, feathery and scaly heroes." },
+  { name: "Adventure", slug: "adventure", icon: "map", color: "#f97316", description: "Journeys, treasure maps and brave explorers." },
+  { name: "Fairy tales", slug: "fairy-tales", icon: "castle", color: "#f43f5e", description: "Castles, dragons and a little magic." },
+  { name: "Feelings & values", slug: "feelings", icon: "heart", color: "#ef4444", description: "Kindness, courage, sharing and big feelings." },
 ];
 
+/** School subjects created by earlier versions of this seed; removed once they hold no books. */
+const LEGACY_SUBJECTS = ["chemistry", "biology", "physics", "geography", "history", "mathematics"];
+
 async function main() {
+  // These passwords are public in the README. Use `npm run admin:create` for a real deployment.
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SEED !== "true") {
+    throw new Error("Refusing to create demo accounts in production. Run `npm run admin:create -- you@example.com` instead.");
+  }
+
   const hash = (p: string) => bcrypt.hash(p, 10);
 
   await db.user.upsert({
@@ -48,7 +59,7 @@ async function main() {
   const school = await db.school.upsert({
     where: { slug: "demo-high-school" },
     update: {},
-    create: { name: "Demo High School", slug: "demo-high-school", city: "Demo City", joinCode: "DEMO2026", color: "#5b5bf6", maxStudents: 500 },
+    create: { name: "Demo High School", slug: "demo-high-school", city: "Demo City", joinCode: "DEMO2026", color: "#f26a1a", maxStudents: 500 },
   });
 
   await db.user.upsert({
@@ -63,8 +74,8 @@ async function main() {
   });
 
   // Demo book: one page with an animated water molecule, compiled if the sample .mind exists.
-  const chemistry = subjects[0]!;
-  let book = await db.book.findFirst({ where: { title: "Discovering Molecules", subjectId: chemistry.id } });
+  const science = subjects[0]!;
+  let book = await db.book.findFirst({ where: { title: "Discovering Molecules" } });
   if (!book) {
     const imageUrl = install("water-page.png", "targets", "demowaterpage.png");
     const modelUrl = install("water.glb", "models", "demowatermolecule.glb");
@@ -75,8 +86,8 @@ async function main() {
         data: {
           title: "Discovering Molecules",
           description: "Your first AR chemistry book: scan the page to meet the water molecule.",
-          gradeLevel: "Grade 10",
-          subjectId: chemistry.id,
+          gradeLevel: "Ages 8–12",
+          subjectId: science.id,
         },
       });
       const target = await db.target.create({
@@ -130,7 +141,7 @@ async function main() {
     });
   }
 
-  const example = await seedExampleBook(chemistry.id);
+  const example = await seedExampleBook(science.id);
   if (example) {
     await db.schoolBook.upsert({
       where: { schoolId_bookId: { schoolId: school.id, bookId: example.id } },
@@ -139,7 +150,59 @@ async function main() {
     });
   }
 
-  console.log("Seeded. Sign in as admin@arlive.app / admin1234");
+  // Demo books seeded into the old school subjects move to the story categories.
+  const legacy = await db.subject.findMany({ where: { slug: { in: LEGACY_SUBJECTS } }, select: { id: true } });
+  if (legacy.length > 0) {
+    await db.book.updateMany({
+      where: { subjectId: { in: legacy.map((s) => s.id) }, title: { in: ["Discovering Molecules", EXAMPLE_TITLE] } },
+      data: { subjectId: science.id },
+    });
+    await db.subject.deleteMany({ where: { id: { in: legacy.map((s) => s.id) }, books: { none: {} } } });
+  }
+
+  await seedFamily(example?.id);
+
+  console.log("Seeded. Sign in as admin@arlive.app / admin1234 or parent@sketchling.app / parent1234");
+}
+
+/** A demo parent with a child, a waiting custom story request, and a rating and like on the example book. */
+async function seedFamily(bookId: string | undefined) {
+  const parent = await db.user.upsert({
+    where: { username: "parent@sketchling.app" },
+    update: {},
+    create: { name: "Sara Parent", username: "parent@sketchling.app", role: "PARENT", passwordHash: await bcrypt.hash("parent1234", 10) },
+  });
+  let child = await db.child.findFirst({ where: { parentId: parent.id } });
+  child ??= await db.child.create({ data: { parentId: parent.id, name: "Lina", age: 5, interests: "cats, the sea, drawing" } });
+  if ((await db.storyRequest.count({ where: { userId: parent.id } })) === 0) {
+    await db.storyRequest.create({
+      data: {
+        userId: parent.id,
+        childId: child.id,
+        childName: child.name,
+        childAge: child.age,
+        interests: child.interests,
+        goal: "kindness",
+        message: "Lina finds it hard to share her crayons with her little brother. I'd love a story that shows sharing can be fun and makes everyone happier.",
+        language: "en",
+      },
+    });
+  }
+  if (!bookId) return;
+  await db.bookLike.upsert({ where: { userId_bookId: { userId: parent.id, bookId } }, update: {}, create: { userId: parent.id, bookId } });
+  await db.bookRating.upsert({ where: { userId_bookId: { userId: parent.id, bookId } }, update: {}, create: { userId: parent.id, bookId, stars: 5 } });
+  // Keep the library counters in step with the rows (as src/server/actions/library.ts does), and
+  // feature the example on the home page.
+  const [likes, ratings] = await Promise.all([db.bookLike.count({ where: { bookId } }), db.bookRating.findMany({ where: { bookId }, select: { stars: true } })]);
+  await db.book.update({
+    where: { id: bookId },
+    data: {
+      likeCount: likes,
+      ratingCount: ratings.length,
+      ratingAvg: averageStars(ratings.map((r) => r.stars)),
+      featured: true,
+    },
+  });
 }
 
 /**
@@ -163,8 +226,8 @@ async function seedExampleBook(subjectId: string) {
   const book = await db.book.create({
     data: {
       title: EXAMPLE_TITLE,
-      description: "A water-cycle sketchbook: cover + 6 two-page spreads with three AR pages. Use it to try the reader, AR and print.",
-      gradeLevel: "Ages 10–12",
+      description: "Follow Lou the water drop from the sea to the clouds and back again: a sketchbook story about the water cycle, with three pages that pop out in 3D.",
+      gradeLevel: "Ages 6–10",
       format: "SKETCH",
       subjectId,
     },

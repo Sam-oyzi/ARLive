@@ -36,17 +36,41 @@ export function playableBooksWhere(schoolId: string) {
   return { ...readableBooksWhere(schoolId), mindUrl: { not: null } } as const;
 }
 
-/** Reading the book (flip-through) doesn't need compiled AR data, only access to a published book. */
-export async function canUserReadBook(user: { role: string; schoolId: string | null }, bookId: string) {
-  if (user.role === "SUPER_ADMIN") return true;
-  if (!user.schoolId) return false;
-  const count = await db.book.count({ where: { id: bookId, ...readableBooksWhere(user.schoolId) } });
+/** Who is looking at a book: a signed-in user, or null for a visitor. */
+export type Viewer = { id: string; role: string; schoolId: string | null } | null;
+
+/** The public library: published books that weren't made for one family. Free for everyone. */
+export const libraryBooksWhere = { published: true, ownerId: null } as const;
+
+/**
+ * Published books a viewer may open: the library, their own custom stories, and books their school
+ * was granted. Admins see everything, drafts included.
+ */
+export function readableWhere(viewer: Viewer) {
+  if (viewer?.role === "SUPER_ADMIN") return {};
+  return {
+    published: true,
+    OR: [
+      { ownerId: null },
+      ...(viewer ? [{ ownerId: viewer.id }] : []),
+      ...(viewer?.schoolId ? [{ access: { some: { schoolId: viewer.schoolId } } }] : []),
+    ],
+  };
+}
+
+/** Reading the book (flip-through, print) doesn't need compiled AR data. */
+export async function canUserReadBook(viewer: Viewer, bookId: string) {
+  const count = await db.book.count({ where: { id: bookId, ...readableWhere(viewer) } });
   return count > 0;
 }
 
-export async function canUserOpenBook(user: { role: string; schoolId: string | null }, bookId: string) {
-  if (user.role === "SUPER_ADMIN") return true;
-  if (!user.schoolId) return false;
-  const count = await db.book.count({ where: { id: bookId, ...playableBooksWhere(user.schoolId) } });
+/** Scanning needs the compiled AR data as well. */
+export async function canUserOpenBook(viewer: Viewer, bookId: string) {
+  const count = await db.book.count({ where: { id: bookId, mindUrl: { not: null }, ...readableWhere(viewer) } });
   return count > 0;
+}
+
+/** A book needs pages to be published. AR pages are optional, but must be compiled once there are some. */
+export function canPublish(state: CompileState, pages: number): boolean {
+  return pages > 0 && state !== "missing";
 }

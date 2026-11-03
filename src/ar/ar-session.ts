@@ -10,7 +10,7 @@ export type ARStage = "camera" | "targets" | "warmup" | "running";
 
 export class ARError extends Error {
   constructor(
-    public code: "insecure" | "unsupported" | "denied" | "no-camera" | "camera" | "targets",
+    public code: "insecure" | "unsupported" | "webgl" | "denied" | "no-camera" | "camera" | "targets",
     message: string,
   ) {
     super(message);
@@ -60,7 +60,11 @@ export class ARSession {
     private container: HTMLElement,
     private options: Options,
   ) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    try {
+      this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    } catch {
+      throw new ARError("webgl", "This device can't show 3D right now. Close other tabs and try again, or scan with a phone instead.");
+    }
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -127,6 +131,7 @@ export class ARSession {
     } catch {
       throw new ARError("targets", "Couldn't load this book's AR data. Check your connection and try again.");
     }
+    if (this.disposed) return;
     // MindAR reports poses in target-image pixels with the origin at a corner; re-centre and
     // normalise so that 1 unit = target width and (0,0) = target centre.
     this.postMatrices = dimensions.map(([width, height]) =>
@@ -139,6 +144,7 @@ export class ARSession {
 
     onStage?.("warmup");
     await new Promise((r) => setTimeout(r, 0)); // let the UI paint before the blocking GPU warm-up
+    if (this.disposed) return;
     this.controller.dummyRun(video);
     if (this.disposed) return;
     this.controller.processVideo(video);

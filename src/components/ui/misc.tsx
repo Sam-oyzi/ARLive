@@ -59,7 +59,7 @@ const STAT_TONES = {
   brand: "bg-brand-50 text-brand-600",
   green: "bg-emerald-50 text-emerald-600",
   amber: "bg-amber-50 text-amber-600",
-  pink: "bg-pink-50 text-pink-600",
+  rose: "bg-rose-50 text-rose-600",
   sky: "bg-sky-50 text-sky-600",
 };
 
@@ -94,7 +94,7 @@ export function Avatar({ name, className, color }: { name: string; className?: s
   return (
     <span
       className={cn(
-        "grid size-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-xs font-bold text-white",
+        "grid size-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-bold text-white",
         className,
       )}
       style={color ? { background: color } : undefined}

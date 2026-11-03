@@ -61,7 +61,7 @@ export default async function SchoolOverview() {
         />
         <StatCard label="Active · 14 days" value={activeStudents.length} icon={Trophy} tone="amber" hint="Students who scanned at least once" />
         <StatCard label="Scans · 14 days" value={scans.length} icon={ScanLine} tone="green" />
-        <StatCard label="AR books" value={books.length} icon={BookOpen} tone="pink" />
+        <StatCard label="AR books" value={books.length} icon={BookOpen} tone="rose" />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.6fr_1fr]">

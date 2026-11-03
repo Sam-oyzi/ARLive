@@ -11,6 +11,11 @@ export type SessionPayload = {
   schoolId: string | null;
 };
 
+/** True when a token predates the user's last password change, which signs out older sessions. */
+export function isRevoked(issuedAt: number, passwordChangedAt: Date | null): boolean {
+  return !!passwordChangedAt && issuedAt < Math.floor(passwordChangedAt.getTime() / 1000);
+}
+
 function key() {
   const secret = process.env.SESSION_SECRET;
   if (!secret || secret.length < 16) throw new Error("SESSION_SECRET is missing or too short");
@@ -36,18 +41,18 @@ export async function signHandoff(uid: string, path: string): Promise<string> {
     .sign(key());
 }
 
-export async function verifyHandoff(token: string | null): Promise<{ uid: string; path: string } | null> {
+export async function verifyHandoff(token: string | null): Promise<{ uid: string; path: string; issuedAt: number } | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, key(), { algorithms: ["HS256"] });
     if (payload.purpose !== "handoff" || typeof payload.uid !== "string" || typeof payload.path !== "string") return null;
-    return { uid: payload.uid, path: payload.path };
+    return { uid: payload.uid, path: payload.path, issuedAt: payload.iat ?? 0 };
   } catch {
     return null;
   }
 }
 
-export async function verifySession(token: string | undefined): Promise<SessionPayload | null> {
+export async function verifySession(token: string | undefined): Promise<(SessionPayload & { issuedAt: number }) | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, key(), { algorithms: ["HS256"] });
@@ -58,6 +63,7 @@ export async function verifySession(token: string | undefined): Promise<SessionP
       uid: payload.uid,
       role: payload.role as Role,
       schoolId: typeof payload.schoolId === "string" ? payload.schoolId : null,
+      issuedAt: payload.iat ?? 0,
     };
   } catch {
     return null;

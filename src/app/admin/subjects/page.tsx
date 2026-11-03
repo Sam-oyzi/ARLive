@@ -7,7 +7,7 @@ import { SubjectIcon } from "@/lib/subject-icons";
 import { plural } from "@/lib/utils";
 import { SubjectActions, SubjectDialog } from "./subject-dialog";
 
-export const metadata = { title: "Subjects" };
+export const metadata = { title: "Categories" };
 
 export default async function SubjectsPage() {
   await requireUser(["SUPER_ADMIN"]);
@@ -19,7 +19,7 @@ export default async function SubjectsPage() {
   const addButton = (
     <SubjectDialog>
       <Button>
-        <Plus /> New subject
+        <Plus /> New category
       </Button>
     </SubjectDialog>
   );
@@ -27,12 +27,12 @@ export default async function SubjectsPage() {
   return (
     <>
       <PageHeader
-        title="Subjects"
-        description="The matières students choose from. Each subject groups the AR books that belong to it."
+        title="Categories"
+        description="How the library is organised: bedtime, animals, adventure… Each category groups the books that belong to it."
         actions={addButton}
       />
       {subjects.length === 0 ? (
-        <EmptyState icon={Shapes} title="No subjects yet" description="Create Chemistry, Biology, Physics… to organise your books." action={addButton} />
+        <EmptyState icon={Shapes} title="No categories yet" description="Create Bedtime, Animal stories, Adventure… to organise your books." action={addButton} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {subjects.map((subject) => {

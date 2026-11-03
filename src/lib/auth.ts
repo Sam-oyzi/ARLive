@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "./db";
 import { homeFor, type Role } from "./roles";
-import { SESSION_COOKIE, SESSION_MAX_AGE, signSession, verifySession } from "./session";
+import { isRevoked, SESSION_COOKIE, SESSION_MAX_AGE, signSession, verifySession } from "./session";
 
 export async function createSession(user: { id: string; role: string; schoolId: string | null }) {
   const token = await signSession({ uid: user.id, role: user.role as Role, schoolId: user.schoolId });
@@ -36,6 +36,7 @@ export const getCurrentUser = cache(async () => {
     include: { school: true },
   });
   if (!user || !user.active) return null;
+  if (isRevoked(session.issuedAt, user.passwordChangedAt)) return null;
   if (user.school && !user.school.active && user.role !== "SUPER_ADMIN") return null;
   return user;
 });

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CircleCheck, Library } from "lucide-react";
 import { EmptyState, PageHeader } from "@/components/ui/misc";
+import { Thumb } from "@/components/thumb";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { SubjectIcon } from "@/lib/subject-icons";
@@ -56,8 +57,7 @@ export default async function CatalogPage() {
                   <div key={book.id} className="flex gap-4 rounded-3xl border border-ink-200/70 bg-white p-4 shadow-soft">
                     <div className="grid h-24 w-[72px] shrink-0 place-items-center overflow-hidden rounded-xl text-white shadow-soft" style={{ background: subject.color }}>
                       {book.coverUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={book.coverUrl} alt="" className="size-full object-cover" />
+                        <Thumb src={book.coverUrl} width={72} height={96} className="size-full object-cover" />
                       ) : (
                         <SubjectIcon icon={subject.icon} className="size-7" />
                       )}

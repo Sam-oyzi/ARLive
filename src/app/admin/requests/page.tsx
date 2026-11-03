@@ -9,7 +9,7 @@ import { SubjectIcon } from "@/lib/subject-icons";
 import { timeAgo } from "@/lib/utils";
 import { RequestDecision } from "../schools/[id]/school-controls";
 
-export const metadata = { title: "Requests" };
+export const metadata = { title: "School access" };
 
 export default async function RequestsPage() {
   await requireUser(["SUPER_ADMIN"]);
@@ -29,7 +29,7 @@ export default async function RequestsPage() {
 
   return (
     <>
-      <PageHeader title="Access requests" description="Schools ask for books from the catalog. Approving grants their students access immediately." />
+      <PageHeader title="School access requests" description="Schools ask for books from the catalog. Approving grants their students access immediately." />
       {pending.length === 0 ? (
         <EmptyState icon={Inbox} title="No pending requests" description="When a school asks for a book, it shows up here." />
       ) : (

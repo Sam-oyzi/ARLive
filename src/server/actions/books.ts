@@ -8,16 +8,18 @@ import { pageTranslationsSchema } from "@/lib/page-translations";
 import { BOOK_FORMATS, type BookFormat } from "@/lib/book-format";
 import { db } from "@/lib/db";
 import { deleteUpload } from "@/lib/storage";
-import { failure, invalid, parseForm, refreshAll, type ActionState } from "../forms";
+import { canPublish, compileState } from "@/lib/books";
+import { checkbox, failure, invalid, parseForm, refreshAll, type ActionState } from "../forms";
 
 const bookSchema = z.object({
   id: z.string().optional(),
   title: z.string({ error: "Enter a title" }).min(2).max(140),
   description: z.string().max(600).optional(),
   gradeLevel: z.string().max(60).optional(),
-  subjectId: z.string({ error: "Pick a subject" }),
+  subjectId: z.string({ error: "Pick a category" }),
   coverUrl: z.string().startsWith("/files/").optional(),
   format: z.enum(Object.keys(BOOK_FORMATS) as [BookFormat, ...BookFormat[]]).default("A5"),
+  featured: checkbox,
 });
 
 export async function saveBook(_prev: ActionState<{ id: string }>, formData: FormData): Promise<ActionState<{ id: string }>> {
@@ -45,13 +47,15 @@ export async function saveBook(_prev: ActionState<{ id: string }>, formData: For
 export async function setBookPublished(bookId: string, published: boolean): Promise<ActionState> {
   try {
     await assertRole(["SUPER_ADMIN"]);
-    if (published) {
-      const book = await db.book.findUniqueOrThrow({ where: { id: bookId } });
-      if (!book.mindUrl) return { error: "Compile the AR targets before publishing." };
+    const book = await db.book.findUniqueOrThrow({ where: { id: bookId }, include: { targets: { select: { id: true, imageUrl: true, ar: true } } } });
+    if (published && book.targets.length === 0) return { error: "Add the book's pages before publishing." };
+    if (published && !canPublish(compileState(book, book.targets), book.targets.length)) {
+      return { error: "Compile the AR pages (or turn them into story pages) before publishing." };
     }
     await db.book.update({ where: { id: bookId }, data: { published } });
     refreshAll();
-    return { ok: true, message: published ? "Published — students with access can scan it now" : "Moved back to draft" };
+    const audience = book.ownerId ? "the family can read it now" : "it's in the library for everyone";
+    return { ok: true, message: published ? `Published: ${audience}` : "Moved back to draft" };
   } catch (error) {
     return failure(error);
   }
@@ -199,7 +203,7 @@ const newContent = z.object({
   text: z.string().max(500).nullable(),
 });
 
-const DEFAULT_COLOR: Partial<Record<ContentData["type"], string>> = { TEXT: "#ffffff", TEXT3D: "#5b5bf6" };
+const DEFAULT_COLOR: Partial<Record<ContentData["type"], string>> = { TEXT: "#ffffff", TEXT3D: "#f26a1a" };
 
 export async function addContent(targetId: string, input: z.input<typeof newContent>): Promise<ActionState<ContentData>> {
   try {

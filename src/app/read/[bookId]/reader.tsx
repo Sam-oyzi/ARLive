@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Languages, Printer, ScanLine, Search, Settings2, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Download, Languages, Printer, ScanLine, Search, Settings2, TriangleAlert } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlipBook, type FlipBookHandle, type FlipPage } from "@/components/flipbook/flipbook";
 import { Dropdown, DropdownContent, DropdownTrigger } from "@/components/ui/dropdown";
+import { Thumb } from "@/components/thumb";
 import { runAction } from "@/lib/action-client";
 import type { PageTranslations } from "@/lib/page-translations";
 import { SubjectIcon } from "@/lib/subject-icons";
@@ -18,7 +19,7 @@ type ReaderPage = { id: string; imageUrl: string; title: string; story: string |
 const DESK = [
   "radial-gradient(55% 45% at 12% 18%, rgb(167 186 150 / 0.28), transparent 70%)",
   "radial-gradient(45% 40% at 88% 82%, rgb(214 168 134 / 0.26), transparent 70%)",
-  "radial-gradient(40% 35% at 85% 12%, rgb(176 168 210 / 0.18), transparent 70%)",
+  "radial-gradient(40% 35% at 85% 12%, rgb(150 200 228 / 0.2), transparent 70%)",
   "radial-gradient(120% 90% at 50% 40%, #f4eee2 0%, #ebe3d3 100%)",
 ].join(", ");
 
@@ -98,8 +99,7 @@ export function Reader({
         <div className="flex min-w-0 items-center gap-2.5">
           {readingPages[0]?.imageUrl ? (
             <span className="h-10 w-8 shrink-0 overflow-hidden rounded-md bg-[#f3e8d3] shadow-sm ring-1 ring-[#947a55]/25">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={readingPages[0].imageUrl} alt="" className="size-full object-contain" />
+              <Thumb src={readingPages[0].imageUrl} width={32} height={40} className="size-full object-contain" />
             </span>
           ) : (
             <span className="grid size-9 shrink-0 place-items-center rounded-xl text-white" style={{ background: book.subject.color }}>
@@ -155,9 +155,15 @@ export function Reader({
               </Link>
             </>
           )}
+          {!editable && pages.length > 0 && (
+            // Phones download from the book's library page; here the bar has no room for it.
+            <Link href={`/print/${book.id}`} className={cn(chip, "hidden text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60 sm:flex")} title="Download or print this book">
+              <Download className="size-4" /> Download
+            </Link>
+          )}
           {!editable && book.canScan && (
             <Link href={`/scan/${book.id}`} className={cn(chip, "font-semibold text-white shadow-soft")} style={{ background: book.subject.color }}>
-              <ScanLine className="size-4" /> Scan with camera
+              <ScanLine className="size-4" /> <span className="hidden sm:inline">Scan with camera</span><span className="sm:hidden">Scan</span>
             </Link>
           )}
         </div>
@@ -196,7 +202,7 @@ export function Reader({
                   className={cn(
                     "absolute top-3 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md ring-1 backdrop-blur transition",
                     corner,
-                    ar ? "bg-brand-500 text-white ring-white/30" : "bg-white/85 text-ink-700 ring-ink-200",
+                    ar ? "bg-brand-600 text-white ring-white/30" : "bg-white/85 text-ink-700 ring-ink-200",
                   )}
                   title={ar ? "Compiled as an AR target — click to make it a story page" : "Story page — click to compile it as an AR target"}
                 >
@@ -252,8 +258,7 @@ export function Reader({
             )}
             style={{ aspectRatio: `1 / ${aspect}` }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={readingPages[i]?.imageUrl ?? p.imageUrl} alt="" className="size-full object-cover" />
+            <Thumb src={readingPages[i]?.imageUrl ?? p.imageUrl} width={32} height={Math.round(32 * aspect)} className="size-full object-cover" />
             {isAr(p) && <span className="absolute right-0.5 bottom-0.5 size-2 rounded-full ring-1 ring-white" style={{ background: book.subject.color }} />}
           </button>
         ))}

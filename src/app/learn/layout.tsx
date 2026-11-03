@@ -5,7 +5,7 @@ import { StudentMenu } from "./student-menu";
 export default async function LearnLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser(["STUDENT"]);
   return (
-    <div className="min-h-dvh bg-[radial-gradient(80%_50%_at_50%_0%,rgb(91_91_246/0.10),transparent)]">
+    <div className="min-h-dvh bg-[radial-gradient(80%_50%_at_50%_0%,rgb(242_106_26/0.10),transparent)]">
       <header className="sticky top-0 z-30 border-b border-ink-200/50 bg-ink-50/80 backdrop-blur-lg safe-top">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 pb-3 sm:pb-0">
           <Logo href="/learn" />
