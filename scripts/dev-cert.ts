@@ -1,5 +1,5 @@
-// Creates a self-signed HTTPS certificate for the dev server that is valid for localhost AND this
-// laptop's Wi-Fi IP, so a phone on the same network can open the camera (browsers require HTTPS).
+// Self-signed HTTPS certificate for phone testing, valid for localhost AND this laptop's Wi-Fi IP,
+// so a phone on the same network can open the camera (browsers require HTTPS).
 // Nothing is installed into the system trust store; the phone shows a one-time warning instead.
 import fs from "node:fs";
 import path from "node:path";
@@ -11,13 +11,13 @@ const keyFile = path.join(dir, "dev-key.pem");
 const certFile = path.join(dir, "dev-cert.pem");
 const metaFile = path.join(dir, "dev-cert.json");
 
-async function main() {
+/** Reuses the existing certificate unless the IP addresses changed or it expired. */
+export async function ensureDevCert(): Promise<{ key: string; cert: string; ips: string[] }> {
   const ips = lanAddresses();
   const wanted = ["127.0.0.1", ...ips].sort().join(",");
   const existing = fs.existsSync(metaFile) ? (JSON.parse(fs.readFileSync(metaFile, "utf8")) as { ips: string; expires: string }) : null;
   if (existing?.ips === wanted && new Date(existing.expires) > new Date() && fs.existsSync(keyFile) && fs.existsSync(certFile)) {
-    printUrls(ips);
-    return;
+    return { key: fs.readFileSync(keyFile, "utf8"), cert: fs.readFileSync(certFile, "utf8"), ips };
   }
 
   const expires = new Date(Date.now() + 365 * 86_400_000);
@@ -39,18 +39,5 @@ async function main() {
   fs.writeFileSync(keyFile, pems.private);
   fs.writeFileSync(certFile, pems.cert);
   fs.writeFileSync(metaFile, JSON.stringify({ ips: wanted, expires: expires.toISOString() }));
-  printUrls(ips);
+  return { key: pems.private, cert: pems.cert, ips };
 }
-
-function printUrls(ips: string[]) {
-  console.log("\n  ARLive dev over HTTPS");
-  console.log("  Laptop:  https://localhost:3000");
-  for (const ip of ips) console.log(`  Phone:   https://${ip}:3000   (same Wi-Fi; accept the certificate warning once)`);
-  if (ips.length === 0) console.log("  No Wi-Fi address found — connect to a network to test on a phone.");
-  console.log("");
-}
-
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});

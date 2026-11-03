@@ -4,15 +4,32 @@
     {
       "name": "arlive",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000
     },
     {
       "name": "arlive-phone",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:phone"],
-      "port": 3000,
-      "url": "https://localhost:3000"
+      "runtimeArgs": [
+        "run",
+        "dev:phone"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "sketchbook-example",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4173",
+        "--directory",
+        "sketchbook-exemple"
+      ],
+      "port": 4173
     }
   ]
 }

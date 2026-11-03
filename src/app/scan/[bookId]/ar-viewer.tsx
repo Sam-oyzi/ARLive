@@ -20,10 +20,13 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import * as THREE from "three";
 import { ARError, ARSession, loadMindAR, type ARAnchor, type ARStage } from "@/ar/ar-session";
 import { applyTransform, createContent, type ContentHandle } from "@/ar/content-objects";
+import { MotionPlayer } from "@/ar/motion";
+import { parseMotion } from "@/lib/motion-schema";
 import { PhoneQR } from "@/components/phone-qr";
 import type { ContentData } from "@/lib/content";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { cn, plural } from "@/lib/utils";
+import { QuickLook } from "./quick-look";
 
 type ViewerTarget = {
   id: string;
@@ -49,7 +52,7 @@ const STAGE_TEXT: Record<ARStage, string> = {
   running: "Ready",
 };
 
-type Loaded = { anchor: ARAnchor; handles: ContentHandle[] };
+type Loaded = { anchor: ARAnchor; handles: ContentHandle[]; motions: MotionPlayer[] };
 
 export function ARViewer({ book, targets, backHref }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -121,31 +124,43 @@ export function ARViewer({ book, targets, backHref }: Props) {
     // Everything up to the first await runs inside the tap, so media can be unlocked for sound.
     for (const target of targets) {
       const anchor = session.addAnchor(target.targetIndex);
-      const handles = target.contents.map((content) => {
+      const handles: ContentHandle[] = [];
+      const motions: MotionPlayer[] = [];
+      for (const content of target.contents) {
         const handle = createContent(content, "ar");
+        // wrapper = authored placement (keyframes drive it) → motion group (presets drive it) → content
         const wrapper = new THREE.Group();
         applyTransform(wrapper, content);
-        wrapper.add(handle.object);
+        const motionGroup = new THREE.Group();
+        motionGroup.add(handle.object);
+        wrapper.add(motionGroup);
         anchor.gesture.add(wrapper);
         handle.unlock();
         handle.setMuted(muted);
-        return handle;
-      });
+        handles.push(handle);
+        motions.push(new MotionPlayer(parseMotion(content.motion), content.type, wrapper, motionGroup));
+      }
       session.onTick((delta) => {
-        if (anchor.visible) handles.forEach((h) => h.update(delta));
+        if (!anchor.visible) return;
+        handles.forEach((h) => h.update(delta));
+        motions.forEach((m) => m.update(delta));
       });
       anchor.onFound = () => {
         handles.forEach((h) => {
           h.load().catch(() => {});
           h.play();
         });
+        motions.forEach((m) => m.found());
         setActiveId(target.id);
         setExpanded(false);
         navigator.vibrate?.(25);
         logScan(target.id);
       };
-      anchor.onLost = () => handles.forEach((h) => h.pause());
-      loadedRef.current.set(target.id, { anchor, handles });
+      anchor.onLost = () => {
+        handles.forEach((h) => h.pause());
+        motions.forEach((m) => m.lost());
+      };
+      loadedRef.current.set(target.id, { anchor, handles, motions });
     }
 
     session
@@ -183,7 +198,9 @@ export function ARViewer({ book, targets, backHref }: Props) {
 
   function replay() {
     if (!activeId) return;
-    loadedRef.current.get(activeId)?.handles.forEach((h) => h.restart());
+    const loaded = loadedRef.current.get(activeId);
+    loaded?.handles.forEach((h) => h.restart());
+    loaded?.motions.forEach((m) => m.restart());
   }
 
   function resetGesture() {
@@ -356,6 +373,7 @@ export function ARViewer({ book, targets, backHref }: Props) {
               </span>
               {active.description && <ChevronDown className={cn("mt-1 size-5 shrink-0 text-ink-400 transition", expanded && "rotate-180")} />}
             </button>
+            <QuickLook key={active.id} contents={active.contents} />
             <div className="mt-3 flex gap-2">
               <button onClick={replay} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-2xl bg-ink-100 text-sm font-semibold text-ink-800 active:bg-ink-200">
                 <RotateCcw className="size-4" /> Replay

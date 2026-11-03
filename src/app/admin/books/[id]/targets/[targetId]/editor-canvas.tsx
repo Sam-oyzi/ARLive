@@ -4,14 +4,17 @@
 // how students see it when holding a phone over the book.
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Grid, OrbitControls, TransformControls, useTexture } from "@react-three/drei";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { createContent } from "@/ar/content-objects";
+import { applyTransform, createContent } from "@/ar/content-objects";
+import { applyPreset, resetGroup, upAxis } from "@/ar/motion";
 import type { ContentData } from "@/lib/content";
+import { parseMotion, sampleKeyframes, type Pose } from "@/lib/motion-schema";
 
 export type TransformMode = "translate" | "rotate" | "scale";
-export type Transform = Pick<ContentData, "posX" | "posY" | "posZ" | "rotX" | "rotY" | "rotZ" | "scale">;
+export type Transform = Pose;
+export type ContextTarget = { kind: "content"; id: string } | { kind: "page" };
 
 const DEG = Math.PI / 180;
 
@@ -30,7 +33,17 @@ function Environment() {
   return null;
 }
 
-function Page({ url, aspect, onDeselect }: { url: string; aspect: number; onDeselect: () => void }) {
+function Page({
+  url,
+  aspect,
+  onDeselect,
+  onContext,
+}: {
+  url: string;
+  aspect: number;
+  onDeselect: () => void;
+  onContext: (target: ContextTarget, x: number, y: number) => void;
+}) {
   const texture = useTexture(url);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
@@ -38,13 +51,17 @@ function Page({ url, aspect, onDeselect }: { url: string; aspect: number; onDese
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     if (e.delta <= 2) onDeselect();
   };
+  const onContextMenu = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation();
+    onContext({ kind: "page" }, e.nativeEvent.clientX, e.nativeEvent.clientY);
+  };
   return (
     <group>
-      <mesh position={[0, 0, -0.002]} onClick={onClick}>
+      <mesh position={[0, 0, -0.002]} onClick={onClick} onContextMenu={onContextMenu}>
         <planeGeometry args={[1.04, aspect + 0.04]} />
         <meshBasicMaterial color="#000000" transparent opacity={0.08} />
       </mesh>
-      <mesh onClick={onClick}>
+      <mesh onClick={onClick} onContextMenu={onContextMenu}>
         <planeGeometry args={[1, aspect]} />
         <meshBasicMaterial map={texture} toneMapped={false} />
       </mesh>
@@ -54,20 +71,35 @@ function Page({ url, aspect, onDeselect }: { url: string; aspect: number; onDese
 
 function ContentNode({
   data,
+  pose,
   selected,
+  showGizmo,
+  preview,
   mode,
   onSelect,
   onTransform,
   onClips,
+  onContext,
 }: {
   data: ContentData;
+  /** Overrides the authored transform (keyframe editing). */
+  pose: Pose | null;
   selected: boolean;
+  showGizmo: boolean;
+  /** Play animations in the editor. */
+  preview: boolean;
   mode: TransformMode;
   onSelect: (id: string) => void;
   onTransform: (id: string, t: Transform) => void;
   onClips: (id: string, clips: string[]) => void;
+  onContext: (target: ContextTarget, x: number, y: number) => void;
 }) {
-  const [group, setGroup] = useState<THREE.Group | null>(null);
+  const [wrapper, setWrapper] = useState<THREE.Group | null>(null);
+  const motionGroup = useRef<THREE.Group>(null);
+  const wasAnimatingWrapper = useRef(false);
+  const motion = useMemo(() => parseMotion(data.motion), [data.motion]);
+  const transform = pose ?? data;
+
   // Rebuild only when something that changes the object itself changes (not on transform edits).
   const handle = useMemo(
     () => createContent(data, "editor"),
@@ -92,43 +124,69 @@ function ContentNode({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handle]);
 
-  useFrame((_, delta) => handle.update(delta));
+  useFrame(({ clock }, delta) => {
+    handle.update(delta);
+    const group = motionGroup.current;
+    if (!group || !wrapper) return;
+    const t = clock.elapsedTime;
+
+    if (preview && motion?.kind === "preset") applyPreset(group, motion.preset, t * motion.speed, upAxis(data.type));
+    else resetGroup(group);
+
+    // Keyframes move the whole item, which would fight the gizmo: preview them only when not
+    // selected and not being edited on the timeline.
+    const animateWrapper = preview && motion?.kind === "keyframes" && !selected && !pose;
+    if (animateWrapper) {
+      const sampled = sampleKeyframes(motion, t);
+      if (sampled) applyTransform(wrapper, sampled);
+    } else if (wasAnimatingWrapper.current) {
+      applyTransform(wrapper, transform); // back to the authored placement
+    }
+    wasAnimatingWrapper.current = animateWrapper;
+  });
 
   return (
     <>
       <group
-        ref={setGroup}
-        position={[data.posX, data.posY, data.posZ]}
-        rotation={[data.rotX * DEG, data.rotY * DEG, data.rotZ * DEG]}
-        scale={data.scale}
+        ref={setWrapper}
+        position={[transform.posX, transform.posY, transform.posZ]}
+        rotation={[transform.rotX * DEG, transform.rotY * DEG, transform.rotZ * DEG]}
+        scale={transform.scale}
         onClick={(e: ThreeEvent<MouseEvent>) => {
           e.stopPropagation();
           onSelect(data.id);
         }}
+        onContextMenu={(e: ThreeEvent<MouseEvent>) => {
+          e.stopPropagation();
+          onSelect(data.id);
+          onContext({ kind: "content", id: data.id }, e.nativeEvent.clientX, e.nativeEvent.clientY);
+        }}
       >
-        <primitive object={handle.object} />
+        <group ref={motionGroup}>
+          <primitive object={handle.object} />
+        </group>
       </group>
-      {selected && group && (
+      {selected && showGizmo && wrapper && (
         <TransformControls
-          object={group}
+          object={wrapper}
           mode={mode}
           size={0.8}
           onObjectChange={() => {
-            let scale = data.scale;
+            let scale = transform.scale;
             if (mode === "scale") {
               // Keep scale uniform: take whichever axis the user dragged.
-              const axes = [group.scale.x, group.scale.y, group.scale.z];
-              scale = axes.reduce((best, v) => (Math.abs(v - data.scale) > Math.abs(best - data.scale) ? v : best), data.scale);
+              const axes = [wrapper.scale.x, wrapper.scale.y, wrapper.scale.z];
+              scale = axes.reduce((best, v) => (Math.abs(v - transform.scale) > Math.abs(best - transform.scale) ? v : best), transform.scale);
               scale = Math.max(0.01, scale);
-              group.scale.setScalar(scale);
+              wrapper.scale.setScalar(scale);
             }
             onTransform(data.id, {
-              posX: group.position.x,
-              posY: group.position.y,
-              posZ: group.position.z,
-              rotX: group.rotation.x / DEG,
-              rotY: group.rotation.y / DEG,
-              rotZ: group.rotation.z / DEG,
+              posX: wrapper.position.x,
+              posY: wrapper.position.y,
+              posZ: wrapper.position.z,
+              rotX: wrapper.rotation.x / DEG,
+              rotY: wrapper.rotation.y / DEG,
+              rotZ: wrapper.rotation.z / DEG,
               scale,
             });
           }}
@@ -144,9 +202,13 @@ export default function EditorCanvas({
   contents,
   selectedId,
   mode,
+  preview,
+  editingPose,
+  showGizmo,
   onSelect,
   onTransform,
   onClips,
+  onContext,
 }: {
   imageUrl: string;
   /** target height / width */
@@ -154,9 +216,14 @@ export default function EditorCanvas({
   contents: ContentData[];
   selectedId: string | null;
   mode: TransformMode;
+  preview: boolean;
+  /** The item being keyframed and its current pose on the timeline. */
+  editingPose: { id: string; pose: Pose } | null;
+  showGizmo: boolean;
   onSelect: (id: string | null) => void;
   onTransform: (id: string, t: Transform) => void;
   onClips: (id: string, clips: string[]) => void;
+  onContext: (target: ContextTarget, x: number, y: number) => void;
 }) {
   // The scene is authored directly in target space (X right, Y towards the top of the page, Z out of
   // the page) with a Z-up camera, rather than rotating a parent group to lay the page flat:
@@ -187,17 +254,21 @@ export default function EditorCanvas({
         fadeStrength={1.5}
       />
       <Suspense fallback={null}>
-        <Page url={imageUrl} aspect={aspect} onDeselect={() => onSelect(null)} />
+        <Page url={imageUrl} aspect={aspect} onDeselect={() => onSelect(null)} onContext={onContext} />
       </Suspense>
       {contents.map((content) => (
         <ContentNode
           key={content.id}
           data={content}
+          pose={editingPose?.id === content.id ? editingPose.pose : null}
           selected={content.id === selectedId}
+          showGizmo={showGizmo}
+          preview={preview}
           mode={mode}
           onSelect={onSelect}
           onTransform={onTransform}
           onClips={onClips}
+          onContext={onContext}
         />
       ))}
       <OrbitControls makeDefault minDistance={0.3} maxDistance={6} maxPolarAngle={Math.PI * 0.49} target={[0, 0, 0.08]} />

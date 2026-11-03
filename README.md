@@ -66,10 +66,15 @@ Browsers only open the camera over HTTPS, so start the dev server in phone mode:
 npm run dev:phone
 ```
 
-It creates a self-signed certificate for `localhost` and your laptop's Wi-Fi IP (nothing is
-installed on your computer) and prints the phone URL. Then:
+It serves the app twice and prints both addresses:
 
-1. On the laptop, open `https://localhost:3000` (accept the certificate warning) and sign in.
+- `http://localhost:3000` for the laptop browser (and Claude's preview panel), no warning.
+- `https://<your-wifi-ip>:3443` for phones on the same Wi-Fi. This uses a self-signed
+  certificate (nothing is installed on your computer), so the phone shows a warning once.
+
+Then:
+
+1. On the laptop, open `http://localhost:3000` and sign in.
 2. Open a book's scanner (`Test in AR` in the admin, or a subject page as a student). A
    **Continue on your phone** QR code appears.
 3. Scan it with the phone (same Wi-Fi). Accept the certificate warning once
@@ -105,6 +110,33 @@ src/app/files        serves uploaded files (with range requests for video)
 src/server/actions   server actions (all authorised server-side)
 src/lib              auth, storage, shared helpers
 ```
+
+## Making a book (read, AR, print)
+
+The seed installs **"Example: The Journey of a Water Drop"** (Chemistry): a cover + 6 two-page
+spreads in the sketchbook format, with three AR pages that already have 3D content (molecule model,
+3D text with animations). Open it from *Books & targets → Preview book* to see the result before
+making your own. Its pages are drawn by `scripts/make-example-book.ts`.
+
+1. Plan it with Claude: ask for a book on any topic. The `arlive-book` skill
+   (`.claude/skills/arlive-book`) writes `books/<slug>/plan.md`, copy-paste ChatGPT image prompts in
+   `prompts.md`, and `pages.json` (titles, stories, which pages are AR).
+2. Generate each picture in ChatGPT and save it with the file name from `prompts.md`.
+3. In ARLive, create the book (pick its printed page size) and drop **all images and `pages.json`
+   together**. Tick "two-page spreads" if the pictures are spreads; they're split into pages.
+4. **Preview book** opens the flip-book reader: drag or click to turn pages, use the magnifier, and
+   switch each page between *AR page* (compiled as a target) and *Story page* (reading and print only).
+5. Place 3D content on the AR pages, **Compile**, **Publish**.
+6. **Print** lays the pages out one per sheet at the real size. Use "Save as PDF" and send it to a
+   print shop. AR pages can carry a small "scan this page" badge.
+
+Students get a **Read the book** button next to **Start scanning**.
+
+**3D models are optimised on upload.** AI generators (Hunyuan3D, Meshy, Tripo…) export
+million-triangle models with 4K textures; every uploaded GLB is reduced to about 80k triangles with
+1024 px WebP textures and meshopt-compressed geometry (e.g. a Hunyuan3D snowflake: 76.8 MB → 1.1 MB in
+about 2 s). If optimising fails or doesn't help, the original file is kept. To optimise a file by
+hand: `npm run optimize:glb -- model.glb`.
 
 ## Production notes
 

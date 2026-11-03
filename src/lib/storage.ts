@@ -14,7 +14,8 @@ export const UPLOAD_KINDS = {
   targets: { exts: ["jpg", "jpeg", "png", "webp"], maxMB: 15 },
   covers: { exts: ["jpg", "jpeg", "png", "webp"], maxMB: 10 },
   logos: { exts: ["jpg", "jpeg", "png", "webp", "svg"], maxMB: 5 },
-  models: { exts: ["glb"], maxMB: 100 },
+  // Uploads are optimised on arrival (src/lib/glb-optimize.ts), so large AI-generated files are fine.
+  models: { exts: ["glb"], maxMB: 250 },
   videos: { exts: ["mp4", "webm", "mov"], maxMB: 200 },
   images: { exts: ["jpg", "jpeg", "png", "webp", "gif"], maxMB: 15 },
   audio: { exts: ["mp3", "m4a", "ogg", "wav"], maxMB: 50 },

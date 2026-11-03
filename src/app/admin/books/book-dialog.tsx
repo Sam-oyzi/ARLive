@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/client-bits";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select, Textarea } from "@/components/ui/form";
+import { BOOK_FORMATS } from "@/lib/book-format";
 import { saveBook } from "@/server/actions/books";
 
 type Book = {
@@ -17,6 +18,7 @@ type Book = {
   gradeLevel: string | null;
   subjectId: string;
   coverUrl: string | null;
+  format: string;
 };
 
 export function BookDialog({
@@ -75,6 +77,15 @@ export function BookDialog({
                     <Input id="gradeLevel" name="gradeLevel" defaultValue={book?.gradeLevel ?? ""} placeholder="Grade 10" />
                   </Field>
                 </div>
+                <Field label="Printed page size" htmlFor="format" hint="The reader and the print file use this size.">
+                  <Select id="format" name="format" defaultValue={book?.format ?? "A5"}>
+                    {Object.entries(BOOK_FORMATS).map(([key, f]) => (
+                      <option key={key} value={key}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
                 <Field label="Description" htmlFor="description">
                   <Textarea id="description" name="description" defaultValue={book?.description ?? ""} className="min-h-20" />
                 </Field>

@@ -1,0 +1,259 @@
+"use client";
+
+import Link from "next/link";
+import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Languages, Printer, ScanLine, Search, Settings2, TriangleAlert } from "lucide-react";
+import { DropdownMenu } from "radix-ui";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FlipBook, type FlipBookHandle, type FlipPage } from "@/components/flipbook/flipbook";
+import { Dropdown, DropdownContent, DropdownTrigger } from "@/components/ui/dropdown";
+import { runAction } from "@/lib/action-client";
+import type { PageTranslations } from "@/lib/page-translations";
+import { SubjectIcon } from "@/lib/subject-icons";
+import { cn } from "@/lib/utils";
+import { setTargetAr } from "@/server/actions/books";
+
+type ReaderPage = { id: string; imageUrl: string; title: string; story: string | null; ar: boolean; translations?: PageTranslations };
+
+// A cream desk with soft watercolour washes, so the book reads like paper on a table.
+const DESK = [
+  "radial-gradient(55% 45% at 12% 18%, rgb(167 186 150 / 0.28), transparent 70%)",
+  "radial-gradient(45% 40% at 88% 82%, rgb(214 168 134 / 0.26), transparent 70%)",
+  "radial-gradient(40% 35% at 85% 12%, rgb(176 168 210 / 0.18), transparent 70%)",
+  "radial-gradient(120% 90% at 50% 40%, #f4eee2 0%, #ebe3d3 100%)",
+].join(", ");
+
+const chip = "flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition";
+
+export function Reader({
+  book,
+  aspect,
+  pages,
+  editable,
+  backHref,
+}: {
+  book: {
+    id: string;
+    title: string;
+    format: string;
+    subject: { name: string; color: string; icon: string };
+    canScan: boolean;
+    needsCompile: boolean;
+  };
+  aspect: number;
+  pages: ReaderPage[];
+  /** Platform admins can choose which pages are AR targets. */
+  editable: boolean;
+  backHref: string;
+}) {
+  const flipbook = useRef<FlipBookHandle>(null);
+  const [visible, setVisible] = useState<number[]>([0]);
+  const [magnifier, setMagnifier] = useState(false);
+  const [finePointer, setFinePointer] = useState(false);
+  const [locale, setLocale] = useState("");
+  // Optimistic AR flags while toggling.
+  const [arOverride, setArOverride] = useState<Record<string, boolean>>({});
+  const isAr = (p: ReaderPage) => arOverride[p.id] ?? p.ar;
+  const changed = Object.keys(arOverride).length > 0;
+
+  useEffect(() => setFinePointer(window.matchMedia("(pointer: fine)").matches), []);
+
+  const languages = useMemo(() => [...new Set(pages.flatMap((page) => Object.keys(page.translations ?? {})))].sort(), [pages]);
+  const languageName = (lang: string) => lang ? new Intl.DisplayNames([lang], { type: "language" }).of(lang) ?? lang : "Original";
+  const readingPages = useMemo(() => pages.map((page) => {
+    const translation = page.translations?.[locale];
+    return translation
+      ? { ...page, imageUrl: translation.imageUrl ?? page.imageUrl, title: translation.title, story: translation.story ?? null, lang: locale }
+      : { ...page, lang: "en" };
+  }), [pages, locale]);
+
+  const flipPages: FlipPage[] = useMemo(
+    () => readingPages.map((p) => ({ id: p.id, imageUrl: p.imageUrl, title: p.title, ar: arOverride[p.id] ?? p.ar })),
+    [readingPages, arOverride],
+  );
+  const onSpreadChange = useCallback((indexes: number[]) => setVisible(indexes), []);
+
+  async function toggleAr(page: ReaderPage) {
+    const next = !isAr(page);
+    setArOverride((m) => ({ ...m, [page.id]: next }));
+    const result = await runAction(setTargetAr(page.id, next));
+    if (!result?.ok) setArOverride((m) => ({ ...m, [page.id]: !next }));
+  }
+
+  const arCount = pages.filter(isAr).length;
+  const shown = visible.flatMap((i) => readingPages[i] ? [readingPages[i]] : []);
+  const backCover = pages.length > 1 && shown.length === 0;
+  const atEnd = pages.length <= 1 || backCover || (pages.length % 2 === 0 && visible.includes(pages.length - 1));
+  // Preserve the last spread's caption height while the back cover is closed.
+  const captionPages = backCover ? readingPages.slice(-2) : shown;
+
+  return (
+    <div className="fixed inset-0 flex flex-col overflow-hidden text-ink-900" style={{ background: DESK }}>
+      {/* top bar */}
+      <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-1 safe-top sm:px-6">
+        <Link href={backHref} className="grid size-10 shrink-0 place-items-center rounded-full text-ink-600 ring-1 ring-ink-900/10 hover:bg-white/60 hover:text-ink-900" aria-label="Back">
+          <ArrowLeft className="size-5" />
+        </Link>
+        <div className="flex min-w-0 items-center gap-2.5">
+          {readingPages[0]?.imageUrl ? (
+            <span className="h-10 w-8 shrink-0 overflow-hidden rounded-md bg-[#f3e8d3] shadow-sm ring-1 ring-[#947a55]/25">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={readingPages[0].imageUrl} alt="" className="size-full object-contain" />
+            </span>
+          ) : (
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl text-white" style={{ background: book.subject.color }}>
+              <SubjectIcon icon={book.subject.icon} className="size-[18px]" />
+            </span>
+          )}
+          <div className="min-w-0 leading-tight">
+            <div className="truncate font-serif text-xl"><bdi lang={readingPages[0]?.lang}>{pages[0]?.translations?.[locale]?.title ?? book.title}</bdi></div>
+            <div className="truncate text-xs text-ink-500">
+              {book.subject.name} · {pages.length} pages · {arCount} with AR
+            </div>
+          </div>
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {languages.length > 0 && (
+            <Dropdown modal={false}>
+              <DropdownTrigger aria-label={`Book language: ${languageName(locale)}`} className={cn(chip, "max-w-36 bg-[#f6eedf]/70 text-[#58432f] ring-1 ring-[#947a55]/25 hover:bg-[#f9f1e4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a88b61] data-[state=open]:bg-[#eee1ca]")}>
+                <Languages aria-hidden="true" className="size-4 shrink-0" />
+                <bdi lang={locale || undefined} className="truncate">{languageName(locale)}</bdi>
+                <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
+              </DropdownTrigger>
+              <DropdownContent align="start" className="max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-36 overflow-y-auto border-[#a88b61]/30 bg-[#faf2e4] shadow-[0_10px_26px_rgb(81_58_32_/_0.18)]">
+                <DropdownMenu.RadioGroup value={locale} onValueChange={setLocale} aria-label="Book language">
+                  {["", ...languages].map((lang) => (
+                    <DropdownMenu.RadioItem key={lang} value={lang} textValue={languageName(lang)} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl px-3 py-2 text-sm text-[#58432f] outline-none select-none data-[state=checked]:bg-[#eee2cb] data-[state=checked]:font-semibold data-[highlighted]:bg-[#e9d9bc]">
+                      <bdi lang={lang || undefined}>{languageName(lang)}</bdi>
+                      <span className="size-4 shrink-0">
+                        <DropdownMenu.ItemIndicator><Check aria-hidden="true" className="size-4" /></DropdownMenu.ItemIndicator>
+                      </span>
+                    </DropdownMenu.RadioItem>
+                  ))}
+                </DropdownMenu.RadioGroup>
+              </DropdownContent>
+            </Dropdown>
+          )}
+          {finePointer && (
+            <button
+              onClick={() => setMagnifier((m) => !m)}
+              className={cn(chip, magnifier ? "bg-ink-900 text-white" : "text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60")}
+              aria-pressed={magnifier}
+              title="Magnifier: move the pointer over a page"
+            >
+              <Search className="size-4" /> <span className="hidden sm:inline">Magnifier</span>
+            </button>
+          )}
+          {editable && (
+            <>
+              <Link href={`/admin/books/${book.id}`} className={cn(chip, "hidden text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60 sm:flex")}>
+                <Settings2 className="size-4" /> Studio
+              </Link>
+              <Link href={`/print/${book.id}`} className={cn(chip, "bg-ink-900 text-white hover:bg-ink-800")}>
+                <Printer className="size-4" /> Print
+              </Link>
+            </>
+          )}
+          {!editable && book.canScan && (
+            <Link href={`/scan/${book.id}`} className={cn(chip, "font-semibold text-white shadow-soft")} style={{ background: book.subject.color }}>
+              <ScanLine className="size-4" /> Scan with camera
+            </Link>
+          )}
+        </div>
+      </header>
+
+      {editable && (book.needsCompile || changed) && (
+        <div className="mx-auto mt-1 flex w-fit max-w-[calc(100%-2rem)] shrink-0 items-center gap-2 rounded-full bg-amber-100/80 px-4 py-1.5 text-xs font-medium text-amber-900 ring-1 ring-amber-300/60">
+          <TriangleAlert className="size-3.5 shrink-0" />
+          AR pages changed: recompile in the studio so phones recognise them.
+          <Link href={`/admin/books/${book.id}`} className="shrink-0 font-semibold underline underline-offset-2">
+            Open studio
+          </Link>
+        </div>
+      )}
+
+      {/* the book */}
+      <div className="relative min-h-0 flex-1">
+        {pages.length === 0 ? (
+          <div className="grid size-full place-items-center font-serif text-xl text-ink-500 italic">This book has no pages yet.</div>
+        ) : (
+          <FlipBook
+            ref={flipbook}
+            pages={flipPages}
+            aspect={aspect}
+            magnifier={magnifier}
+            onSpreadChange={onSpreadChange}
+            className="absolute inset-0"
+            renderOverlay={(_, index, side) => {
+              const page = pages[index]!;
+              const ar = isAr(page);
+              const corner = side === "left" ? "left-3" : "right-3";
+              return editable ? (
+                <button
+                  onClick={() => toggleAr(page)}
+                  className={cn(
+                    "absolute top-3 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md ring-1 backdrop-blur transition",
+                    corner,
+                    ar ? "bg-brand-500 text-white ring-white/30" : "bg-white/85 text-ink-700 ring-ink-200",
+                  )}
+                  title={ar ? "Compiled as an AR target — click to make it a story page" : "Story page — click to compile it as an AR target"}
+                >
+                  <ScanLine className="size-3.5" /> {ar ? "AR page" : "Story page"}
+                </button>
+              ) : ar ? (
+                <span className={cn("pointer-events-none absolute top-3 flex items-center gap-1.5 rounded-full bg-ink-950/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur", corner)}>
+                  <ScanLine className="size-3.5" /> Scan me
+                </span>
+              ) : null;
+            }}
+          />
+        )}
+        <button
+          onClick={() => flipbook.current?.prev()}
+          disabled={!pages.length || visible.includes(0)}
+          className="absolute top-1/2 left-1 grid h-16 w-10 -translate-y-1/2 place-items-center text-ink-400 transition enabled:hover:text-ink-900 disabled:opacity-30 sm:left-4"
+          aria-label="Previous page"
+        >
+          <ChevronLeft className="size-8" strokeWidth={1.25} />
+        </button>
+        <button
+          onClick={() => flipbook.current?.next()}
+          disabled={atEnd}
+          className="absolute top-1/2 right-1 grid h-16 w-10 -translate-y-1/2 place-items-center text-ink-400 transition enabled:hover:text-ink-900 disabled:opacity-30 sm:right-4"
+          aria-label="Next page"
+        >
+          <ChevronRight className="size-8" strokeWidth={1.25} />
+        </button>
+      </div>
+
+      {/* caption for the open pages */}
+      <div className="mx-auto w-full max-w-3xl shrink-0 px-6 pt-1 text-center">
+        <div className="truncate text-[13px] text-ink-600">{backCover ? "Back cover" : shown.map((page, index) => <span key={page.id}>{index > 0 && " · "}<bdi lang={page.lang}>{page.title}</bdi></span>)}</div>
+        {captionPages.some((page) => page.story) && (
+          <p aria-hidden={backCover || undefined} className={cn("mx-auto mt-1 line-clamp-2 max-w-2xl font-serif text-[17px] leading-snug text-ink-700 italic", backCover && "invisible")}>
+            {captionPages.map((page) => page.story && <bdi key={page.id} lang={page.lang}>{page.story}{"  "}</bdi>)}
+          </p>
+        )}
+      </div>
+
+      {/* page strip */}
+      <nav className="flex shrink-0 justify-center gap-1.5 overflow-x-auto px-4 pt-3 pb-4 scrollbar-none safe-bottom" aria-label="Pages">
+        {pages.map((p, i) => (
+          <button
+            key={p.id}
+            onClick={() => flipbook.current?.goToPage(i)}
+            title={`${i + 1}. ${p.title}${isAr(p) ? " (AR)" : ""}`}
+            className={cn(
+              "relative w-8 shrink-0 overflow-hidden rounded-[3px] shadow-sm ring-2 transition",
+              visible.includes(i) ? "ring-ink-800" : "opacity-55 ring-transparent hover:opacity-100",
+            )}
+            style={{ aspectRatio: `1 / ${aspect}` }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={readingPages[i]?.imageUrl ?? p.imageUrl} alt="" className="size-full object-cover" />
+            {isAr(p) && <span className="absolute right-0.5 bottom-0.5 size-2 rounded-full ring-1 ring-white" style={{ background: book.subject.color }} />}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}

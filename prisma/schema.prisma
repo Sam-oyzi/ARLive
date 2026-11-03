@@ -73,6 +73,8 @@ model Book {
   description String?
   gradeLevel  String?
   coverUrl    String?
+  /// Printed page size: A5 | SKETCH | A4 | LETTER | SQUARE (src/lib/book-format.ts)
+  format      String          @default("A5")
   published   Boolean         @default(false)
   subjectId   String
   subject     Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
@@ -90,17 +92,20 @@ model Book {
   @@index([subjectId])
 }
 
-/// One scannable page/image in a book.
+/// One page of a book. Pages with `ar` are compiled as image targets; the others are story pages
+/// that only appear in the reader and in print.
 model Target {
   id          String      @id @default(cuid())
   bookId      String
   book        Book        @relation(fields: [bookId], references: [id], onDelete: Cascade)
   name        String
   description String?
+  translations Json?
   imageUrl    String
   width       Int
   height      Int
   order       Int         @default(0)
+  ar          Boolean     @default(true)
   /// Position of this target inside the book's compiled .mind file.
   targetIndex Int?
   createdAt   DateTime    @default(now())
@@ -134,6 +139,8 @@ model Content {
   loop      Boolean  @default(true)
   /// Animation clip to play for MODEL; null plays every clip.
   animation String?
+  /// Transform animation as JSON (src/lib/motion-schema.ts): a preset (spin, float…) or keyframes.
+  motion    String?
   order     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

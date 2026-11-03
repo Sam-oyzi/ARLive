@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import { assertRole, AuthError } from "@/lib/auth";
-import { targetsSignature } from "@/lib/books";
+import { arTargets, targetsSignature } from "@/lib/books";
 import { db } from "@/lib/db";
 import { deleteUpload, saveUpload, UploadError } from "@/lib/storage";
 
@@ -16,7 +16,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const book = await db.book.findUnique({ where: { id }, include: { targets: true } });
     if (!book) return NextResponse.json({ error: "Book not found." }, { status: 404 });
 
-    const known = new Set(book.targets.map((t) => t.id));
+    const compiled = arTargets(book.targets);
+    const known = new Set(compiled.map((t) => t.id));
     if (order.length !== known.size || !order.every((tid) => known.has(tid))) {
       return NextResponse.json(
         { error: "Pages changed while compiling. Refresh the page and compile again." },
@@ -29,8 +30,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     await db.$transaction([
       db.book.update({
         where: { id },
-        data: { mindUrl: url, mindHash: targetsSignature(book.targets), compiledAt: new Date() },
+        data: { mindUrl: url, mindHash: targetsSignature(compiled), compiledAt: new Date() },
       }),
+      // Story pages are not in the .mind file.
+      db.target.updateMany({ where: { bookId: id, ar: false }, data: { targetIndex: null } }),
       ...order.map((targetId, index) => db.target.update({ where: { id: targetId }, data: { targetIndex: index } })),
     ]);
     await deleteUpload(book.mindUrl);

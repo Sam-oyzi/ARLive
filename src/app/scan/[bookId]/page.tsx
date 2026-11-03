@@ -19,7 +19,7 @@ export default async function ScanPage({ params }: { params: Promise<{ bookId: s
     include: {
       subject: true,
       targets: {
-        where: { targetIndex: { not: null } },
+        where: { ar: true, targetIndex: { not: null } },
         orderBy: [{ order: "asc" }, { createdAt: "asc" }],
         include: { contents: { orderBy: { order: "asc" } } },
       },

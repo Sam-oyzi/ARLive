@@ -1,19 +1,28 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Box, Image as ImageIcon, Lightbulb, Pencil, ScanLine, Type, Video, Volume2 } from "lucide-react";
+import { ArrowLeft, BookOpen, Box, Printer, Image as ImageIcon, Lightbulb, Pencil, ScanLine, Type, TypeOutline, Video, Volume2, type LucideIcon } from "lucide-react";
 import { ButtonLink, Button } from "@/components/ui/button";
 import { Card, CardBody, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
-import { compileState } from "@/lib/books";
+import { bookFormat } from "@/lib/book-format";
+import { arTargets, compileState } from "@/lib/books";
+import type { ContentType } from "@/lib/content";
 import { db } from "@/lib/db";
 import { SubjectIcon } from "@/lib/subject-icons";
-import { plural, timeAgo } from "@/lib/utils";
+import { cn, plural, timeAgo } from "@/lib/utils";
 import { BookDialog } from "../book-dialog";
-import { BookMenu, PublishSwitch, TargetMenu } from "./book-controls";
+import { ArToggle, BookMenu, PublishSwitch, TargetMenu } from "./book-controls";
 import { CompileCard } from "./compile-card";
 import { TargetUploader } from "./target-uploader";
 
-const TYPE_ICONS = { MODEL: Box, VIDEO: Video, IMAGE: ImageIcon, AUDIO: Volume2, TEXT: Type } as const;
+const TYPE_ICONS: Record<ContentType, LucideIcon> = {
+  MODEL: Box,
+  TEXT3D: TypeOutline,
+  VIDEO: Video,
+  IMAGE: ImageIcon,
+  AUDIO: Volume2,
+  TEXT: Type,
+};
 
 export default async function BookStudioPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser(["SUPER_ADMIN"]);
@@ -56,7 +65,7 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
             </div>
             <h1 className="font-display text-2xl font-bold tracking-tight text-ink-900">{book.title}</h1>
             <p className="mt-0.5 text-sm text-ink-500">
-              {plural(book.targets.length, "page")} · {plural(book.access.length, "school")} · {plural(book._count.scans, "scan")}
+              {plural(book.targets.length, "page")} ({arTargets(book.targets).length} AR) · {bookFormat(book.format).label} · {plural(book.access.length, "school")} · {plural(book._count.scans, "scan")}
             </p>
           </div>
         </div>
@@ -64,12 +73,22 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
           <PublishSwitch bookId={book.id} published={book.published} disabled={!book.mindUrl} />
           <BookDialog
             subjects={subjects}
-            book={{ id: book.id, title: book.title, description: book.description, gradeLevel: book.gradeLevel, subjectId: book.subjectId, coverUrl: book.coverUrl }}
+            book={{ id: book.id, title: book.title, description: book.description, gradeLevel: book.gradeLevel, subjectId: book.subjectId, coverUrl: book.coverUrl, format: book.format }}
           >
             <Button variant="outline">
               <Pencil /> Edit
             </Button>
           </BookDialog>
+          {book.targets.length > 0 && (
+            <>
+              <ButtonLink href={`/read/${book.id}`} variant="outline">
+                <BookOpen /> Preview book
+              </ButtonLink>
+              <ButtonLink href={`/print/${book.id}`} variant="outline">
+                <Printer /> Print
+              </ButtonLink>
+            </>
+          )}
           {book.mindUrl && (
             <ButtonLink href={`/scan/${book.id}`} target="_blank" variant="secondary">
               <ScanLine /> Test in AR
@@ -83,14 +102,14 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
         <section>
           <div className="mb-4 flex items-baseline justify-between">
             <h2 className="font-display text-lg font-bold text-ink-900">Pages</h2>
-            <span className="text-sm text-ink-500">Click a page to place 3D content on it</span>
+            <span className="text-sm text-ink-500">Click a page to place 3D content · AR pages are compiled, story pages are for reading and print</span>
           </div>
           {book.targets.length === 0 ? (
             <TargetUploader bookId={book.id} />
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 2xl:grid-cols-4">
               {book.targets.map((target, i) => {
-                const types = [...new Set(target.contents.map((c) => c.type))] as (keyof typeof TYPE_ICONS)[];
+                const types = [...new Set(target.contents.map((c) => c.type))] as ContentType[];
                 return (
                   <div key={target.id} className="group relative">
                   <Link
@@ -99,11 +118,15 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
                   >
                     <div className="relative aspect-[3/4] overflow-hidden bg-ink-100">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={target.imageUrl} alt="" className="size-full object-cover transition duration-500 group-hover:scale-105" />
+                      <img
+                        src={target.imageUrl}
+                        alt=""
+                        className={cn("size-full object-cover transition duration-500 group-hover:scale-105", !target.ar && "opacity-75 saturate-50")}
+                      />
                       <span className="absolute top-2.5 left-2.5 rounded-full bg-ink-950/75 px-2 py-0.5 text-[11px] font-bold text-white backdrop-blur">
                         #{i + 1}
                       </span>
-                      {types.length === 0 && (
+                      {target.ar && types.length === 0 && (
                         <span className="absolute inset-x-2.5 bottom-2.5 rounded-xl bg-white/90 px-2.5 py-1.5 text-center text-[11px] font-semibold text-ink-600 backdrop-blur">
                           No AR content yet
                         </span>
@@ -123,6 +146,9 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
                       </span>
                     </div>
                   </Link>
+                  <span className="absolute top-10 left-2.5">
+                    <ArToggle targetId={target.id} ar={target.ar} />
+                  </span>
                   <span className="absolute top-2.5 right-2.5 opacity-0 transition group-hover:-translate-y-0.5 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                     <TargetMenu targetId={target.id} name={target.name} first={i === 0} last={i === book.targets.length - 1} />
                   </span>
@@ -140,7 +166,7 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
             state={state}
             published={book.published}
             compiledLabel={book.compiledAt ? `Last compiled ${timeAgo(book.compiledAt)}` : "Not compiled yet"}
-            targets={book.targets.map((t) => ({ id: t.id, imageUrl: t.imageUrl }))}
+            targets={arTargets(book.targets).map((t) => ({ id: t.id, imageUrl: t.imageUrl }))}
           />
 
           <Card>

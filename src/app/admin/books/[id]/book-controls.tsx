@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ImageUp, MoreHorizontal, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ImageUp, MoreHorizontal, ScanLine, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useOptimistic, useRef, useState, useTransition } from "react";
 import { Confirm } from "@/components/confirm";
@@ -9,7 +9,8 @@ import { Dropdown, DropdownContent, DropdownItem, DropdownSeparator, DropdownTri
 import { Switch } from "@/components/ui/switch";
 import { runAction } from "@/lib/action-client";
 import { replaceTargetImageFromFile, TARGET_IMAGE_ACCEPT } from "@/lib/target-image-client";
-import { deleteBook, deleteTarget, moveTarget, setBookPublished } from "@/server/actions/books";
+import { deleteBook, deleteTarget, moveTarget, setBookPublished, setTargetAr } from "@/server/actions/books";
+import { cn } from "@/lib/utils";
 
 export function PublishSwitch({ bookId, published, disabled }: { bookId: string; published: boolean; disabled?: boolean }) {
   const [, start] = useTransition();
@@ -28,6 +29,29 @@ export function PublishSwitch({ bookId, published, disabled }: { bookId: string;
         }
       />
     </label>
+  );
+}
+
+/** AR page (compiled as a target) or story page (reader and print only). */
+export function ArToggle({ targetId, ar }: { targetId: string; ar: boolean }) {
+  const [, start] = useTransition();
+  const [value, setValue] = useOptimistic(ar);
+  return (
+    <button
+      onClick={() =>
+        start(async () => {
+          setValue(!value);
+          await runAction(setTargetAr(targetId, !value));
+        })
+      }
+      className={cn(
+        "flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold shadow-sm ring-1 backdrop-blur transition",
+        value ? "bg-brand-500 text-white ring-white/30" : "bg-white/90 text-ink-600 ring-ink-200",
+      )}
+      title={value ? "Compiled as an AR target — click to make it a story page" : "Story page — click to compile it as an AR target"}
+    >
+      <ScanLine className="size-3" /> {value ? "AR" : "Story"}
+    </button>
   );
 }
 

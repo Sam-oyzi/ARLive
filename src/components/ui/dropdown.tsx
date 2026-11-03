@@ -7,13 +7,13 @@ import { cn } from "@/lib/utils";
 export const Dropdown = Menu.Root;
 export const DropdownTrigger = Menu.Trigger;
 
-export function DropdownContent({ children, align = "end" }: { children: ReactNode; align?: "start" | "end" | "center" }) {
+export function DropdownContent({ children, align = "end", className }: { children: ReactNode; align?: "start" | "end" | "center"; className?: string }) {
   return (
     <Menu.Portal>
       <Menu.Content
         align={align}
         sideOffset={6}
-        className="z-50 min-w-48 rounded-2xl border border-ink-200/70 bg-white p-1.5 shadow-lift data-[state=open]:animate-fade-up"
+        className={cn("z-50 min-w-48 rounded-2xl border border-ink-200/70 bg-white p-1.5 shadow-lift data-[state=open]:animate-fade-up", className)}
       >
         {children}
       </Menu.Content>

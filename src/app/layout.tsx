@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
+import { Bricolage_Grotesque, Instrument_Serif, Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta", display: "swap" });
 const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-bricolage", display: "swap" });
+// Book reader captions
+const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-instrument", display: "swap" });
 
 export const metadata: Metadata = {
   title: { default: "ARLive — Augmented reality for every classroom", template: "%s · ARLive" },
@@ -26,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // suppressHydrationWarning: browser extensions (ColorZilla, Grammarly, password managers) add
     // attributes to <html>/<body> before React loads. Only these two elements' own attributes are
     // exempted; mismatches anywhere inside are still reported.
-    <html lang="en" className={`${jakarta.variable} ${bricolage.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${jakarta.variable} ${bricolage.variable} ${serif.variable}`} suppressHydrationWarning>
       <body className="min-h-dvh" suppressHydrationWarning>
         {children}
         <Toaster

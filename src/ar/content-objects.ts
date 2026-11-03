@@ -26,7 +26,7 @@ export type ContentHandle = {
 };
 
 let gltfLoader: GLTFLoader | null = null;
-function getGLTFLoader() {
+export function getGLTFLoader() {
   if (!gltfLoader) {
     const draco = new DRACOLoader().setDecoderPath("/vendor/draco/");
     gltfLoader = new GLTFLoader().setDRACOLoader(draco).setMeshoptDecoder(MeshoptDecoder);
@@ -101,6 +101,8 @@ export function createContent(data: ContentData, mode: Mode): ContentHandle {
       return audioContent(data, mode);
     case "TEXT":
       return textContent(data);
+    case "TEXT3D":
+      return text3dContent(data);
   }
 }
 
@@ -346,6 +348,34 @@ function textContent(data: ContentData): ContentHandle {
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
   root.add(flatPlane(texture, canvas.height / canvas.width, true));
+  return handle;
+}
+
+function text3dContent(data: ContentData): ContentHandle {
+  const root = new THREE.Group();
+  const handle = baseHandle(root);
+  const color = new THREE.Color(data.color || "#5b5bf6");
+  // Faces in the chosen colour, sides a shade darker so the depth reads clearly.
+  const faces = new THREE.MeshStandardMaterial({ color, roughness: 0.32, metalness: 0.08 });
+  const sides = new THREE.MeshStandardMaterial({ color: color.clone().multiplyScalar(0.62), roughness: 0.42, metalness: 0.08 });
+  let loading: Promise<void> | null = null;
+
+  handle.load = () => {
+    loading ??= import("./text3d").then(async ({ createTextGeometry }) => {
+      const geometry = await createTextGeometry(data.text || data.name);
+      const box = geometry.boundingBox!;
+      const shadow = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({ map: getShadowTexture(), transparent: true, depthWrite: false, toneMapped: false }),
+      );
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.y = 0.002;
+      shadow.scale.set((box.max.x - box.min.x) * 1.25, Math.max(box.max.z - box.min.z, 0.05) * 2.5, 1);
+      shadow.renderOrder = -1;
+      root.add(shadow, new THREE.Mesh(geometry, [faces, sides]));
+    });
+    return loading;
+  };
   return handle;
 }
 

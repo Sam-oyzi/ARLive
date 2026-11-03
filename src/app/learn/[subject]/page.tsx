@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ScanLine } from "lucide-react";
+import { ArrowLeft, BookOpen, ScanLine } from "lucide-react";
 import { PhoneMockup } from "@/components/phone-mockup";
 import { PhoneQR } from "@/components/phone-qr";
 import { requireUser } from "@/lib/auth";
@@ -111,6 +111,12 @@ export default async function SubjectPage({ params }: { params: Promise<{ subjec
                   style={{ background: subject.color }}
                 >
                   <ScanLine className="size-5" /> Start scanning
+                </Link>
+                <Link
+                  href={`/read/${book.id}`}
+                  className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-ink-200 bg-white text-sm font-semibold text-ink-800 transition hover:bg-ink-50"
+                >
+                  <BookOpen className="size-4" /> Read the book
                 </Link>
                 <div className="hidden lg:block">
                   <PhoneQR path={`/scan/${book.id}`} size={64} />

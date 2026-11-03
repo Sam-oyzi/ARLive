@@ -1,0 +1,224 @@
+{
+  "pages": [
+    {
+      "file": "page-01.jpg",
+      "title": "The Journey of a Water Drop",
+      "story": "Follow Lou, a little water drop, all the way around the water cycle: from the sea to the sky and back again.",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Le voyage d’une goutte d’eau",
+          "story": "Suis Lou, une petite goutte, de la mer jusqu’au ciel et de retour à la mer.",
+          "imageUrl": "/book-art/water-drop/fr-page-01.jpg"
+        },
+        "ar": {
+          "title": "رحلة قطرة ماء",
+          "story": "رافق لو، قطرة الماء الصغيرة، من البحر إلى السماء ثم عُد معها إلى البحر.",
+          "imageUrl": "/book-art/water-drop/ar-page-01.jpg"
+        }
+      }
+    },
+    {
+      "file": "page-02.jpg",
+      "title": "Lou in the sea",
+      "story": "Lou lives in the big blue sea with billions of other drops. Fish dart past, and the waves rock Lou gently up and down.",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Lou dans la mer",
+          "story": "Lou vit dans la grande mer bleue avec des milliards d’autres gouttes. Les poissons filent et les vagues la bercent."
+        },
+        "ar": {
+          "title": "لو في البحر",
+          "story": "تعيش لو في البحر الأزرق مع مليارات القطرات. تسبح الأسماك حولها وتهدهدها الأمواج."
+        }
+      }
+    },
+    {
+      "file": "page-03.jpg",
+      "title": "The warm sun",
+      "story": "High above, the sun shines on the water. Its energy warms the surface of the sea, where Lou loves to float.",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "La chaleur du soleil",
+          "story": "Le soleil brille dans le ciel. Son énergie réchauffe la surface de la mer où Lou flotte.",
+          "imageUrl": "/book-art/water-drop/fr-page-03.jpg"
+        },
+        "ar": {
+          "title": "دفء الشمس",
+          "story": "تشرق الشمس عالياً. وتدفئ طاقتها سطح البحر حيث تطفو لو.",
+          "imageUrl": "/book-art/water-drop/ar-page-03.jpg"
+        }
+      }
+    },
+    {
+      "file": "page-04.jpg",
+      "title": "Rising waves",
+      "story": "Lou rides to the top of a wave. Every drop of water is made of countless tiny particles called molecules.",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Au sommet de la vague",
+          "story": "Lou monte au sommet d’une vague. Chaque goutte est faite d’innombrables petites particules appelées molécules."
+        },
+        "ar": {
+          "title": "فوق الموجة",
+          "story": "تصعد لو إلى قمة موجة. تتكون كل قطرة من جسيمات صغيرة لا تُحصى تسمى الجزيئات."
+        }
+      }
+    },
+    {
+      "file": "page-05.jpg",
+      "title": "Meet H₂O",
+      "story": "A water molecule is one oxygen atom bonded to two hydrogen atoms: H₂O. The bonds meet at 104.5°, a bent shape that makes water molecules stick to each other.",
+      "ar": true,
+      "translations": {
+        "fr": {
+          "title": "À la rencontre de H₂O",
+          "story": "Une molécule d’eau contient un atome d’oxygène lié à deux atomes d’hydrogène. Ils forment un angle de 104,5°, ce qui aide les molécules à s’attirer.",
+          "imageUrl": "/book-art/water-drop/fr-page-05.jpg"
+        },
+        "ar": {
+          "title": "تعرّف على H₂O",
+          "story": "يتكون جزيء الماء من ذرة أكسجين مرتبطة بذرتي هيدروجين. وتصنع الذرات زاوية مقدارها 104٫5 درجة، مما يساعد جزيئات الماء على التجاذب.",
+          "imageUrl": "/book-art/water-drop/ar-page-05.jpg"
+        }
+      }
+    },
+    {
+      "file": "page-06.jpg",
+      "title": "Ice crystal",
+      "story": "When water freezes, its molecules lock together into a pattern of hexagons. That is why every snowflake has six arms!",
+      "ar": true,
+      "translations": {
+        "fr": {
+          "title": "Un cristal de glace",
+          "story": "Quand l’eau gèle, ses molécules s’organisent en hexagones. Voilà pourquoi les flocons ont six branches !"
+        },
+        "ar": {
+          "title": "بلورة جليد",
+          "story": "عندما يتجمد الماء، تنتظم جزيئاته في أشكال سداسية. ولهذا السبب تتفرع ندفة الثلج في ستة اتجاهات!"
+        }
+      }
+    },
+    {
+      "file": "page-07.jpg",
+      "title": "Snowy peaks",
+      "story": "Up in the cold mountains, Lou can sleep as snow for a whole winter, waiting for spring to melt it.",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Les sommets enneigés",
+          "story": "Dans le froid des montagnes, Lou peut dormir sous forme de neige tout l’hiver et attendre le printemps.",
+          "imageUrl": "/book-art/water-drop/fr-page-07.jpg"
+        },
+        "ar": {
+          "title": "القمم الثلجية",
+          "story": "في الجبال الباردة، قد تنام لو على هيئة ثلج طوال الشتاء وتنتظر الربيع.",
+          "imageUrl": "/book-art/water-drop/ar-page-07.jpg"
+        }
+      }
+    },
+    {
+      "file": "page-08.jpg",
+      "title": "Warming up",
+      "story": "When the sun heats the sea, some molecules move so fast that they escape into the air. This is called evaporation.",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "L’eau se réchauffe",
+          "story": "Quand le soleil chauffe la mer, certaines molécules s’échappent dans l’air. C’est l’évaporation."
+        },
+        "ar": {
+          "title": "حين يسخن الماء",
+          "story": "عندما تسخّن الشمس البحر، تفلت بعض جزيئات الماء إلى الهواء. وهذا ما نسميه التبخر."
+        }
+      }
+    },
+    {
+      "file": "page-09.jpg",
+      "title": "Up, up and away",
+      "story": "Lou has become invisible water vapour! Warm air carries Lou higher and higher, where it is much colder.",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "De plus en plus haut",
+          "story": "Lou est devenue de la vapeur d’eau invisible. L’air chaud l’emporte vers des régions de plus en plus froides.",
+          "imageUrl": "/book-art/water-drop/fr-page-09.jpg"
+        },
+        "ar": {
+          "title": "أعلى فأعلى",
+          "story": "تحولت لو إلى بخار ماء لا يُرى. يحملها الهواء الدافئ عالياً حيث يزداد البرد.",
+          "imageUrl": "/book-art/water-drop/ar-page-09.jpg"
+        }
+      }
+    },
+    {
+      "file": "page-10.jpg",
+      "title": "Gathering clouds",
+      "story": "In the cold air, vapour condenses into tiny droplets. Lou meets millions of friends and together they form a cloud.",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Les nuages se forment",
+          "story": "Dans l’air froid, la vapeur se condense en minuscules gouttes. Lou rejoint des millions d’autres gouttes pour former un nuage."
+        },
+        "ar": {
+          "title": "تتكوّن السحب",
+          "story": "في الهواء البارد، يتكاثف البخار على هيئة قطرات صغيرة. وتنضم لو إلى ملايين القطرات الأخرى لتشكّل سحابة."
+        }
+      }
+    },
+    {
+      "file": "page-11.jpg",
+      "title": "Rain over the mountain",
+      "story": "When the droplets grow too heavy, they fall as rain. This is precipitation: it waters the forests and fills the rivers.",
+      "ar": true,
+      "translations": {
+        "fr": {
+          "title": "La pluie sur la montagne",
+          "story": "Quand les gouttes deviennent trop lourdes, elles tombent sous forme de pluie. Cette pluie arrose les forêts et remplit les rivières."
+        },
+        "ar": {
+          "title": "المطر فوق الجبل",
+          "story": "عندما تزداد القطرات ثقلاً، تهطل على هيئة مطر. يسقي المطر الغابات ويملأ الأنهار."
+        }
+      }
+    },
+    {
+      "file": "page-12.jpg",
+      "title": "The river",
+      "story": "Lou lands on the mountain and joins a stream. Streams join rivers, and rivers rush downhill towards the sea.",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "La rivière",
+          "story": "Lou tombe sur la montagne et rejoint un ruisseau. Les ruisseaux se rassemblent en rivières qui s’écoulent vers la mer."
+        },
+        "ar": {
+          "title": "النهر",
+          "story": "تهبط لو على الجبل وتلتحق بجدول صغير. وتجتمع الجداول لتكوّن أنهاراً تجري نحو البحر."
+        }
+      }
+    },
+    {
+      "file": "page-13.jpg",
+      "title": "Home again",
+      "story": "Back in the sea, Lou is ready to start again. The water cycle never stops: the water you drink today may once have been rain over a faraway mountain.",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "De retour à la mer",
+          "story": "Lou retrouve la mer et son voyage peut recommencer. L’eau que tu bois aujourd’hui est peut-être tombée autrefois sur une montagne lointaine.",
+          "imageUrl": "/book-art/water-drop/fr-page-13.jpg"
+        },
+        "ar": {
+          "title": "العودة إلى البحر",
+          "story": "تعود لو إلى البحر لتبدأ رحلتها من جديد. ربما كان الماء الذي تشربه اليوم مطراً هطل ذات يوم فوق جبل بعيد.",
+          "imageUrl": "/book-art/water-drop/ar-page-13.jpg"
+        }
+      }
+    }
+  ]
+}

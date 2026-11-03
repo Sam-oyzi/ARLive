@@ -10,6 +10,8 @@ const AREAS: [prefix: string, roles: Role[]][] = [
   ["/school", ["SCHOOL_ADMIN"]],
   ["/learn", ["STUDENT"]],
   ["/scan", ["SUPER_ADMIN", "SCHOOL_ADMIN", "STUDENT"]],
+  ["/read", ["SUPER_ADMIN", "SCHOOL_ADMIN", "STUDENT"]],
+  ["/print", ["SUPER_ADMIN"]],
 ];
 
 export async function proxy(request: NextRequest) {
@@ -34,5 +36,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/school/:path*", "/learn/:path*", "/scan/:path*", "/login", "/join"],
+  matcher: ["/admin/:path*", "/school/:path*", "/learn/:path*", "/scan/:path*", "/read/:path*", "/print/:path*", "/login", "/join"],
 };

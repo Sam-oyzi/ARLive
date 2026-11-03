@@ -1,7 +1,15 @@
 // Browser-side upload helper: streams the raw file to /api/upload with progress events.
 import type { UploadKind } from "./storage";
 
-export type UploadResult = { url: string; size: number; width?: number; height?: number };
+export type UploadResult = {
+  url: string;
+  size: number;
+  width?: number;
+  height?: number;
+  /** 3D models: what the server-side optimiser did (null when it kept the original). */
+  optimized?: { summary: string } | null;
+  optimizeError?: string;
+};
 
 export function uploadFile(
   file: File | Blob,

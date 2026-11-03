@@ -20,14 +20,19 @@ export function PhoneQR({ path, size = 96, dark, className }: { path: string; si
   useEffect(() => {
     let alive = true;
     async function refresh() {
-      const { token, lanHost } = await createPhoneHandoff(path).catch(() => ({ token: null, lanHost: null }));
+      const { token, phoneOrigin, lanHost } = await createPhoneHandoff(path).catch(() => ({
+        token: null,
+        phoneOrigin: null,
+        lanHost: null,
+      }));
       if (!alive) return;
       const { protocol, hostname, port, origin } = window.location;
       const local = LOCAL_HOSTS.has(hostname);
-      const base = local && lanHost ? `${protocol}//${lanHost}${port ? `:${port}` : ""}` : origin;
+      // `npm run dev:phone` serves phones over HTTPS on its own port; otherwise reuse this page's address.
+      const base = phoneOrigin ?? (local && lanHost ? `${protocol}//${lanHost}${port ? `:${port}` : ""}` : origin);
       setUrl(token ? `${base}/handoff?t=${encodeURIComponent(token)}` : `${base}${path}`);
-      if (local && !lanHost) setWarning("Connect this computer to Wi-Fi so your phone can reach it.");
-      else if (protocol === "http:") setWarning("Phone cameras only work over HTTPS. Restart the server with: npm run dev:phone");
+      if (!phoneOrigin && local && !lanHost) setWarning("Connect this computer to Wi-Fi so your phone can reach it.");
+      else if (!base.startsWith("https:")) setWarning("Phone cameras only work over HTTPS. Restart the server with: npm run dev:phone");
       else setWarning(null);
     }
     refresh();

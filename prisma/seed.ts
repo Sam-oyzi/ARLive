@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import bcrypt from "bcryptjs";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { targetsSignature } from "../src/lib/books";
 
 const db = new PrismaClient();
@@ -130,7 +130,86 @@ async function main() {
     });
   }
 
+  const example = await seedExampleBook(chemistry.id);
+  if (example) {
+    await db.schoolBook.upsert({
+      where: { schoolId_bookId: { schoolId: school.id, bookId: example.id } },
+      update: {},
+      create: { schoolId: school.id, bookId: example.id },
+    });
+  }
+
   console.log("Seeded. Sign in as admin@arlive.app / admin1234");
+}
+
+/**
+ * "The Journey of a Water Drop": a cover + 6 spreads in the sketchbook format (pages drawn by
+ * scripts/make-example-book.ts), to preview the reader, AR pages and print before making your own.
+ */
+const EXAMPLE_TITLE = "Example: The Journey of a Water Drop";
+
+async function seedExampleBook(subjectId: string) {
+  const existing = await db.book.findFirst({ where: { title: EXAMPLE_TITLE } });
+  if (existing) return existing;
+  const dir = path.join(SAMPLE, "example-book");
+  if (!fs.existsSync(path.join(dir, "pages.json"))) {
+    console.warn("No example book assets — run `npx tsx scripts/make-example-book.ts`.");
+    return null;
+  }
+  const manifest = JSON.parse(fs.readFileSync(path.join(dir, "pages.json"), "utf8")) as {
+    pages: { file: string; title: string; story: string; ar: boolean; translations?: Prisma.InputJsonObject }[];
+  };
+
+  const book = await db.book.create({
+    data: {
+      title: EXAMPLE_TITLE,
+      description: "A water-cycle sketchbook: cover + 6 two-page spreads with three AR pages. Use it to try the reader, AR and print.",
+      gradeLevel: "Ages 10–12",
+      format: "SKETCH",
+      subjectId,
+    },
+  });
+
+  const molecule = install("water.glb", "models", "examplewatermolecule.glb");
+  // 3D content for the AR pages (by file name).
+  const keyed = (motion: object) => JSON.stringify(motion);
+  const CONTENT: Record<string, Omit<Prisma.ContentUncheckedCreateInput, "targetId">[]> = {
+    "page-05.jpg": [
+      ...(molecule ? [{ type: "MODEL", name: "Water molecule", url: molecule, posY: 0.12, rotX: 90, scale: 0.6, order: 0 }] : []),
+      { type: "TEXT3D", name: "H2O", text: "H2O", color: "#c8433a", posY: -0.42, rotX: 90, scale: 1.3, motion: keyed({ kind: "preset", preset: "float", speed: 1 }), order: 1 },
+    ],
+    "page-06.jpg": [
+      { type: "TEXT3D", name: "ICE", text: "ICE", color: "#0ea5e9", posY: 0, rotX: 90, scale: 1.8, motion: keyed({ kind: "preset", preset: "spin", speed: 1 }), order: 0 },
+      { type: "TEXT", name: "Label", text: "Six arms: water freezes in hexagons", color: "#ffffff", posY: -0.5, posZ: 0.02, scale: 0.7, order: 1 },
+    ],
+    "page-11.jpg": [
+      { type: "TEXT3D", name: "RAIN", text: "RAIN", color: "#34497a", posY: 0.05, rotX: 90, scale: 1.5, motion: keyed({ kind: "preset", preset: "bounce", speed: 1 }), order: 0 },
+    ],
+  };
+
+  const arTargets: { id: string; imageUrl: string }[] = [];
+  for (const [order, page] of manifest.pages.entries()) {
+    const imageUrl = install(path.join("example-book", page.file), "targets", `example${page.file.replace(/[^a-z0-9.]/gi, "")}`);
+    if (!imageUrl) continue;
+    const target = await db.target.create({
+      data: { bookId: book.id, name: page.title, description: page.story, translations: page.translations, imageUrl, width: 768, height: 1024, order, ar: page.ar },
+    });
+    for (const content of CONTENT[page.file] ?? []) await db.content.create({ data: { ...content, targetId: target.id } });
+    if (page.ar) arTargets.push(target);
+  }
+
+  // Ready to scan if the compiled AR data for these pages ships with the sample.
+  const mindUrl = install(path.join("example-book", "example.mind"), "mind", "example.mind");
+  if (mindUrl) {
+    for (const [index, target] of arTargets.entries()) await db.target.update({ where: { id: target.id }, data: { targetIndex: index } });
+    await db.book.update({
+      where: { id: book.id },
+      data: { mindUrl, mindHash: targetsSignature(arTargets), compiledAt: new Date(), published: true },
+    });
+  } else {
+    console.log("Example book: open it in /admin/books and click Compile to enable AR.");
+  }
+  return book;
 }
 
 main()

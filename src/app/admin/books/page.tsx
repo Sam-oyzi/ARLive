@@ -23,7 +23,7 @@ export default async function BooksPage({ searchParams }: { searchParams: Promis
       orderBy: { updatedAt: "desc" },
       include: {
         subject: true,
-        targets: { select: { id: true, imageUrl: true, _count: { select: { contents: true } } } },
+        targets: { select: { id: true, imageUrl: true, ar: true, _count: { select: { contents: true } } } },
         _count: { select: { access: true } },
       },
     }),

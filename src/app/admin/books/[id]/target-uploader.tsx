@@ -1,43 +1,76 @@
 "use client";
 
-import { CloudUpload } from "lucide-react";
+import { CloudUpload, FileJson } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/misc";
 import { runAction } from "@/lib/action-client";
+import { cropHalf, parseManifest, planPages, type PagesManifest } from "@/lib/page-import";
 import { imageSize, uploadFile } from "@/lib/upload-client";
 import { cn } from "@/lib/utils";
 import { addTargets } from "@/server/actions/books";
 
 type Job = { name: string; progress: number; error?: string };
+type NewPage = Parameters<typeof addTargets>[1][number];
 
-/** Drop book pages here: each image becomes an AR target. */
+/** Drop book pages here, optionally with the pages.json that gives them titles, stories and AR flags. */
 export function TargetUploader({ bookId, compact }: { bookId: string; compact?: boolean }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [splitSpreads, setSplitSpreads] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const busy = jobs.some((j) => j.progress < 100 && !j.error);
 
   async function handle(files: File[]) {
     const images = files.filter((f) => /^image\/(jpeg|png|webp)$/.test(f.type));
-    if (images.length < files.length) toast.error("Only JPG, PNG and WebP images can be targets.");
-    if (images.length === 0) return;
-    setJobs(images.map((f) => ({ name: f.name, progress: 0 })));
+    const json = files.find((f) => f.name.toLowerCase().endsWith(".json"));
+    if (images.length + (json ? 1 : 0) < files.length) toast.error("Only JPG, PNG, WebP images and a pages.json can be added.");
+    if (images.length === 0) {
+      if (json) toast.error("Add the page images together with pages.json.");
+      return;
+    }
 
-    const uploaded: { name: string; imageUrl: string; width: number; height: number }[] = [];
+    let manifest: PagesManifest | null = null;
+    if (json) {
+      try {
+        manifest = parseManifest(await json.text());
+      } catch (error) {
+        toast.error((error as Error).message);
+        return;
+      }
+    }
+
+    const sizes = new Map<File, { width: number; height: number }>();
+    try {
+      await Promise.all(images.map(async (f) => sizes.set(f, await imageSize(f))));
+    } catch (error) {
+      toast.error((error as Error).message);
+      return;
+    }
+    const plan = planPages(images, sizes, manifest, splitSpreads);
+    setJobs(plan.map((p) => ({ name: p.name, progress: 0 })));
+
+    const uploaded: NewPage[] = [];
     // A few at a time keeps the browser responsive on 100-page books.
     let next = 0;
     async function worker() {
-      while (next < images.length) {
+      while (next < plan.length) {
         const index = next++;
-        const file = images[index]!;
+        const page = plan[index]!;
+        const progress = (p: number) => setJobs((js) => js.map((j, i) => (i === index ? { ...j, progress: p } : j)));
         try {
-          const size = await imageSize(file);
-          const { url } = await uploadFile(file, "targets", file.name, (p) =>
-            setJobs((js) => js.map((j, i) => (i === index ? { ...j, progress: p } : j))),
-          );
-          uploaded[index] = { name: file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "), imageUrl: url, ...size };
-          setJobs((js) => js.map((j, i) => (i === index ? { ...j, progress: 100 } : j)));
+          let body: Blob = page.file;
+          let size = sizes.get(page.file)!;
+          let filename = page.file.name;
+          if (page.crop) {
+            const half = await cropHalf(page.file, page.crop);
+            body = half.blob;
+            size = { width: half.width, height: half.height };
+            filename = `${filename.replace(/\.[^.]+$/, "")}-${page.crop}.jpg`;
+          }
+          const { url } = await uploadFile(body, "targets", filename, progress);
+          uploaded[index] = { name: page.name, imageUrl: url, ...size, description: page.description, translations: page.translations, ar: page.ar };
+          progress(100);
         } catch (error) {
           setJobs((js) => js.map((j, i) => (i === index ? { ...j, error: (error as Error).message } : j)));
         }
@@ -54,7 +87,7 @@ export function TargetUploader({ bookId, compact }: { bookId: string; compact?: 
       <input
         ref={input}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept="image/jpeg,image/png,image/webp,.json,application/json"
         multiple
         className="hidden"
         onChange={(e) => {
@@ -86,8 +119,19 @@ export function TargetUploader({ bookId, compact }: { bookId: string; compact?: 
           <CloudUpload className="size-6" />
         </span>
         <span className="text-sm font-semibold text-ink-900">{compact ? "Add pages" : "Drop book pages here"}</span>
-        {!compact && <span className="max-w-xs text-xs text-ink-500">JPG, PNG or WebP — one image per page or illustration. You can select many at once.</span>}
+        {!compact && (
+          <span className="max-w-sm text-xs text-ink-500">
+            JPG, PNG or WebP, one image per page. Pages are ordered by file name (01, 02, …).
+            <span className="mt-1.5 flex items-center justify-center gap-1 font-medium text-ink-600">
+              <FileJson className="size-3.5" /> Add a pages.json in the same drop for titles, stories and AR pages.
+            </span>
+          </span>
+        )}
       </button>
+      <label className={cn("mt-2 flex cursor-pointer items-start gap-2 text-ink-600", compact ? "text-[11px]" : "text-xs")}>
+        <input type="checkbox" checked={splitSpreads} onChange={(e) => setSplitSpreads(e.target.checked)} className="mt-0.5 accent-brand-500" />
+        <span>Landscape images are two-page spreads: split them into left and right pages (automatic with a pages.json)</span>
+      </label>
       {jobs.length > 0 && (
         <ul className="mt-3 flex flex-col gap-2">
           {jobs.map((job, i) => (

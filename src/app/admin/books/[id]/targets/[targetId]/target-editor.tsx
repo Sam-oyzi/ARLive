@@ -4,35 +4,49 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   Box,
-  Crosshair,
+  Film,
   Image as ImageIcon,
   Layers,
   LoaderCircle,
   Move3D,
+  Pause,
+  Play,
   Rotate3D,
   Save,
   Scale3D,
-  Trash2,
   Type,
+  TypeOutline,
   Video,
   Volume2,
   type LucideIcon,
 } from "lucide-react";
-import { useActionState, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Confirm } from "@/components/confirm";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { SubmitButton } from "@/components/ui/client-bits";
-import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Progress } from "@/components/ui/misc";
-import { Switch } from "@/components/ui/switch";
 import { runAction } from "@/lib/action-client";
-import { CONTENT_META, defaultTransform, type ContentData, type ContentType } from "@/lib/content";
+import { CONTENT_META, type ContentData, type ContentType } from "@/lib/content";
+import {
+  parseMotion,
+  poseOf,
+  sampleKeyframes,
+  serializeMotion,
+  upsertKeyframe,
+  type KeyframeMotion,
+  type Motion,
+  type Pose,
+} from "@/lib/motion-schema";
 import { replaceTargetImageFromFile, TARGET_IMAGE_ACCEPT } from "@/lib/target-image-client";
 import { uploadFile } from "@/lib/upload-client";
 import { cn } from "@/lib/utils";
-import { addContent, deleteContent, saveContents, updateTarget } from "@/server/actions/books";
-import type { Transform, TransformMode } from "./editor-canvas";
+import { addContent, deleteContent, duplicateContent, replaceContentFile, saveContents } from "@/server/actions/books";
+import type { ContextTarget, TransformMode } from "./editor-canvas";
+import { Inspector } from "./inspector";
+import { PageDetails, TargetImageCard, type EditorTarget } from "./page-cards";
+import { SceneMenu, type SceneMenuAction } from "./scene-menu";
+import { Timeline } from "./timeline";
 
 const EditorCanvas = dynamic(() => import("./editor-canvas"), {
   ssr: false,
@@ -43,44 +57,214 @@ const EditorCanvas = dynamic(() => import("./editor-canvas"), {
   ),
 });
 
-const TYPE_ICON: Record<ContentType, LucideIcon> = { MODEL: Box, VIDEO: Video, IMAGE: ImageIcon, AUDIO: Volume2, TEXT: Type };
+const TYPE_ICON: Record<ContentType, LucideIcon> = {
+  MODEL: Box,
+  TEXT3D: TypeOutline,
+  VIDEO: Video,
+  IMAGE: ImageIcon,
+  AUDIO: Volume2,
+  TEXT: Type,
+};
 const MODES: { mode: TransformMode; icon: LucideIcon; label: string; key: string }[] = [
   { mode: "translate", icon: Move3D, label: "Move", key: "w" },
   { mode: "rotate", icon: Rotate3D, label: "Rotate", key: "e" },
   { mode: "scale", icon: Scale3D, label: "Scale", key: "r" },
 ];
 
-type Target = { id: string; name: string; description: string | null; imageUrl: string; width: number; height: number };
+type PendingFile = { mode: "add"; type: ContentType } | { mode: "replace"; id: string } | { mode: "target" };
+type Editing = { id: string; time: number; playing: boolean; selectedKey: number | null };
 
-export function TargetEditor({ target, initialContents }: { target: Target; initialContents: ContentData[] }) {
+export function TargetEditor({ target, initialContents }: { target: EditorTarget; initialContents: ContentData[] }) {
   const [contents, setContents] = useState(initialContents);
   const [selectedId, setSelectedId] = useState<string | null>(initialContents[0]?.id ?? null);
   const [mode, setMode] = useState<TransformMode>("translate");
+  const [preview, setPreview] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [clips, setClips] = useState<Record<string, string[]>>({});
-  const [upload, setUpload] = useState<{ type: ContentType; name: string; progress: number } | null>(null);
+  const [upload, setUpload] = useState<{ label: string; progress: number } | null>(null);
+  const [targetProgress, setTargetProgress] = useState<number | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; contentId: string | null } | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  // Keyframe editing: the item on the timeline, the playhead, and a pose the user moved but hasn't keyed yet.
+  const [editing, setEditing] = useState<Editing | null>(null);
+  const [manualPose, setManualPose] = useState<Pose | null>(null);
+
   const fileInput = useRef<HTMLInputElement>(null);
-  const pendingType = useRef<ContentType>("MODEL");
+  const pendingFile = useRef<PendingFile | null>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const rightDown = useRef<{ x: number; y: number } | null>(null);
+  const contextHandled = useRef(false);
+  const router = useRouter();
+
   const selected = contents.find((c) => c.id === selectedId) ?? null;
+  const editingContent = editing ? (contents.find((c) => c.id === editing.id) ?? null) : null;
+  const editingMotion = useMemo(() => {
+    const motion = parseMotion(editingContent?.motion);
+    return motion?.kind === "keyframes" ? motion : null;
+  }, [editingContent?.motion]);
+  const displayPose: Pose | null =
+    editing && editingContent
+      ? (manualPose ?? (editingMotion ? sampleKeyframes(editingMotion, editing.time) : null) ?? poseOf(editingContent))
+      : null;
 
   const patch = useCallback((id: string, changes: Partial<ContentData>) => {
     setContents((list) => list.map((c) => (c.id === id ? { ...c, ...changes } : c)));
     setDirty(true);
   }, []);
-  const onTransform = useCallback((id: string, t: Transform) => patch(id, t), [patch]);
   const onClips = useCallback((id: string, names: string[]) => setClips((m) => ({ ...m, [id]: names })), []);
 
-  // W / E / R switch gizmo modes, like most 3D tools.
+  /** Set an item's animation; keyframed items rest on their first keyframe. */
+  function setMotion(id: string, motion: Motion | null) {
+    const changes: Partial<ContentData> = { motion: serializeMotion(motion) };
+    if (motion?.kind === "keyframes" && motion.frames[0]) Object.assign(changes, poseOf(motion.frames[0]));
+    patch(id, changes);
+  }
+
+  function onTransform(id: string, pose: Pose) {
+    if (editing?.id === id) {
+      setManualPose(pose);
+      setEditing((e) => e && { ...e, playing: false });
+      return;
+    }
+    const content = contents.find((c) => c.id === id);
+    if (!content) return;
+    const motion = parseMotion(content.motion);
+    if (motion?.kind === "keyframes" && motion.frames.length) {
+      // Moving a keyframed item outside the timeline carries its whole animation along.
+      const frames = motion.frames.map((f) => ({
+        ...f,
+        posX: f.posX + pose.posX - content.posX,
+        posY: f.posY + pose.posY - content.posY,
+        posZ: f.posZ + pose.posZ - content.posZ,
+        rotX: f.rotX + pose.rotX - content.rotX,
+        rotY: f.rotY + pose.rotY - content.rotY,
+        rotZ: f.rotZ + pose.rotZ - content.rotZ,
+        scale: f.scale * (pose.scale / content.scale),
+      }));
+      patch(id, { ...pose, motion: serializeMotion({ ...motion, frames }) });
+    } else {
+      patch(id, pose);
+    }
+  }
+
+  // ---------- timeline ----------
+
+  function openTimeline(id: string) {
+    const content = contents.find((c) => c.id === id);
+    if (!content) return;
+    const existing = parseMotion(content.motion);
+    if (existing?.kind !== "keyframes") {
+      setMotion(id, { kind: "keyframes", duration: 3, loop: true, easing: "smooth", frames: [{ t: 0, ...poseOf(content) }] });
+    }
+    setSelectedId(id);
+    setManualPose(null);
+    setEditing({ id, time: 0, playing: false, selectedKey: 0 });
+  }
+
+  function closeTimeline() {
+    setEditing(null);
+    setManualPose(null);
+  }
+
+  function updateMotion(update: (m: KeyframeMotion) => KeyframeMotion) {
+    if (editing && editingMotion) setMotion(editing.id, update(editingMotion));
+  }
+
+  function scrub(time: number) {
+    setEditing((e) => e && { ...e, time, playing: false });
+    setManualPose(null);
+  }
+
+  function togglePlay() {
+    if (!editing || !editingMotion) return;
+    setManualPose(null);
+    setEditing({
+      ...editing,
+      playing: !editing.playing,
+      time: !editing.playing && !editingMotion.loop && editing.time >= editingMotion.duration ? 0 : editing.time,
+    });
+  }
+
+  function addKey() {
+    if (!editing || !editingMotion || !displayPose) return;
+    const frames = upsertKeyframe(editingMotion.frames, editing.time, displayPose);
+    const keyTime = Math.round(editing.time * 100) / 100;
+    updateMotion((m) => ({ ...m, frames }));
+    setManualPose(null);
+    setEditing({ ...editing, playing: false, selectedKey: frames.findIndex((f) => Math.abs(f.t - keyTime) < 0.005) });
+  }
+
+  function deleteKey() {
+    if (!editing || !editingMotion || editing.selectedKey === null) return;
+    const index = editing.selectedKey;
+    updateMotion((m) => ({ ...m, frames: m.frames.filter((_, i) => i !== index) }));
+    setManualPose(null);
+    setEditing({ ...editing, selectedKey: null });
+  }
+
+  function moveKey(index: number, t: number) {
+    updateMotion((m) => ({ ...m, frames: m.frames.map((f, i) => (i === index ? { ...f, t } : f)) }));
+  }
+
+  function changeTimeline(changes: Partial<Pick<KeyframeMotion, "duration" | "loop" | "easing">>) {
+    updateMotion((m) => {
+      const duration = changes.duration ?? m.duration;
+      return { ...m, ...changes, frames: m.frames.map((f) => ({ ...f, t: Math.min(f.t, duration) })) };
+    });
+    if (changes.duration !== undefined) setEditing((e) => e && { ...e, time: Math.min(e.time, changes.duration!) });
+  }
+
+  // Playback: advance the playhead every frame.
+  const motionRef = useRef(editingMotion);
+  motionRef.current = editingMotion;
+  useEffect(() => {
+    if (!editing?.playing) return;
+    let raf = 0;
+    let last = performance.now();
+    const step = (now: number) => {
+      const delta = (now - last) / 1000;
+      last = now;
+      setEditing((e) => {
+        const m = motionRef.current;
+        if (!e || !e.playing || !m) return e;
+        let time = e.time + delta;
+        let playing = true;
+        if (time >= m.duration) {
+          if (m.loop) time %= m.duration;
+          else {
+            time = m.duration;
+            playing = false;
+          }
+        }
+        return { ...e, time, playing };
+      });
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [editing?.playing]);
+
+  // ---------- keyboard ----------
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest("input, textarea, select")) return;
-      const match = MODES.find((m) => m.key === e.key.toLowerCase());
-      if (match) setMode(match.mode);
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      if ((e.target as HTMLElement).closest("input, textarea, select, [contenteditable]")) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         save();
+        return;
       }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (editing) {
+        if (key === "i") return void (e.preventDefault(), addKey());
+        if (key === " ") return void (e.preventDefault(), togglePlay());
+        if ((key === "delete" || key === "backspace") && editing.selectedKey !== null) return void (e.preventDefault(), deleteKey());
+        if (key === "escape") return closeTimeline();
+      }
+      const match = MODES.find((m) => m.key === key);
+      if (match) setMode(match.mode);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -93,14 +277,16 @@ export function TargetEditor({ target, initialContents }: { target: Target; init
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
+  // ---------- persistence ----------
+
   async function save() {
     if (!dirty || saving) return;
     setSaving(true);
     const result = await runAction(
       saveContents(
         target.id,
-        contents.map(({ id, name, text, color, posX, posY, posZ, rotX, rotY, rotZ, scale, autoplay, loop, animation }) => ({
-          id, name, text, color, posX, posY, posZ, rotX, rotY, rotZ, scale, autoplay, loop, animation,
+        contents.map(({ id, name, text, color, posX, posY, posZ, rotX, rotY, rotZ, scale, autoplay, loop, animation, motion }) => ({
+          id, name, text, color, posX, posY, posZ, rotX, rotY, rotZ, scale, autoplay, loop, animation, motion,
         })),
       ),
     );
@@ -108,44 +294,154 @@ export function TargetEditor({ target, initialContents }: { target: Target; init
     setSaving(false);
   }
 
+  function pickFile(pending: PendingFile, accept: string) {
+    pendingFile.current = pending;
+    if (!fileInput.current) return;
+    fileInput.current.accept = accept;
+    fileInput.current.click();
+  }
+
+  async function uploadFor(type: ContentType, file: File): Promise<string | null> {
+    const kind = CONTENT_META[type].uploadKind;
+    if (!kind) return null;
+    setUpload({ label: `Uploading ${file.name}`, progress: 0 });
+    try {
+      const result = await uploadFile(file, kind, file.name, (p) =>
+        setUpload((u) =>
+          u && {
+            // Once the bytes are in, the server is still shrinking the model.
+            label: p >= 100 && type === "MODEL" ? `Optimising ${file.name} for phones…` : u.label,
+            progress: p,
+          },
+        ),
+      );
+      if (result.optimized) toast.success("3D model optimised", { description: result.optimized.summary });
+      else if (result.optimizeError) toast.warning(result.optimizeError);
+      return result.url;
+    } catch (error) {
+      toast.error((error as Error).message);
+      return null;
+    } finally {
+      setUpload(null);
+    }
+  }
+
+  async function onFile(file: File) {
+    const pending = pendingFile.current;
+    pendingFile.current = null;
+    if (!pending) return;
+    if (pending.mode === "target") {
+      setTargetProgress(0);
+      const ok = await replaceTargetImageFromFile(target.id, file, setTargetProgress);
+      setTargetProgress(null);
+      if (ok) router.refresh();
+    } else if (pending.mode === "add") {
+      await create(pending.type, file);
+    } else {
+      await replaceFile(pending.id, file);
+    }
+  }
+
   async function create(type: ContentType, file?: File) {
     let url: string | null = null;
-    const name = file ? file.name.replace(/\.[^.]+$/, "") : CONTENT_META[type].label;
     if (file) {
-      const kind = CONTENT_META[type].uploadKind!;
-      setUpload({ type, name, progress: 0 });
-      try {
-        url = (await uploadFile(file, kind, file.name, (p) => setUpload((u) => u && { ...u, progress: p }))).url;
-      } catch (error) {
-        toast.error((error as Error).message);
-        setUpload(null);
-        return;
-      }
+      url = await uploadFor(type, file);
+      if (!url) return;
     }
-    const result = await runAction(addContent(target.id, { type, name, url, text: type === "TEXT" ? "New label" : null }));
-    setUpload(null);
+    const name = file ? file.name.replace(/\.[^.]+$/, "") : CONTENT_META[type].label;
+    const text = type === "TEXT" ? "New label" : type === "TEXT3D" ? "Hello" : null;
+    const result = await runAction(addContent(target.id, { type, name, url, text }));
     if (result?.data) {
       setContents((list) => [...list, result.data!]);
       setSelectedId(result.data.id);
     }
   }
 
-  function pick(type: ContentType) {
-    if (type === "TEXT") return create("TEXT");
-    pendingType.current = type;
-    if (fileInput.current) {
-      fileInput.current.accept = CONTENT_META[type].accept;
-      fileInput.current.click();
+  async function replaceFile(id: string, file: File) {
+    const content = contents.find((c) => c.id === id);
+    if (!content) return;
+    const url = await uploadFor(content.type, file);
+    if (!url) return;
+    const result = await runAction(replaceContentFile(id, url));
+    if (result?.data) {
+      const { url: newUrl, animation } = result.data;
+      setContents((list) => list.map((c) => (c.id === id ? { ...c, url: newUrl, animation } : c)));
+      setClips((m) => ({ ...m, [id]: [] }));
     }
+  }
+
+  async function duplicate(id: string) {
+    const source = contents.find((c) => c.id === id);
+    if (!source) return;
+    const result = await runAction(duplicateContent(id));
+    if (!result?.data) return;
+    const copy = result.data;
+    // Start from the on-screen state (which may have unsaved edits); Save persists it.
+    setContents((list) => [...list, { ...source, id: copy.id, name: copy.name, order: copy.order, posX: source.posX + 0.08 }]);
+    setSelectedId(copy.id);
+    setDirty(true);
   }
 
   async function remove(id: string) {
     const result = await runAction(deleteContent(id));
     if (result?.ok) {
+      if (editing?.id === id) closeTimeline();
       setContents((list) => list.filter((c) => c.id !== id));
       setSelectedId(null);
     }
   }
+
+  // ---------- selection & context menu ----------
+
+  function select(id: string | null) {
+    if (editing && id !== editing.id) closeTimeline();
+    setSelectedId(id);
+  }
+
+  function onContext(target: ContextTarget, clientX: number, clientY: number) {
+    contextHandled.current = true;
+    const down = rightDown.current;
+    if (down && Math.hypot(clientX - down.x, clientY - down.y) > 6) return; // that was a right-drag pan
+    const rect = stage.current!.getBoundingClientRect();
+    setMenu({ x: clientX - rect.left, y: clientY - rect.top, contentId: target.kind === "content" ? target.id : null });
+  }
+
+  function onMenuAction(action: SceneMenuAction) {
+    switch (action.kind) {
+      case "replace": {
+        const content = contents.find((c) => c.id === action.id);
+        if (content) pickFile({ mode: "replace", id: action.id }, CONTENT_META[content.type].accept);
+        break;
+      }
+      case "edit-text":
+        select(action.id);
+        requestAnimationFrame(() => {
+          const field = document.getElementById(`content-text-${action.id}`) as HTMLTextAreaElement | null;
+          field?.scrollIntoView({ block: "center", behavior: "smooth" });
+          field?.focus();
+          field?.select();
+        });
+        break;
+      case "animate":
+        openTimeline(action.id);
+        break;
+      case "duplicate":
+        duplicate(action.id);
+        break;
+      case "delete":
+        setDeleteId(action.id);
+        break;
+      case "replace-target":
+        pickFile({ mode: "target" }, TARGET_IMAGE_ACCEPT);
+        break;
+      case "add":
+        if (action.type === "MODEL") pickFile({ mode: "add", type: "MODEL" }, CONTENT_META.MODEL.accept);
+        else create(action.type);
+        break;
+    }
+  }
+
+  const deleting = contents.find((c) => c.id === deleteId);
 
   return (
     <div className="grid gap-4 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -155,23 +451,38 @@ export function TargetEditor({ target, initialContents }: { target: Target; init
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) create(pendingType.current, file);
+          if (file) onFile(file);
           e.target.value = "";
         }}
       />
 
-      {/* Stage */}
       {/* Stage: fixed height when stacked, fills the workspace height on wide screens */}
-      <Card className="relative h-[65vh] min-h-[420px] overflow-hidden xl:h-full xl:min-h-0">
+      <Card
+        ref={stage}
+        className="relative h-[65vh] min-h-[420px] overflow-hidden xl:h-full xl:min-h-0"
+        onPointerDownCapture={(e) => {
+          if (e.button === 2) rightDown.current = { x: e.clientX, y: e.clientY };
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          // Right-click on empty space (nothing in the scene handled it): offer the page menu.
+          if (!contextHandled.current) onContext({ kind: "page" }, e.clientX, e.clientY);
+          contextHandled.current = false;
+        }}
+      >
         <EditorCanvas
           imageUrl={target.imageUrl}
           aspect={target.height / target.width}
           contents={contents}
           selectedId={selectedId}
           mode={mode}
-          onSelect={setSelectedId}
+          preview={preview}
+          editingPose={editing && displayPose ? { id: editing.id, pose: displayPose } : null}
+          showGizmo={!editing?.playing}
+          onSelect={select}
           onTransform={onTransform}
           onClips={onClips}
+          onContext={onContext}
         />
         <div className="absolute top-4 left-4 flex gap-1 rounded-2xl bg-white/90 p-1 shadow-soft backdrop-blur">
           {MODES.map((m) => (
@@ -188,6 +499,18 @@ export function TargetEditor({ target, initialContents }: { target: Target; init
               <span className="hidden sm:inline">{m.label}</span>
             </button>
           ))}
+          <span className="mx-0.5 w-px self-stretch bg-ink-200" />
+          <button
+            onClick={() => setPreview((p) => !p)}
+            title="Preview animations in the editor"
+            className={cn(
+              "flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition",
+              preview ? "bg-brand-50 text-brand-700" : "text-ink-500 hover:bg-ink-100",
+            )}
+          >
+            {preview ? <Pause className="size-4" /> : <Play className="size-4" />}
+            <span className="hidden sm:inline">Animations</span>
+          </button>
         </div>
         <div className="absolute top-4 right-4">
           <Button onClick={save} disabled={!dirty || saving} size="sm" className="shadow-lift">
@@ -195,29 +518,57 @@ export function TargetEditor({ target, initialContents }: { target: Target; init
             {dirty ? "Save scene" : "Saved"}
           </Button>
         </div>
-        <div className="pointer-events-none absolute bottom-4 left-4 rounded-xl bg-ink-950/70 px-3 py-1.5 text-[11px] font-medium text-white/90 backdrop-blur">
-          Drag to orbit · scroll to zoom · click an object to select · 1 unit = page width
-        </div>
+        {!editing && (
+          <div className="pointer-events-none absolute bottom-4 left-4 rounded-xl bg-ink-950/70 px-3 py-1.5 text-[11px] font-medium text-white/90 backdrop-blur">
+            Drag to orbit · right-click for actions · 1 unit = page width
+          </div>
+        )}
+        {editing && editingMotion && editingContent && (
+          <Timeline
+            name={editingContent.name}
+            motion={editingMotion}
+            time={editing.time}
+            playing={editing.playing}
+            selectedKey={editing.selectedKey}
+            poseChanged={manualPose !== null}
+            onTime={scrub}
+            onTogglePlay={togglePlay}
+            onAddKey={addKey}
+            onDeleteKey={deleteKey}
+            onSelectKey={(index) => setEditing((e) => e && { ...e, selectedKey: index })}
+            onMoveKey={moveKey}
+            onChange={changeTimeline}
+            onClose={closeTimeline}
+          />
+        )}
+        {menu && (
+          <SceneMenu
+            x={menu.x}
+            y={menu.y}
+            content={contents.find((c) => c.id === menu.contentId) ?? null}
+            onAction={onMenuAction}
+            onClose={() => setMenu(null)}
+          />
+        )}
       </Card>
 
       {/* Panel: scrolls on its own so the 3D view stays in place */}
       <div className="flex flex-col gap-4 xl:min-h-0 xl:overflow-y-auto xl:pr-1 xl:pb-1 [&>*]:shrink-0">
-
         <Card className="p-5">
           <div className="mb-3 text-xs font-semibold tracking-wide text-ink-500 uppercase">Add to this page</div>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {(Object.keys(CONTENT_META) as ContentType[]).map((type) => {
               const Icon = TYPE_ICON[type];
               return (
                 <button
                   key={type}
-                  onClick={() => pick(type)}
+                  onClick={() => (CONTENT_META[type].uploadKind ? pickFile({ mode: "add", type }, CONTENT_META[type].accept) : create(type))}
                   disabled={!!upload}
                   title={`${CONTENT_META[type].label} — ${CONTENT_META[type].hint}`}
                   className="flex flex-col items-center gap-1.5 rounded-2xl border border-ink-200 px-1 py-3 text-[11px] font-semibold text-ink-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-50"
                 >
                   <Icon className="size-5" />
-                  {CONTENT_META[type].label.split(" ")[0]}
+                  {CONTENT_META[type].short}
                 </button>
               );
             })}
@@ -225,7 +576,7 @@ export function TargetEditor({ target, initialContents }: { target: Target; init
           {upload && (
             <div className="mt-3 rounded-xl bg-ink-50 p-3 text-xs">
               <div className="mb-1.5 flex justify-between font-medium text-ink-700">
-                <span className="truncate">Uploading {upload.name}</span>
+                <span className="truncate">{upload.label}</span>
                 <span className="tabular-nums">{Math.round(upload.progress)}%</span>
               </div>
               <Progress value={upload.progress} className="h-1.5" />
@@ -238,24 +589,33 @@ export function TargetEditor({ target, initialContents }: { target: Target; init
             <Layers className="size-3.5" /> Layers
           </div>
           {contents.length === 0 ? (
-            <p className="py-3 text-sm text-ink-500">Nothing here yet. Add a 3D model, video, image, audio or label.</p>
+            <p className="py-3 text-sm text-ink-500">Nothing here yet. Add a 3D model, 3D text, video, image, audio or label.</p>
           ) : (
             <ul className="flex flex-col gap-1">
               {contents.map((c) => {
                 const Icon = TYPE_ICON[c.type];
+                const active = c.id === selectedId;
                 return (
                   <li key={c.id}>
                     <button
-                      onClick={() => setSelectedId(c.id)}
+                      onClick={() => select(c.id)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        select(c.id);
+                        const rect = stage.current!.getBoundingClientRect();
+                        // Open the same menu, at the right edge of the 3D view.
+                        setMenu({ x: rect.width - 16, y: Math.min(e.clientY - rect.top, rect.height - 16), contentId: c.id });
+                      }}
                       className={cn(
                         "flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-sm transition",
-                        c.id === selectedId ? "bg-brand-50 text-brand-800 ring-1 ring-brand-200" : "text-ink-700 hover:bg-ink-50",
+                        active ? "bg-brand-50 text-brand-800 ring-1 ring-brand-200" : "text-ink-700 hover:bg-ink-50",
                       )}
                     >
-                      <span className={cn("grid size-8 place-items-center rounded-lg", c.id === selectedId ? "bg-brand-500 text-white" : "bg-ink-100 text-ink-500")}>
+                      <span className={cn("grid size-8 place-items-center rounded-lg", active ? "bg-brand-500 text-white" : "bg-ink-100 text-ink-500")}>
                         <Icon className="size-4" />
                       </span>
                       <span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>
+                      {c.motion && <Film className="size-3.5 shrink-0 text-brand-400" aria-label="Animated" />}
                       <span className="text-[11px] text-ink-400">{CONTENT_META[c.type].label}</span>
                     </button>
                   </li>
@@ -265,235 +625,41 @@ export function TargetEditor({ target, initialContents }: { target: Target; init
           )}
         </Card>
 
-        {selected && <Inspector key={selected.id} content={selected} clips={clips[selected.id] ?? []} onChange={(c) => patch(selected.id, c)} onDelete={() => remove(selected.id)} />}
+        {selected && (
+          <Inspector
+            key={selected.id}
+            content={selected}
+            transform={editing?.id === selected.id && displayPose ? displayPose : poseOf(selected)}
+            keyframing={editing?.id === selected.id ? { time: editing.time } : null}
+            motion={parseMotion(selected.motion)}
+            clips={clips[selected.id] ?? []}
+            onChange={(changes) => patch(selected.id, changes)}
+            onTransform={(pose) => onTransform(selected.id, pose)}
+            onMotion={(motion) => {
+              if (editing?.id === selected.id && motion?.kind !== "keyframes") closeTimeline();
+              setMotion(selected.id, motion);
+            }}
+            onOpenTimeline={() => openTimeline(selected.id)}
+            onReplace={() => pickFile({ mode: "replace", id: selected.id }, CONTENT_META[selected.type].accept)}
+            onDuplicate={() => duplicate(selected.id)}
+            onDelete={() => setDeleteId(selected.id)}
+          />
+        )}
 
-        <TargetImageCard target={target} />
+        <TargetImageCard target={target} progress={targetProgress} onReplace={() => pickFile({ mode: "target" }, TARGET_IMAGE_ACCEPT)} />
         <PageDetails target={target} />
       </div>
+
+      <Confirm
+        open={!!deleting}
+        onOpenChange={(open) => !open && setDeleteId(null)}
+        title={`Delete “${deleting?.name ?? ""}”?`}
+        description="It's removed from this page for every student. Uploaded files are deleted when nothing else uses them."
+        onConfirm={async () => {
+          if (deleteId) await remove(deleteId);
+          setDeleteId(null);
+        }}
+      />
     </div>
-  );
-}
-
-const AXIS_COLOR: Record<string, string> = { X: "text-rose-500", Y: "text-emerald-500", Z: "text-blue-500" };
-
-function NumberInput({ value, onChange, step, label, suffix }: { value: number; onChange: (v: number) => void; step: number; label: string; suffix?: string }) {
-  const decimals = step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3;
-  const [text, setText] = useState(value.toFixed(decimals));
-  const [focused, setFocused] = useState(false);
-  useEffect(() => {
-    if (!focused) setText(value.toFixed(decimals));
-  }, [value, focused, decimals]);
-  return (
-    <label className="flex h-9 items-center rounded-xl border border-ink-200 bg-white pl-2.5 text-xs focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-100">
-      {/* Same colours as the gizmo arrows: X red, Y green, Z blue */}
-      <span className={cn("w-3 font-bold", AXIS_COLOR[label] ?? "text-ink-400")}>{label}</span>
-      <input
-        type="number"
-        step={step}
-        value={text}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        onChange={(e) => {
-          setText(e.target.value);
-          const n = parseFloat(e.target.value);
-          if (Number.isFinite(n)) onChange(n);
-        }}
-        className="w-full min-w-0 bg-transparent px-1.5 text-right font-medium text-ink-900 tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-      />
-      {suffix && <span className="pr-2 text-ink-400">{suffix}</span>}
-    </label>
-  );
-}
-
-function Inspector({
-  content,
-  clips,
-  onChange,
-  onDelete,
-}: {
-  content: ContentData;
-  clips: string[];
-  onChange: (changes: Partial<ContentData>) => void;
-  onDelete: () => void;
-}) {
-  const playable = content.type === "MODEL" || content.type === "VIDEO" || content.type === "AUDIO";
-  const spatial = content.type !== "AUDIO";
-  return (
-    <Card className="p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-xs font-semibold tracking-wide text-ink-500 uppercase">{CONTENT_META[content.type].label}</div>
-        <Button variant="danger-ghost" size="xs" onClick={onDelete}>
-          <Trash2 /> Remove
-        </Button>
-      </div>
-      <div className="flex flex-col gap-4">
-        <Field label="Name">
-          <Input value={content.name} onChange={(e) => onChange({ name: e.target.value })} />
-        </Field>
-
-        {content.type === "TEXT" && (
-          <>
-            <Field label="Text">
-              <Textarea value={content.text ?? ""} onChange={(e) => onChange({ text: e.target.value })} className="min-h-16" />
-            </Field>
-            <Field label="Background">
-              <div className="flex gap-2">
-                {["#ffffff", "#161624", "#5b5bf6", "#10b981", "#f59e0b", "#ef4444"].map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => onChange({ color: c })}
-                    aria-label={c}
-                    className="size-7 rounded-full ring-1 ring-ink-200"
-                    style={{ background: c, boxShadow: content.color === c ? `0 0 0 2px white, 0 0 0 4px ${c === "#ffffff" ? "#bfbfd1" : c}` : undefined }}
-                  />
-                ))}
-              </div>
-            </Field>
-          </>
-        )}
-
-        {spatial && (
-          <>
-            <Field label="Position">
-              <div className="grid grid-cols-3 gap-1.5">
-                <NumberInput label="X" step={0.01} value={content.posX} onChange={(v) => onChange({ posX: v })} />
-                <NumberInput label="Y" step={0.01} value={content.posY} onChange={(v) => onChange({ posY: v })} />
-                <NumberInput label="Z" step={0.01} value={content.posZ} onChange={(v) => onChange({ posZ: v })} />
-              </div>
-            </Field>
-            <Field label="Rotation">
-              <div className="grid grid-cols-3 gap-1.5">
-                <NumberInput label="X" step={1} suffix="°" value={content.rotX} onChange={(v) => onChange({ rotX: v })} />
-                <NumberInput label="Y" step={1} suffix="°" value={content.rotY} onChange={(v) => onChange({ rotY: v })} />
-                <NumberInput label="Z" step={1} suffix="°" value={content.rotZ} onChange={(v) => onChange({ rotZ: v })} />
-              </div>
-            </Field>
-            <Field label="Scale" hint="1 = as wide as the page">
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={0.05}
-                  max={3}
-                  step={0.01}
-                  value={Math.min(3, content.scale)}
-                  onChange={(e) => onChange({ scale: parseFloat(e.target.value) })}
-                  className="flex-1 accent-brand-500"
-                />
-                <div className="w-24">
-                  <NumberInput label="" step={0.01} value={content.scale} onChange={(v) => v > 0 && onChange({ scale: v })} />
-                </div>
-              </div>
-            </Field>
-            <div className="flex flex-wrap gap-1.5">
-              <Button variant="outline" size="xs" onClick={() => onChange({ posX: 0, posY: 0 })}>
-                <Crosshair /> Centre
-              </Button>
-              <Button variant="outline" size="xs" onClick={() => onChange({ rotX: 90, rotY: 0, rotZ: 0, posZ: 0 })}>
-                Stand up
-              </Button>
-              <Button variant="outline" size="xs" onClick={() => onChange({ rotX: 0, rotY: 0, rotZ: 0, posZ: 0.01 })}>
-                Lay flat
-              </Button>
-              <Button variant="ghost" size="xs" onClick={() => onChange(defaultTransform(content.type))}>
-                Reset
-              </Button>
-            </div>
-          </>
-        )}
-
-        {playable && (
-          <div className="flex flex-col gap-3 rounded-2xl bg-ink-50 p-3.5">
-            <label className="flex items-center justify-between text-sm font-medium text-ink-700">
-              Play when the page is found
-              <Switch checked={content.autoplay} onCheckedChange={(v) => onChange({ autoplay: v })} />
-            </label>
-            <label className="flex items-center justify-between text-sm font-medium text-ink-700">
-              Loop
-              <Switch checked={content.loop} onCheckedChange={(v) => onChange({ loop: v })} />
-            </label>
-            {content.type === "MODEL" && clips.length > 0 && (
-              <Field label="Animation">
-                <Select value={content.animation ?? ""} onChange={(e) => onChange({ animation: e.target.value || null })}>
-                  <option value="">All clips ({clips.length})</option>
-                  {clips.map((clip) => (
-                    <option key={clip} value={clip}>
-                      {clip}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            )}
-          </div>
-        )}
-      </div>
-    </Card>
-  );
-}
-
-function TargetImageCard({ target }: { target: Target }) {
-  const input = useRef<HTMLInputElement>(null);
-  const [progress, setProgress] = useState<number | null>(null);
-  const router = useRouter();
-
-  async function onFile(file: File) {
-    setProgress(0);
-    const ok = await replaceTargetImageFromFile(target.id, file, setProgress);
-    setProgress(null);
-    if (ok) router.refresh();
-  }
-
-  return (
-    <Card className="p-5">
-      <div className="mb-3 text-xs font-semibold tracking-wide text-ink-500 uppercase">Target image</div>
-      <input
-        ref={input}
-        type="file"
-        accept={TARGET_IMAGE_ACCEPT}
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onFile(file);
-          e.target.value = "";
-        }}
-      />
-      <div className="flex gap-4">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={target.imageUrl} alt="" className="h-24 w-[72px] shrink-0 rounded-xl object-cover ring-1 ring-ink-200" />
-        <div className="flex min-w-0 flex-col justify-between gap-2">
-          <p className="text-xs leading-relaxed text-ink-500">
-            The picture students point their camera at. Replacing it keeps everything placed on this page; recompile the book afterwards.
-          </p>
-          <Button variant="outline" size="sm" disabled={progress !== null} onClick={() => input.current?.click()}>
-            {progress !== null ? <LoaderCircle className="animate-spin" /> : <ImageIcon />}
-            {progress !== null ? `Uploading ${Math.round(progress)}%` : "Replace image"}
-          </Button>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function PageDetails({ target }: { target: Target }) {
-  const [state, action] = useActionState(updateTarget, undefined);
-  useEffect(() => {
-    if (state?.ok) toast.success(state.message);
-    else if (state?.error) toast.error(state.error);
-  }, [state]);
-  return (
-    <Card className="p-5">
-      <div className="mb-3 text-xs font-semibold tracking-wide text-ink-500 uppercase">Page info shown to students</div>
-      <form action={action} className="flex flex-col gap-3">
-        <input type="hidden" name="id" value={target.id} />
-        <Field label="Title">
-          <Input name="name" defaultValue={target.name} required />
-        </Field>
-        <Field label="Explanation" hint="Appears in the info card when a student scans this page.">
-          <Textarea name="description" defaultValue={target.description ?? ""} placeholder="The heart pumps blood through…" />
-        </Field>
-        <SubmitButton variant="outline" size="sm" pendingText="Saving…">
-          Save page info
-        </SubmitButton>
-      </form>
-    </Card>
   );
 }

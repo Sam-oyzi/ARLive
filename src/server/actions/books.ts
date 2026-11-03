@@ -2,7 +2,10 @@
 
 import { z } from "zod";
 import { assertRole } from "@/lib/auth";
-import { CONTENT_TYPES, defaultTransform, type ContentData } from "@/lib/content";
+import { CONTENT_META, CONTENT_TYPES, defaultTransform, type ContentData } from "@/lib/content";
+import { parseMotion } from "@/lib/motion-schema";
+import { pageTranslationsSchema } from "@/lib/page-translations";
+import { BOOK_FORMATS, type BookFormat } from "@/lib/book-format";
 import { db } from "@/lib/db";
 import { deleteUpload } from "@/lib/storage";
 import { failure, invalid, parseForm, refreshAll, type ActionState } from "../forms";
@@ -14,6 +17,7 @@ const bookSchema = z.object({
   gradeLevel: z.string().max(60).optional(),
   subjectId: z.string({ error: "Pick a subject" }),
   coverUrl: z.string().startsWith("/files/").optional(),
+  format: z.enum(Object.keys(BOOK_FORMATS) as [BookFormat, ...BookFormat[]]).default("A5"),
 });
 
 export async function saveBook(_prev: ActionState<{ id: string }>, formData: FormData): Promise<ActionState<{ id: string }>> {
@@ -78,6 +82,10 @@ const newTargets = z.array(
     imageUrl: z.string().startsWith("/files/targets/"),
     width: z.number().int().positive(),
     height: z.number().int().positive(),
+    // From an imported pages.json: the page story and whether it is an AR page.
+    description: z.string().max(1000).nullish(),
+    translations: pageTranslationsSchema.optional(),
+    ar: z.boolean().optional(),
   }),
 );
 
@@ -111,6 +119,18 @@ export async function updateTarget(_prev: ActionState, formData: FormData): Prom
     await db.target.update({ where: { id }, data: { name, description: description ?? null } });
     refreshAll();
     return { ok: true, message: "Page details saved" };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Choose whether a page is compiled as an AR target or is a story page (reader and print only). */
+export async function setTargetAr(targetId: string, ar: boolean): Promise<ActionState> {
+  try {
+    await assertRole(["SUPER_ADMIN"]);
+    await db.target.update({ where: { id: targetId }, data: { ar } });
+    refreshAll();
+    return { ok: true, message: ar ? "AR page — recompile the book to apply" : "Story page — recompile the book to apply" };
   } catch (error) {
     return failure(error);
   }
@@ -167,12 +187,19 @@ export async function deleteTarget(targetId: string): Promise<ActionState> {
 
 // ---------- Content placed on a target ----------
 
+/** Duplicated items share one uploaded file; only delete it once nothing points at it. */
+async function deleteContentFileIfUnused(url: string | null) {
+  if (url && (await db.content.count({ where: { url } })) === 0) await deleteUpload(url);
+}
+
 const newContent = z.object({
   type: z.enum(CONTENT_TYPES),
   name: z.string().min(1).max(120),
   url: z.string().startsWith("/files/").nullable(),
   text: z.string().max(500).nullable(),
 });
+
+const DEFAULT_COLOR: Partial<Record<ContentData["type"], string>> = { TEXT: "#ffffff", TEXT3D: "#5b5bf6" };
 
 export async function addContent(targetId: string, input: z.input<typeof newContent>): Promise<ActionState<ContentData>> {
   try {
@@ -181,10 +208,54 @@ export async function addContent(targetId: string, input: z.input<typeof newCont
     if (!parsed.success) return invalid(parsed.error);
     const count = await db.content.count({ where: { targetId } });
     const content = await db.content.create({
-      data: { ...parsed.data, ...defaultTransform(parsed.data.type), targetId, order: count, color: parsed.data.type === "TEXT" ? "#ffffff" : null },
+      data: {
+        ...parsed.data,
+        ...defaultTransform(parsed.data.type),
+        targetId,
+        order: count,
+        color: DEFAULT_COLOR[parsed.data.type] ?? null,
+      },
     });
     refreshAll();
     return { ok: true, data: content as ContentData };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Swap the file behind a model / video / image / audio item, keeping its placement and animation. */
+export async function replaceContentFile(contentId: string, url: string): Promise<ActionState<ContentData>> {
+  try {
+    await assertRole(["SUPER_ADMIN"]);
+    const content = await db.content.findUniqueOrThrow({ where: { id: contentId } });
+    const kind = CONTENT_META[content.type as ContentData["type"]]?.uploadKind;
+    if (!kind || !url.startsWith(`/files/${kind}/`)) return { error: "That file doesn't fit this item." };
+    const updated = await db.content.update({
+      where: { id: contentId },
+      // A different GLB has different clips, so go back to playing all of them.
+      data: { url, animation: content.type === "MODEL" ? null : content.animation },
+    });
+    await deleteContentFileIfUnused(content.url);
+    refreshAll();
+    return { ok: true, message: "Replaced", data: updated as ContentData };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function duplicateContent(contentId: string): Promise<ActionState<ContentData>> {
+  try {
+    await assertRole(["SUPER_ADMIN"]);
+    const { id, createdAt, updatedAt, ...source } = await db.content.findUniqueOrThrow({ where: { id: contentId } });
+    void id;
+    void createdAt;
+    void updatedAt;
+    const count = await db.content.count({ where: { targetId: source.targetId } });
+    const copy = await db.content.create({
+      data: { ...source, name: `${source.name} copy`.slice(0, 120), posX: source.posX + 0.08, order: count },
+    });
+    refreshAll();
+    return { ok: true, message: "Duplicated", data: copy as ContentData };
   } catch (error) {
     return failure(error);
   }
@@ -206,6 +277,11 @@ const contentUpdate = z.object({
   autoplay: z.boolean(),
   loop: z.boolean(),
   animation: z.string().max(120).nullable(),
+  motion: z
+    .string()
+    .max(100_000)
+    .nullable()
+    .refine((json) => json === null || parseMotion(json) !== null, "Invalid animation data"),
 });
 
 export async function saveContents(targetId: string, items: z.input<typeof contentUpdate>[]): Promise<ActionState> {
@@ -227,7 +303,7 @@ export async function deleteContent(contentId: string): Promise<ActionState> {
   try {
     await assertRole(["SUPER_ADMIN"]);
     const content = await db.content.delete({ where: { id: contentId } });
-    await deleteUpload(content.url);
+    await deleteContentFileIfUnused(content.url);
     refreshAll();
     return { ok: true };
   } catch (error) {
