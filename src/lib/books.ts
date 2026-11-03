@@ -24,20 +24,23 @@ export function compileState(
   return book.mindHash === targetsSignature(ar) ? "ready" : "stale";
 }
 
-/** Books a school can open in AR: granted, published and compiled. */
-export function playableBooksWhere(schoolId: string) {
+export function readableBooksWhere(schoolId: string) {
   return {
     published: true,
-    mindUrl: { not: null },
     access: { some: { schoolId } },
   } as const;
+}
+
+/** Books a school can open in AR: granted, published and compiled. */
+export function playableBooksWhere(schoolId: string) {
+  return { ...readableBooksWhere(schoolId), mindUrl: { not: null } } as const;
 }
 
 /** Reading the book (flip-through) doesn't need compiled AR data, only access to a published book. */
 export async function canUserReadBook(user: { role: string; schoolId: string | null }, bookId: string) {
   if (user.role === "SUPER_ADMIN") return true;
   if (!user.schoolId) return false;
-  const count = await db.book.count({ where: { id: bookId, published: true, access: { some: { schoolId: user.schoolId } } } });
+  const count = await db.book.count({ where: { id: bookId, ...readableBooksWhere(user.schoolId) } });
   return count > 0;
 }
 

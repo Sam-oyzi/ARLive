@@ -89,6 +89,7 @@ export const FlipBook = forwardRef<
   FlipBookHandle,
   {
     pages: FlipPage[];
+    backCoverImageUrl?: string;
     /** page height / width */
     aspect: number;
     initialPage?: number;
@@ -99,7 +100,7 @@ export const FlipBook = forwardRef<
     onSpreadChange?: (pages: number[]) => void;
     className?: string;
   }
->(function FlipBook({ pages, aspect, initialPage = 0, magnifier, renderOverlay, onSpreadChange, className }, ref) {
+>(function FlipBook({ pages, backCoverImageUrl, aspect, initialPage = 0, magnifier, renderOverlay, onSpreadChange, className }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [spread, setSpread] = useState(() => spreadOf(initialPage));
@@ -111,10 +112,11 @@ export const FlipBook = forwardRef<
   const reducedMotion = useRef(false);
 
   const n = pages.length;
-  const hasBackCover = n > 1 && n % 2 === 1;
+  const hasBackCover = n > 0 && (!!backCoverImageUrl || (n > 1 && n % 2 === 1));
   const spreads = Math.floor(n / 2) + 1 + Number(hasBackCover);
   const page = (i: number) => (i >= 0 && i < n ? pages[i]! : null);
-  const left = (s: number) => hasBackCover && s === spreads - 1 ? BACK_COVER : page(2 * s - 1);
+  const backCover = backCoverImageUrl ? { ...BACK_COVER, imageUrl: backCoverImageUrl } : BACK_COVER;
+  const left = (s: number) => hasBackCover && s === spreads - 1 ? backCover : page(2 * s - 1);
   const right = (s: number) => page(2 * s);
 
   // Fit two pages side by side inside the container.
@@ -132,6 +134,7 @@ export const FlipBook = forwardRef<
     reducedMotion.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     // Preload every page so turns never flash an empty sheet.
     const urls = new Set(pages.map((page) => page.imageUrl).filter(Boolean));
+    if (backCoverImageUrl) urls.add(backCoverImageUrl);
     for (const url of images.current.keys()) {
       if (!urls.has(url)) images.current.delete(url);
     }
@@ -141,7 +144,7 @@ export const FlipBook = forwardRef<
       img.src = url;
       images.current.set(url, img);
     }
-  }, [pages]);
+  }, [pages, backCoverImageUrl]);
 
   useEffect(() => {
     onSpreadChange?.([2 * spread - 1, 2 * spread].filter((i) => i >= 0 && i < n));
@@ -458,7 +461,7 @@ export const FlipBook = forwardRef<
           {staticPages}
 
           {/* overlays sit on the resting pages only */}
-          {!turn && leftStatic && leftStatic !== BACK_COVER && (
+          {!turn && leftStatic && leftStatic !== backCover && (
             <div className="absolute top-0 left-0" style={{ width: pageW, height: pageH }}>
               {renderOverlay?.(leftStatic, 2 * spread - 1, "left")}
             </div>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="768" height="1024" viewBox="0 0 768 1024">
+  <defs>
+    <radialGradient id="paper" cx="48%" cy="41%" r="75%">
+      <stop stop-color="#f7efdf" />
+      <stop offset="1" stop-color="#e6d9be" />
+    </radialGradient>
+  </defs>
+  <rect width="768" height="1024" fill="url(#paper)" />
+  <text x="384" y="516" text-anchor="middle" fill="#624631" font-family="Georgia, serif" font-style="italic" font-size="38">“Wonder begins with a question.”</text>
+</svg>

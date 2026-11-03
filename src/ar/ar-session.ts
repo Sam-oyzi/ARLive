@@ -286,6 +286,12 @@ export class ARSession {
     return canvas.toDataURL("image/jpeg", 0.92);
   }
 
+  resumeCamera() {
+    if (!this.disposed && this.video?.paused && this.video.srcObject) {
+      void this.video.play().catch(() => {});
+    }
+  }
+
   dispose() {
     this.disposed = true;
     window.removeEventListener("resize", this.onResize);

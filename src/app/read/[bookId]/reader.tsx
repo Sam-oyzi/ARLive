@@ -23,6 +23,7 @@ const DESK = [
 ].join(", ");
 
 const chip = "flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition";
+const DEFAULT_BACK_COVER = "/book-art/back-cover.svg";
 
 export function Reader({
   book,
@@ -34,6 +35,7 @@ export function Reader({
   book: {
     id: string;
     title: string;
+    backCoverImageUrl?: string;
     format: string;
     subject: { name: string; color: string; icon: string };
     canScan: boolean;
@@ -81,8 +83,8 @@ export function Reader({
 
   const arCount = pages.filter(isAr).length;
   const shown = visible.flatMap((i) => readingPages[i] ? [readingPages[i]] : []);
-  const backCover = pages.length > 1 && shown.length === 0;
-  const atEnd = pages.length <= 1 || backCover || (pages.length % 2 === 0 && visible.includes(pages.length - 1));
+  const backCover = pages.length > 0 && shown.length === 0;
+  const atEnd = pages.length === 0 || backCover;
   // Preserve the last spread's caption height while the back cover is closed.
   const captionPages = backCover ? readingPages.slice(-2) : shown;
 
@@ -179,6 +181,7 @@ export function Reader({
           <FlipBook
             ref={flipbook}
             pages={flipPages}
+            backCoverImageUrl={book.backCoverImageUrl ?? DEFAULT_BACK_COVER}
             aspect={aspect}
             magnifier={magnifier}
             onSpreadChange={onSpreadChange}
@@ -228,6 +231,7 @@ export function Reader({
       {/* caption for the open pages */}
       <div className="mx-auto w-full max-w-3xl shrink-0 px-6 pt-1 text-center">
         <div className="truncate text-[13px] text-ink-600">{backCover ? "Back cover" : shown.map((page, index) => <span key={page.id}>{index > 0 && " · "}<bdi lang={page.lang}>{page.title}</bdi></span>)}</div>
+        {backCover && <span className="sr-only">Wonder begins with a question. {book.backCoverImageUrl && "Written and created by Iassam Houzi. All rights reserved."}</span>}
         {captionPages.some((page) => page.story) && (
           <p aria-hidden={backCover || undefined} className={cn("mx-auto mt-1 line-clamp-2 max-w-2xl font-serif text-[17px] leading-snug text-ink-700 italic", backCover && "invisible")}>
             {captionPages.map((page) => page.story && <bdi key={page.id} lang={page.lang}>{page.story}{"  "}</bdi>)}

@@ -95,6 +95,23 @@ export function ARViewer({ book, targets, backHref }: Props) {
 
   useEffect(() => teardown, [teardown]);
 
+  useEffect(() => {
+    if (phase !== "running") return;
+    // Quick Look is a native overlay. Keep the tracking session and resume its
+    // video if the browser paused it while the overlay had focus.
+    const resume = () => {
+      if (!document.hidden) sessionRef.current?.resumeCamera();
+    };
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("focus", resume);
+    window.addEventListener("pageshow", resume);
+    return () => {
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("pageshow", resume);
+    };
+  }, [phase]);
+
   const logScan = useCallback(
     (targetId: string) => {
       const now = Date.now();

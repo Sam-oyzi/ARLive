@@ -7,6 +7,7 @@ import { disposeObject, getGLTFLoader } from "@/ar/content-objects";
 import type { ContentData } from "@/lib/content";
 
 const MIME_TYPE = "model/vnd.usdz+zip";
+const launchClass = "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-ink-100 px-3 text-sm font-semibold text-ink-800";
 
 async function loadPreviewObject(content: ContentData) {
   if (content.type === "MODEL" && content.url) {
@@ -49,8 +50,8 @@ async function exportPreview(content: ContentData) {
 export function QuickLook({ contents }: { contents: ContentData[] }) {
   const objects = contents.filter((item) => (item.type === "MODEL" && item.url) || (item.type === "TEXT3D" && item.text?.trim()));
   const [supported, setSupported] = useState(false);
-  const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
+  const [attempt, setAttempt] = useState(0);
   const [preview, setPreview] = useState<{ id: string; url?: string }>();
   const selected = objects.find((item) => item.id === selectedId) ?? objects[0];
 
@@ -59,7 +60,8 @@ export function QuickLook({ contents }: { contents: ContentData[] }) {
   }, []);
 
   useEffect(() => {
-    if (!open || !selected) return;
+    // Prepare the asset before the tap so Safari can handle a real rel=ar link.
+    if (!supported || !selected) return;
 
     let cancelled = false;
     let url: string | undefined;
@@ -75,48 +77,37 @@ export function QuickLook({ contents }: { contents: ContentData[] }) {
       cancelled = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [open, selected]);
+  }, [supported, selected, attempt]);
 
   if (!supported || !selected) return null;
 
   const result = preview?.id === selected.id ? preview : undefined;
   return (
-    <div className="mt-3">
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => { setPreview(undefined); setOpen(!open); }}
-        className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-ink-100 px-3 text-sm font-semibold text-ink-800"
-      >
-        <Box className="size-4" aria-hidden="true" /> AR Quick Look
-      </button>
-      {open && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-2xl bg-ink-100 p-2 text-sm">
-          {objects.length > 1 && (
-            <select
-              aria-label="Object to preview"
-              value={selected.id}
-              onChange={(event) => { setPreview(undefined); setSelectedId(event.target.value); }}
-              className="min-h-10 max-w-full rounded-xl bg-white px-2 text-ink-900"
-            >
-              {objects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-          )}
-          {result?.url ? (
-            <div className="flex items-center gap-2">
-              <a rel="ar" href={result.url} aria-label={`Open ${selected.name} in AR Quick Look`} className="grid size-11 place-items-center rounded-xl bg-white">
-                {/* Safari requires a single image child for Quick Look. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/ar-quick-look.svg" alt="" className="size-6" />
-              </a>
-              <span>Tap the cube to place in AR</span>
-            </div>
-          ) : result ? (
-            <p role="status" className="px-2">This object couldn’t be prepared for Quick Look.</p>
-          ) : (
-            <p role="status" className="flex items-center gap-2 px-2"><LoaderCircle className="size-4 animate-spin" /> Preparing AR preview…</p>
-          )}
-        </div>
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      {result?.url ? (
+        <a rel="ar" href={result.url} aria-label={`Open ${selected.name} in AR Quick Look`} className={`${launchClass} after:content-['AR_Quick_Look']`}>
+          {/* Keep the image as the link's only child for Safari's native viewer. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/ar-quick-look.svg" alt="" className="size-4" />
+        </a>
+      ) : result ? (
+        <button type="button" className={launchClass} onClick={() => { setPreview(undefined); setAttempt((value) => value + 1); }}>
+          <Box aria-hidden="true" className="size-4" /> Retry AR Quick Look
+        </button>
+      ) : (
+        <span role="status" className={`${launchClass} text-ink-500`}>
+          <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> Preparing AR Quick Look…
+        </span>
+      )}
+      {objects.length > 1 && (
+        <select
+          aria-label="Object to preview"
+          value={selected.id}
+          onChange={(event) => { setPreview(undefined); setSelectedId(event.target.value); }}
+          className="min-h-11 max-w-full rounded-2xl bg-ink-100 px-3 text-sm text-ink-800"
+        >
+          {objects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+        </select>
       )}
     </div>
   );

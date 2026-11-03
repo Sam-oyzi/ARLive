@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { BookOpen, Camera, ChevronRight, Sparkles, Box } from "lucide-react";
+import { BookOpen, Camera, ChevronRight, Sparkles } from "lucide-react";
 import { EmptyState } from "@/components/ui/misc";
 import { requireUser } from "@/lib/auth";
-import { playableBooksWhere } from "@/lib/books";
+import { playableBooksWhere, readableBooksWhere } from "@/lib/books";
 import { db } from "@/lib/db";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { plural } from "@/lib/utils";
@@ -17,16 +17,17 @@ function greeting() {
 export default async function LearnHome() {
   const user = await requireUser(["STUDENT"]);
   const schoolId = user.schoolId!;
+  const readable = readableBooksWhere(schoolId);
   const [subjects, recent] = await Promise.all([
     db.subject.findMany({
-      where: { books: { some: playableBooksWhere(schoolId) } },
+      where: { books: { some: readable } },
       orderBy: [{ order: "asc" }, { name: "asc" }],
       include: {
-        books: { where: playableBooksWhere(schoolId), select: { id: true, _count: { select: { targets: true } } } },
+        books: { where: readable, select: { id: true, _count: { select: { targets: true } } } },
       },
     }),
     db.scanEvent.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, book: playableBooksWhere(schoolId) },
       orderBy: { createdAt: "desc" },
       take: 30,
       include: { target: { select: { id: true, name: true, imageUrl: true } }, book: { select: { id: true, title: true } } },
@@ -45,15 +46,14 @@ export default async function LearnHome() {
         <div className="relative">
           <p className="text-sm font-medium text-white/60">{greeting()},</p>
           <h1 className="mt-1 font-display text-3xl font-bold tracking-tight sm:text-4xl">{user.name.split(" ")[0]} 👋</h1>
-          <p className="mt-3 max-w-md text-[15px] text-white/70">Pick a subject, open your book, and point your camera at a page to see it come alive in 3D.</p>
+          <p className="mt-3 max-w-md text-[15px] text-white/75">Choose a subject and read your books online. When a book has AR, you can also scan its pages to explore in 3D.</p>
           <div className="mt-6 flex flex-wrap gap-2 text-xs font-semibold">
             {[
-              { icon: BookOpen, label: "Pick a subject" },
-              { icon: Camera, label: "Scan a page" },
-              { icon: Box, label: "Explore in 3D" },
-            ].map((step, i) => (
+              { icon: BookOpen, label: "Read online" },
+              { icon: Camera, label: "Scan AR pages" },
+            ].map((step) => (
               <span key={step.label} className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 backdrop-blur">
-                <span className="grid size-5 place-items-center rounded-full bg-white text-[10px] font-bold text-ink-900">{i + 1}</span>
+                <step.icon aria-hidden="true" className="size-4" />
                 {step.label}
               </span>
             ))}
@@ -65,7 +65,7 @@ export default async function LearnHome() {
       {subjects.length === 0 ? (
         <EmptyState
           icon={Sparkles}
-          title="No AR books yet"
+          title="No books yet"
           description="Your school hasn't enabled any books yet. Ask your teacher — they'll appear here automatically."
         />
       ) : (

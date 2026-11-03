@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="768" height="1024" viewBox="0 0 768 1024">
+  <defs>
+    <radialGradient id="paper" cx="48%" cy="41%" r="75%">
+      <stop stop-color="#f7efdf" />
+      <stop offset="1" stop-color="#e6d9be" />
+    </radialGradient>
+  </defs>
+  <rect width="768" height="1024" fill="url(#paper)" />
+  <g text-anchor="middle" fill="#624631">
+    <text x="384" y="516" font-family="Georgia, serif" font-style="italic" font-size="38">“Wonder begins with a question.”</text>
+    <text x="384" y="766" font-family="Georgia, serif" font-size="18" letter-spacing="3">WRITTEN AND CREATED BY</text>
+    <text x="384" y="835" font-family="Segoe Script, Brush Script MT, Georgia, serif" font-style="italic" font-size="52">Iassam Houzi</text>
+    <path d="M267 856Q378 869 501 850" fill="none" stroke="#9c7758" stroke-width="1.6" stroke-linecap="round" />
+    <text x="384" y="916" font-family="Georgia, serif" font-size="18">© Iassam Houzi. All rights reserved.</text>
+  </g>
+</svg>

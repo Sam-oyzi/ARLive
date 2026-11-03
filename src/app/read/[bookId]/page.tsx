@@ -35,6 +35,7 @@ export default async function ReadPage({ params }: { params: Promise<{ bookId: s
       book={{
         id: book.id,
         title: book.title,
+        backCoverImageUrl: book.title === "Example: The Journey of a Water Drop" ? "/book-art/water-drop/back-cover.svg" : undefined,
         format: book.format,
         subject: { name: book.subject.name, color: book.subject.color, icon: book.subject.icon },
         // Students can only scan once the AR data is compiled; admins see the compile status instead.

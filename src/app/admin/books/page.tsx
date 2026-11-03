@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { BookOpen, Plus } from "lucide-react";
+import { ArrowUpRight, BookOpen, Plus, Search } from "lucide-react";
 import { CompileBadge } from "@/components/compile-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/form";
 import { EmptyState, PageHeader } from "@/components/ui/misc";
 import { requireUser } from "@/lib/auth";
 import { compileState } from "@/lib/books";
@@ -13,17 +14,28 @@ import { BookDialog } from "./book-dialog";
 
 export const metadata = { title: "Books & targets" };
 
-export default async function BooksPage({ searchParams }: { searchParams: Promise<{ subject?: string }> }) {
+export default async function BooksPage({ searchParams }: { searchParams: Promise<{ subject?: string; q?: string }> }) {
   await requireUser(["SUPER_ADMIN"]);
-  const { subject: subjectFilter } = await searchParams;
+  const params = await searchParams;
+  const subjectFilter = typeof params.subject === "string" ? params.subject : undefined;
+  const query = typeof params.q === "string" ? params.q.trim().slice(0, 120) : "";
+  function filterHref(subject?: string, search = query) {
+    const next = new URLSearchParams();
+    if (subject) next.set("subject", subject);
+    if (search) next.set("q", search);
+    return `/admin/books${next.size ? `?${next}` : ""}`;
+  }
   const [subjects, books] = await Promise.all([
     db.subject.findMany({ orderBy: [{ order: "asc" }, { name: "asc" }], include: { _count: { select: { books: true } } } }),
     db.book.findMany({
-      where: subjectFilter ? { subject: { slug: subjectFilter } } : undefined,
+      where: {
+        ...(subjectFilter && { subject: { slug: subjectFilter } }),
+        ...(query && { OR: [{ title: { contains: query } }, { description: { contains: query } }] }),
+      },
       orderBy: { updatedAt: "desc" },
       include: {
         subject: true,
-        targets: { select: { id: true, imageUrl: true, ar: true, _count: { select: { contents: true } } } },
+        targets: { orderBy: [{ order: "asc" }, { createdAt: "asc" }], select: { id: true, imageUrl: true, ar: true } },
         _count: { select: { access: true } },
       },
     }),
@@ -46,35 +58,47 @@ export default async function BooksPage({ searchParams }: { searchParams: Promis
         actions={addButton}
       />
 
-      <div className="mb-6 flex gap-2 overflow-x-auto scrollbar-none">
-        <FilterChip href="/admin/books" active={!subjectFilter} label="All" count={subjects.reduce((n, s) => n + s._count.books, 0)} />
-        {subjects.map((s) => (
-          <FilterChip key={s.id} href={`/admin/books?subject=${s.slug}`} active={s.slug === subjectFilter} label={s.name} count={s._count.books} color={s.color} />
-        ))}
-      </div>
+      <section aria-label="Book filters" className="mb-6 space-y-3 rounded-2xl border border-ink-200/70 bg-white p-3 shadow-soft sm:p-4">
+        <form action="/admin/books" className="flex flex-wrap items-center gap-2">
+          {subjectFilter && <input type="hidden" name="subject" value={subjectFilter} />}
+          <div className="relative min-w-32 flex-1 sm:max-w-xs">
+            <Search aria-hidden="true" className="pointer-events-none absolute top-3 left-3 size-4 text-ink-500" />
+            <Input type="search" name="q" key={query} defaultValue={query} maxLength={120} aria-label="Search books" placeholder="Search books" className="pl-9" />
+          </div>
+          <Button type="submit" variant="outline">Search</Button>
+          {query && <Link href={filterHref(subjectFilter, "")} className="rounded-lg px-2 py-1 text-sm font-medium text-brand-700 underline-offset-2 hover:underline">Clear search</Link>}
+          <p className="ml-auto text-xs font-medium text-ink-500">{plural(books.length, "book")}</p>
+        </form>
+        <nav aria-label="Filter by subject" className="flex flex-wrap gap-2">
+          <FilterChip href={filterHref()} active={!subjectFilter} label="All subjects" count={subjects.reduce((n, s) => n + s._count.books, 0)} />
+          {subjects.map((s) => (
+            <FilterChip key={s.id} href={filterHref(s.slug)} active={s.slug === subjectFilter} label={s.name} count={s._count.books} color={s.color} />
+          ))}
+        </nav>
+      </section>
 
       {books.length === 0 ? (
         <EmptyState
           icon={BookOpen}
-          title={activeSubject ? `No ${activeSubject.name} books yet` : "No books yet"}
-          description="Create a book, upload its pages and attach 3D content to each page."
-          action={addButton}
+          title={query ? "No matching books" : activeSubject ? `No ${activeSubject.name} books yet` : "No books yet"}
+          description={query ? "Try a different title or clear the search." : "Create a book, upload its pages and attach 3D content to each page."}
+          action={query ? <Link className="text-sm font-semibold text-brand-700 underline" href={filterHref(subjectFilter, "")}>Clear search</Link> : addButton}
         />
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {books.map((book) => {
             const state = compileState(book, book.targets);
-            const withContent = book.targets.filter((t) => t._count.contents > 0).length;
+            const arPages = book.targets.filter((t) => t.ar).length;
             return (
               <Link
                 key={book.id}
                 href={`/admin/books/${book.id}`}
                 className="group flex flex-col overflow-hidden rounded-3xl border border-ink-200/70 bg-white shadow-soft transition hover:-translate-y-0.5 hover:shadow-lift"
               >
-                <div className="relative aspect-[4/3] overflow-hidden" style={{ background: `${book.subject.color}1a` }}>
+                <div className="relative grid aspect-[4/3] place-items-center overflow-hidden" style={{ background: `radial-gradient(ellipse at 50% 35%, white, ${book.subject.color}22)` }}>
                   {book.coverUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={book.coverUrl} alt="" className="size-full object-cover transition duration-500 group-hover:scale-105" />
+                    <img src={book.coverUrl} alt="" className="absolute inset-0 m-auto h-[82%] max-w-[85%] rounded-lg object-contain shadow-lift transition duration-500 group-hover:scale-105" />
                   ) : (
                     <div className="grid size-full place-items-center">
                       <div className="flex -space-x-8">
@@ -95,6 +119,7 @@ export default async function BooksPage({ searchParams }: { searchParams: Promis
                   <div className="absolute top-3 left-3 flex gap-1.5">
                     {book.published ? <Badge tone="dark">Published</Badge> : <Badge className="bg-white/90">Draft</Badge>}
                   </div>
+                  <span aria-hidden="true" className="absolute top-3 right-3 grid size-8 place-items-center rounded-full bg-white/90 text-ink-600 shadow-soft transition group-hover:text-brand-700"><ArrowUpRight className="size-4" /></span>
                 </div>
                 <div className="flex flex-1 flex-col p-5">
                   <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold" style={{ color: book.subject.color }}>
@@ -105,7 +130,7 @@ export default async function BooksPage({ searchParams }: { searchParams: Promis
                   <h3 className="line-clamp-2 font-display font-bold text-ink-900 group-hover:text-brand-600">{book.title}</h3>
                   <div className="mt-auto flex items-center justify-between gap-2 pt-4">
                     <span className="text-xs text-ink-500">
-                      {plural(book.targets.length, "page")} · {withContent} with AR · {plural(book._count.access, "school")}
+                      {plural(book.targets.length, "page")} · {arPages} with AR · {plural(book._count.access, "school")}
                     </span>
                     <CompileBadge state={state} />
                   </div>
@@ -123,6 +148,7 @@ function FilterChip({ href, active, label, count, color }: { href: string; activ
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-semibold transition",
         active ? "border-ink-900 bg-ink-900 text-white" : "border-ink-200 bg-white text-ink-600 hover:border-ink-300 hover:text-ink-900",
