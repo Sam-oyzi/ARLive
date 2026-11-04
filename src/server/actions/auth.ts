@@ -11,8 +11,16 @@ import { echoValues, failure, invalid, parseForm, type ActionState } from "../fo
 // Compared against when the username doesn't exist, so response time doesn't reveal valid usernames.
 const DUMMY_HASH = "$2b$10$CwTycUXWue0Thq9StjUM0uJ8.Y5Yb6dO7kQ6wV4G1oCrZQ5Kk7v2e";
 
-function safeNext(next: unknown, fallback: string) {
-  return typeof next === "string" && next.startsWith("/") && !next.startsWith("//") ? next : fallback;
+function loginDestination(next: string | undefined, home: string) {
+  if (!next?.startsWith("/")) return home;
+  const base = "http://localhost";
+  const target = URL.parse(next, base);
+  if (!target || target.origin !== base) return home;
+
+  const { pathname, search, hash } = target;
+  // The reader and scanner check access to the requested book themselves.
+  const allowed = [home, "/read", "/scan"].some((area) => pathname === area || pathname.startsWith(`${area}/`));
+  return allowed ? `${pathname}${search}${hash}` : home;
 }
 
 const loginSchema = z.object({
@@ -45,10 +53,7 @@ async function attemptLogin(formData: FormData): Promise<ActionState> {
 
   await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   await createSession(user);
-  const home = homeFor(user.role);
-  // Only follow ?next= into the area this role can actually open.
-  const target = safeNext(next, home);
-  redirect(target.startsWith(home) || target.startsWith("/scan") ? target : home);
+  redirect(loginDestination(next, homeFor(user.role)));
 }
 
 const joinSchema = z.object({

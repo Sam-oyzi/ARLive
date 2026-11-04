@@ -4,6 +4,7 @@ export type PaperPull = { edgeY: number; offsetY: number };
 
 type Vertex = { x: number; y: number; z: number; u: number; v: number; shade: number; edgeX: number; edgeY: number };
 type Triangle = { a: Vertex; b: Vertex; c: Vertex; depth: number; facing: number };
+type Artwork = { image: HTMLImageElement; surface: HTMLCanvasElement; width: number; height: number; pixelRatio: number };
 
 const COLUMNS = 24;
 const ROWS = 14;
@@ -56,6 +57,28 @@ function foldDistance(travel: number, radius: number) {
   return (low + high) / 2;
 }
 
+function prepareArtwork(image: HTMLImageElement | undefined, width: number, height: number, pixelRatio: number, cached?: Artwork): Artwork | undefined {
+  if (!image?.complete || !image.naturalWidth || !image.naturalHeight) return;
+  if (cached?.image === image && cached.width === width && cached.height === height && cached.pixelRatio === pixelRatio) return cached;
+
+  // Bake the paper and artwork together. Painting them separately through each
+  // antialiased triangle clip leaves paper-colored lines along the mesh edges.
+  const surface = document.createElement("canvas");
+  surface.width = Math.ceil(width * pixelRatio);
+  surface.height = Math.ceil(height * pixelRatio);
+  const context = surface.getContext("2d", { alpha: false });
+  if (!context) return;
+  context.scale(surface.width / width, surface.height / height);
+  context.fillStyle = PAPER;
+  context.fillRect(0, 0, width, height);
+
+  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+  const w = image.naturalWidth * scale;
+  const h = image.naturalHeight * scale;
+  context.drawImage(image, (width - w) / 2, (height - h) / 2, w, h);
+  return { image, surface, width, height, pixelRatio };
+}
+
 function drawPaper(
   context: CanvasRenderingContext2D,
   width: number,
@@ -64,8 +87,8 @@ function drawPaper(
   progress: number,
   pull: PaperPull,
   stitchOpacity: number,
-  front?: HTMLImageElement,
-  back?: HTMLImageElement,
+  front?: HTMLCanvasElement,
+  back?: HTMLCanvasElement,
 ) {
   const spine = width * 1.5;
   const top = height * 0.5;
@@ -150,7 +173,7 @@ function drawPaper(
       stitchesPainted = true;
     }
     const frontFacing = facing > 0;
-    const image = frontFacing ? front : back;
+    const artwork = frontFacing ? front : back;
     const flipTexture = frontFacing !== (direction === 1);
     const ax = flipTexture ? width - a.u : a.u;
     const bx = flipTexture ? width - b.u : b.u;
@@ -176,8 +199,8 @@ function drawPaper(
     context.closePath();
     context.clip();
     context.transform(xx, xy, yx, yy, a.x - xx * ax - yx * a.v, a.y - xy * ax - yy * a.v);
-    if (image?.complete && image.naturalWidth) {
-      context.drawImage(image, 0, 0, width, height);
+    if (artwork) {
+      context.drawImage(artwork, 0, 0, width, height);
     } else {
       context.fillStyle = PAPER;
       context.fillRect(0, 0, width, height);
@@ -229,6 +252,7 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
   back?: HTMLImageElement;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const artwork = useRef<{ front?: Artwork; back?: Artwork }>({});
 
   useLayoutEffect(() => {
     const element = canvas.current;
@@ -242,9 +266,12 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
 
     function paint() {
       if (!context) return;
+      const cache = artwork.current;
+      cache.front = prepareArtwork(front, width, height, scale, cache.front);
+      cache.back = prepareArtwork(back, width, height, scale, cache.back);
       context.setTransform(scale, 0, 0, scale, 0, 0);
       context.clearRect(0, 0, width * 3, height * 2);
-      drawPaper(context, width, height, direction, progress, pull, stitchOpacity, front, back);
+      drawPaper(context, width, height, direction, progress, pull, stitchOpacity, cache.front?.surface, cache.back?.surface);
     }
     paint();
     front?.addEventListener("load", paint);

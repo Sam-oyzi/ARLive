@@ -35,6 +35,7 @@ const PAPER = "#fbf8f1";
 const RADIUS = 6;
 const LENS = 180;
 const ZOOM = 2.4;
+const SINGLE_PAGE_WIDTH = 640;
 const BACK_COVER: FlipPage = { id: "back-cover", imageUrl: "", title: "Back cover", ar: false };
 
 const spreadOf = (pageIndex: number) => Math.floor((pageIndex + 1) / 2);
@@ -72,7 +73,7 @@ function PageFace({
   return (
     <div
       className="absolute top-0 overflow-hidden"
-      style={{ left: side === "left" ? 0 : width, width, height, borderRadius: radius, background: page.imageUrl ? `${PAPER} url("${page.imageUrl}") center / cover no-repeat` : PAPER }}
+      style={{ left: side === "left" ? 0 : width, width, height, borderRadius: radius, background: page.imageUrl ? `${PAPER} url("${page.imageUrl}") center / contain no-repeat` : PAPER }}
     >
       {closedCover && <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{
         borderRadius: "inherit",
@@ -103,7 +104,7 @@ export const FlipBook = forwardRef<
 >(function FlipBook({ pages, backCoverImageUrl, aspect, initialPage = 0, magnifier, renderOverlay, onSpreadChange, className }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
-  const [spread, setSpread] = useState(() => spreadOf(initialPage));
+  const [currentPage, setCurrentPage] = useState(initialPage);
   const [turn, setTurn] = useState<Turn | null>(null);
   const [lens, setLens] = useState<{ x: number; y: number } | null>(null);
   const animation = useRef(0);
@@ -113,13 +114,21 @@ export const FlipBook = forwardRef<
 
   const n = pages.length;
   const hasBackCover = n > 0 && (!!backCoverImageUrl || (n > 1 && n % 2 === 1));
-  const spreads = Math.floor(n / 2) + 1 + Number(hasBackCover);
+  const singlePage = size.w < SINGLE_PAGE_WIDTH;
+  const lensEnabled = magnifier && !singlePage;
+  const lastPosition = (singlePage ? n - 1 : Math.floor(n / 2)) + Number(hasBackCover);
+  const viewingBack = hasBackCover && currentPage === n;
+  const position = singlePage ? currentPage : viewingBack ? lastPosition : spreadOf(currentPage);
+  const pageAt = useCallback((destination: number) => {
+    if (singlePage) return destination;
+    if (hasBackCover && destination === lastPosition) return n;
+    return Math.max(0, 2 * destination - 1);
+  }, [singlePage, hasBackCover, lastPosition, n]);
   const page = (i: number) => (i >= 0 && i < n ? pages[i]! : null);
   const backCover = backCoverImageUrl ? { ...BACK_COVER, imageUrl: backCoverImageUrl } : BACK_COVER;
-  const left = (s: number) => hasBackCover && s === spreads - 1 ? backCover : page(2 * s - 1);
+  const left = (s: number) => hasBackCover && s === lastPosition ? backCover : page(2 * s - 1);
   const right = (s: number) => page(2 * s);
 
-  // Fit two pages side by side inside the container.
   useLayoutEffect(() => {
     const el = container.current;
     if (!el) return;
@@ -129,6 +138,13 @@ export const FlipBook = forwardRef<
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // A turn in flight belongs to the layout it started in.
+  useLayoutEffect(() => {
+    cancelAnimationFrame(animation.current);
+    drag.current = null;
+    setTurn(null);
+  }, [singlePage]);
 
   useEffect(() => {
     reducedMotion.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -147,8 +163,9 @@ export const FlipBook = forwardRef<
   }, [pages, backCoverImageUrl]);
 
   useEffect(() => {
-    onSpreadChange?.([2 * spread - 1, 2 * spread].filter((i) => i >= 0 && i < n));
-  }, [spread, n, onSpreadChange]);
+    const indexes = singlePage ? [currentPage] : [2 * position - 1, 2 * position];
+    onSpreadChange?.(indexes.filter((i) => i >= 0 && i < n));
+  }, [singlePage, currentPage, position, n, onSpreadChange]);
 
   useEffect(() => () => cancelAnimationFrame(animation.current), []);
 
@@ -156,7 +173,7 @@ export const FlipBook = forwardRef<
     cancelAnimationFrame(animation.current);
     const finish = () => {
       setTurn(null);
-      if (to === 1) setSpread((s) => s + dir);
+      if (to === 1) setCurrentPage(pageAt(position + dir));
     };
     if (reducedMotion.current) {
       finish();
@@ -165,31 +182,31 @@ export const FlipBook = forwardRef<
     // Use the reference sketchbook's spring for both completed and cancelled turns.
     const stiffness = to === 1 ? 170 : 150;
     const damping = to === 1 ? 26 : 24;
-    let position = from;
+    let progress = from;
     let velocity = 0;
     let previousTime = performance.now();
     setTurn({ dir, p: from, pull });
     const step = (now: number) => {
       const dt = Math.max(0, Math.min(0.032, (now - previousTime) / 1000));
       previousTime = now;
-      velocity += (-stiffness * (position - to) - damping * velocity) * dt;
-      position += velocity * dt;
-      if (Math.abs(position - to) < 0.002 && Math.abs(velocity) < 0.02) {
+      velocity += (-stiffness * (progress - to) - damping * velocity) * dt;
+      progress += velocity * dt;
+      if (Math.abs(progress - to) < 0.002 && Math.abs(velocity) < 0.02) {
         finish();
       } else {
-        setTurn({ dir, p: Math.max(0, Math.min(1, position)), pull });
+        setTurn({ dir, p: Math.max(0, Math.min(1, progress)), pull });
         animation.current = requestAnimationFrame(step);
       }
     };
     animation.current = requestAnimationFrame(step);
-  }, []);
+  }, [pageAt, position]);
 
   const flip = useCallback(
     (dir: 1 | -1) => {
-      if (turn || drag.current || spread + dir < 0 || spread + dir >= spreads) return;
+      if (turn || drag.current || position + dir < 0 || position + dir > lastPosition) return;
       animateTo(dir, 0, 1);
     },
-    [turn, spread, spreads, animateTo],
+    [turn, position, lastPosition, animateTo],
   );
 
   useImperativeHandle(
@@ -201,10 +218,10 @@ export const FlipBook = forwardRef<
         cancelAnimationFrame(animation.current);
         drag.current = null;
         setTurn(null);
-        setSpread(Math.max(0, Math.min(spreads - 1, spreadOf(index))));
+        setCurrentPage(Math.max(0, Math.min(n - 1, index)));
       },
     }),
-    [flip, spreads],
+    [flip, n],
   );
 
   useEffect(() => {
@@ -218,36 +235,47 @@ export const FlipBook = forwardRef<
   }, [flip]);
 
   // ---------- layout ----------
-  const pageW = Math.max(0, Math.min(size.w / 2, size.h / aspect) * 0.88);
+  const pageW = Math.max(0, singlePage
+    ? Math.min(size.w - 56, (size.h - 64) / aspect)
+    : Math.min(size.w / 2, size.h / aspect) * 0.88);
   const pageH = pageW * aspect;
-  const destination = spread + (turn?.dir ?? 0);
   const leafDir = turn?.dir;
+  const destination = position + (leafDir ?? 0);
+  const singleSide = (leafDir === -1 || (!leafDir && viewingBack)) ? "left" : "right";
+  const singleFace = (index: number) => hasBackCover && index === n ? backCover : page(index);
   const shiftFor = (s: number) => (left(s) ? 0 : -pageW / 2) + (right(s) ? 0 : pageW / 2);
-  const shift = turn ? shiftFor(spread) + (shiftFor(destination) - shiftFor(spread)) * easeInOut(turn.p) : shiftFor(spread);
+  const shift = singlePage ? (singleSide === "left" ? pageW / 2 : -pageW / 2)
+    : turn ? shiftFor(position) + (shiftFor(destination) - shiftFor(position)) * easeInOut(turn.p) : shiftFor(position);
 
-  // Pages lying flat while a leaf turns.
-  const leftStatic = leafDir === -1 ? left(destination) : left(spread);
-  const rightStatic = leafDir === 1 ? right(destination) : right(spread);
-  const front = leafDir ? (leafDir === 1 ? right(spread) : left(spread)) : null;
-  const back = leafDir ? (leafDir === 1 ? left(destination) : right(destination)) : null;
+  // On a phone the incoming page sits under the turning sheet. Its reverse is blank.
+  const leftStatic = singlePage ? (singleSide === "left" ? singleFace(destination) : null)
+    : left(leafDir === -1 ? destination : position);
+  const rightStatic = singlePage ? (singleSide === "right" ? singleFace(destination) : null)
+    : right(leafDir === 1 ? destination : position);
+  const front = !leafDir ? null : singlePage ? singleFace(position) : leafDir === 1 ? right(position) : left(position);
+  const back = !leafDir || singlePage ? null : leafDir === 1 ? left(destination) : right(destination);
   // How many sheets are stacked on each side (for the page-edge effect).
-  const pagesLeft = Math.max(0, 2 * spread - 1);
-  const pagesRight = Math.max(0, n - 2 * spread);
+  const pagesLeft = singlePage ? n : Math.max(0, 2 * position - 1);
+  const pagesRight = singlePage ? n : Math.max(0, n - 2 * position);
+  const dragDistance = pageW * (singlePage ? 0.85 : 1.24);
 
   // ---------- pointer ----------
   function onPointerDown(e: React.PointerEvent) {
-    if (turn || drag.current || spreads < 2 || e.button !== 0 || (e.target as HTMLElement).closest("button, a, input, label")) return;
+    if (turn || drag.current || lastPosition < 1 || e.button !== 0 || (e.target as HTMLElement).closest("button, a, input, label")) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    // The rect already includes the centring shift; its middle is the spine.
-    const dir: 1 | -1 = e.clientX > rect.left + rect.width / 2 ? 1 : -1;
-    if (spread + dir < 0 || spread + dir >= spreads) return;
+    const x = e.clientX - rect.left;
+    const start = singlePage && singleSide === "right" ? pageW : 0;
+    const width = singlePage ? pageW : rect.width;
+    if (x < start || x > start + width) return;
+    const dir: 1 | -1 = x > start + width / 2 ? 1 : -1;
+    if (position + dir < 0 || position + dir > lastPosition) return;
     const edgeY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
     drag.current = { pointerId: e.pointerId, dir, startX: e.clientX, startY: e.clientY, edgeY, samples: [{ x: e.clientX, t: performance.now() }] };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
   function onPointerMove(e: React.PointerEvent) {
-    if (magnifier && e.pointerType === "mouse") {
+    if (lensEnabled && e.pointerType === "mouse") {
       const rect = e.currentTarget.getBoundingClientRect();
       setLens({ x: e.clientX - rect.left, y: e.clientY - rect.top });
     }
@@ -260,7 +288,7 @@ export const FlipBook = forwardRef<
     d.samples.push({ x: e.clientX, t: now });
     while (d.samples.length > 2 && now - d.samples[0]!.t > 100) d.samples.shift();
     const lift = Math.min(0.2, Math.abs(dy) / pageH * 0.45);
-    const p = Math.min(1, Math.max(0, dx / (pageW * 2 * 0.62), lift));
+    const p = Math.min(1, Math.max(0, dx / dragDistance, lift));
     const offsetY = Math.max(-pageH * 0.5, Math.min(pageH * 0.5, dy));
     d.turn = { dir: d.dir, p, pull: { edgeY: d.edgeY, offsetY } };
     setTurn(d.turn);
@@ -277,7 +305,7 @@ export const FlipBook = forwardRef<
     }
     const first = d.samples[0]!;
     const last = d.samples[d.samples.length - 1]!;
-    const velocity = ((first.x - last.x) * d.dir * 1000) / (pageW * 2 * 0.62 * Math.max(1, last.t - first.t));
+    const velocity = ((first.x - last.x) * d.dir * 1000) / (dragDistance * Math.max(1, last.t - first.t));
     const { p, pull } = d.turn;
     const commit = released && (p > 0.42 || (performance.now() - last.t < 100 && velocity > 1.1));
     animateTo(d.dir, p, commit ? 1 : 0, pull);
@@ -307,14 +335,15 @@ export const FlipBook = forwardRef<
       const backX = forward ? pageW - (i + 1) * sw : i * sw;
       const face = (p: FlipPage | null, x: number, isBack: boolean): ReactNode => (
         <div
-          className="absolute inset-0"
+          className="absolute inset-0 overflow-hidden"
           style={{
-            background: p?.imageUrl ? `${PAPER} url("${p.imageUrl}") ${-x}px 0 / ${pageW}px ${pageH}px no-repeat` : PAPER,
+            background: PAPER,
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
             transform: `${isBack ? "rotateY(180deg) " : ""}translateZ(${PAPER_THICKNESS / 2}px)`,
           }}
         >
+          {p?.imageUrl && <div className="absolute top-0" style={{ left: -x, width: pageW, height: pageH, background: `url("${p.imageUrl}") center / contain no-repeat` }} />}
           <div
             className="absolute inset-0"
             style={{
@@ -372,7 +401,7 @@ export const FlipBook = forwardRef<
         side="left"
         width={pageW}
         height={pageH}
-        closedCover={!turn && !rightStatic}
+        closedCover={!turn && (singlePage ? viewingBack : !rightStatic)}
         extra={leafDir === -1 && <div className="absolute inset-y-0 right-0 w-[46%] bg-[linear-gradient(to_left,rgb(52_38_20_/_0.30),transparent_82%)]" style={{ opacity: castShadow }} />}
       />
       <PageFace
@@ -380,7 +409,7 @@ export const FlipBook = forwardRef<
         side="right"
         width={pageW}
         height={pageH}
-        closedCover={!turn && !leftStatic}
+        closedCover={!turn && (singlePage ? position === 0 : !leftStatic)}
         extra={leafDir === 1 && <div className="absolute inset-y-0 left-0 w-[46%] bg-[linear-gradient(to_right,rgb(52_38_20_/_0.24),transparent_82%)]" style={{ opacity: castShadow }} />}
       />
       {!turn && leftStatic && rightStatic && (
@@ -405,7 +434,7 @@ export const FlipBook = forwardRef<
     </>
   );
 
-  const showLens = magnifier && lens && !turn && lens.x >= 0 && lens.y >= 0 && lens.x <= pageW * 2 && lens.y <= pageH;
+  const showLens = lensEnabled && lens && !turn && lens.x >= 0 && lens.y >= 0 && lens.x <= pageW * 2 && lens.y <= pageH;
 
   return (
     <div ref={container} className={className ?? "relative size-full"} style={{ perspective, perspectiveOrigin: "50% 45%" }}>
@@ -417,7 +446,7 @@ export const FlipBook = forwardRef<
             height: pageH,
             transform: `translate(calc(-50% + ${shift}px), -50%)`,
             transformStyle: "preserve-3d",
-            cursor: magnifier ? "none" : turn ? "grabbing" : "grab",
+            cursor: lensEnabled ? "none" : turn ? "grabbing" : "grab",
           }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -445,13 +474,13 @@ export const FlipBook = forwardRef<
             </div>
           )}
           {/* the book block, with page edges showing how much is left on each side */}
-          {(leftStatic || (leafDir !== -1 && left(spread))) && (
+          {leftStatic && (
             <div
               className="absolute top-0 left-0"
               style={{ width: pageW, height: pageH, background: PAPER, borderRadius: `${RADIUS}px 0 0 ${RADIUS}px`, boxShadow: stack("left", pagesLeft) }}
             />
           )}
-          {(rightStatic || (leafDir !== 1 && right(spread))) && (
+          {rightStatic && (
             <div
               className="absolute top-0"
               style={{ left: pageW, width: pageW, height: pageH, background: PAPER, borderRadius: `0 ${RADIUS}px ${RADIUS}px 0`, boxShadow: stack("right", pagesRight) }}
@@ -463,12 +492,12 @@ export const FlipBook = forwardRef<
           {/* overlays sit on the resting pages only */}
           {!turn && leftStatic && leftStatic !== backCover && (
             <div className="absolute top-0 left-0" style={{ width: pageW, height: pageH }}>
-              {renderOverlay?.(leftStatic, 2 * spread - 1, "left")}
+              {renderOverlay?.(leftStatic, singlePage ? currentPage : 2 * position - 1, "left")}
             </div>
           )}
           {!turn && rightStatic && (
             <div className="absolute top-0" style={{ left: pageW, width: pageW, height: pageH }}>
-              {renderOverlay?.(rightStatic, 2 * spread, "right")}
+              {renderOverlay?.(rightStatic, singlePage ? currentPage : 2 * position, "right")}
             </div>
           )}
 

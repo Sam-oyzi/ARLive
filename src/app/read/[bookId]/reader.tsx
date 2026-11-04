@@ -22,7 +22,7 @@ const DESK = [
   "radial-gradient(120% 90% at 50% 40%, #f4eee2 0%, #ebe3d3 100%)",
 ].join(", ");
 
-const chip = "flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition";
+const chip = "flex items-center gap-2 rounded-full px-2.5 py-2 text-sm font-medium transition sm:px-3.5";
 const DEFAULT_BACK_COVER = "/book-art/back-cover.svg";
 
 export function Reader({
@@ -48,6 +48,7 @@ export function Reader({
   backHref: string;
 }) {
   const flipbook = useRef<FlipBookHandle>(null);
+  const thumbnails = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState<number[]>([0]);
   const [magnifier, setMagnifier] = useState(false);
   const [finePointer, setFinePointer] = useState(false);
@@ -73,6 +74,11 @@ export function Reader({
     [readingPages, arOverride],
   );
   const onSpreadChange = useCallback((indexes: number[]) => setVisible(indexes), []);
+  const firstVisible = visible[0];
+
+  useEffect(() => {
+    thumbnails.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [firstVisible]);
 
   async function toggleAr(page: ReaderPage) {
     const next = !isAr(page);
@@ -87,17 +93,18 @@ export function Reader({
   const atEnd = pages.length === 0 || backCover;
   // Preserve the last spread's caption height while the back cover is closed.
   const captionPages = backCover ? readingPages.slice(-2) : shown;
+  const hasCaption = captionPages.some((page) => page.story);
 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden text-ink-900" style={{ background: DESK }}>
       {/* top bar */}
-      <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-1 safe-top sm:px-6">
-        <Link href={backHref} className="grid size-10 shrink-0 place-items-center rounded-full text-ink-600 ring-1 ring-ink-900/10 hover:bg-white/60 hover:text-ink-900" aria-label="Back">
+      <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-1 safe-top sm:gap-3 sm:px-6">
+        <Link href={backHref} className="grid size-9 shrink-0 place-items-center rounded-full text-ink-600 ring-1 ring-ink-900/10 hover:bg-white/60 hover:text-ink-900 sm:size-10" aria-label="Back">
           <ArrowLeft className="size-5" />
         </Link>
-        <div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
           {readingPages[0]?.imageUrl ? (
-            <span className="h-10 w-8 shrink-0 overflow-hidden rounded-md bg-[#f3e8d3] shadow-sm ring-1 ring-[#947a55]/25">
+            <span className="h-8 w-6 shrink-0 overflow-hidden rounded-md bg-[#f3e8d3] shadow-sm ring-1 ring-[#947a55]/25 sm:h-10 sm:w-8">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={readingPages[0].imageUrl} alt="" className="size-full object-contain" />
             </span>
@@ -107,19 +114,19 @@ export function Reader({
             </span>
           )}
           <div className="min-w-0 leading-tight">
-            <div className="truncate font-serif text-xl"><bdi lang={readingPages[0]?.lang}>{pages[0]?.translations?.[locale]?.title ?? book.title}</bdi></div>
+            <div className="line-clamp-2 font-serif text-base sm:line-clamp-1 sm:text-xl"><bdi lang={readingPages[0]?.lang}>{pages[0]?.translations?.[locale]?.title ?? book.title}</bdi></div>
             <div className="truncate text-xs text-ink-500">
               {book.subject.name} · {pages.length} pages · {arCount} with AR
             </div>
           </div>
         </div>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
           {languages.length > 0 && (
             <Dropdown modal={false}>
               <DropdownTrigger aria-label={`Book language: ${languageName(locale)}`} className={cn(chip, "max-w-36 bg-[#f6eedf]/70 text-[#58432f] ring-1 ring-[#947a55]/25 hover:bg-[#f9f1e4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a88b61] data-[state=open]:bg-[#eee1ca]")}>
                 <Languages aria-hidden="true" className="size-4 shrink-0" />
-                <bdi lang={locale || undefined} className="truncate">{languageName(locale)}</bdi>
-                <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
+                <bdi lang={locale || undefined} className="hidden truncate sm:block">{languageName(locale)}</bdi>
+                <ChevronDown aria-hidden="true" className="hidden size-3.5 shrink-0 sm:block" />
               </DropdownTrigger>
               <DropdownContent align="start" className="max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-36 overflow-y-auto border-[#a88b61]/30 bg-[#faf2e4] shadow-[0_10px_26px_rgb(81_58_32_/_0.18)]">
                 <DropdownMenu.RadioGroup value={locale} onValueChange={setLocale} aria-label="Book language">
@@ -138,7 +145,8 @@ export function Reader({
           {finePointer && (
             <button
               onClick={() => setMagnifier((m) => !m)}
-              className={cn(chip, magnifier ? "bg-ink-900 text-white" : "text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60")}
+              className={cn(chip, "hidden sm:flex", magnifier ? "bg-ink-900 text-white" : "text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60")}
+              aria-label="Magnifier"
               aria-pressed={magnifier}
               title="Magnifier: move the pointer over a page"
             >
@@ -150,14 +158,14 @@ export function Reader({
               <Link href={`/admin/books/${book.id}`} className={cn(chip, "hidden text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60 sm:flex")}>
                 <Settings2 className="size-4" /> Studio
               </Link>
-              <Link href={`/print/${book.id}`} className={cn(chip, "bg-ink-900 text-white hover:bg-ink-800")}>
-                <Printer className="size-4" /> Print
+              <Link href={`/print/${book.id}`} aria-label="Print" className={cn(chip, "bg-ink-900 text-white hover:bg-ink-800")}>
+                <Printer className="size-4" /> <span className="hidden sm:inline">Print</span>
               </Link>
             </>
           )}
           {!editable && book.canScan && (
-            <Link href={`/scan/${book.id}`} className={cn(chip, "font-semibold text-white shadow-soft")} style={{ background: book.subject.color }}>
-              <ScanLine className="size-4" /> Scan with camera
+            <Link href={`/scan/${book.id}`} aria-label="Scan with camera" className={cn(chip, "font-semibold text-white shadow-soft")} style={{ background: book.subject.color }}>
+              <ScanLine className="size-4" /> <span className="hidden sm:inline">Scan with camera</span>
             </Link>
           )}
         </div>
@@ -194,7 +202,7 @@ export function Reader({
                 <button
                   onClick={() => toggleAr(page)}
                   className={cn(
-                    "absolute top-3 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md ring-1 backdrop-blur transition",
+                    "absolute -top-8 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md ring-1 backdrop-blur transition sm:top-3",
                     corner,
                     ar ? "bg-brand-500 text-white ring-white/30" : "bg-white/85 text-ink-700 ring-ink-200",
                   )}
@@ -203,7 +211,7 @@ export function Reader({
                   <ScanLine className="size-3.5" /> {ar ? "AR page" : "Story page"}
                 </button>
               ) : ar ? (
-                <span className={cn("pointer-events-none absolute top-3 flex items-center gap-1.5 rounded-full bg-ink-950/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur", corner)}>
+                <span className={cn("pointer-events-none absolute -top-8 flex items-center gap-1.5 rounded-full bg-ink-950/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur sm:top-3", corner)}>
                   <ScanLine className="size-3.5" /> Scan me
                 </span>
               ) : null;
@@ -213,18 +221,18 @@ export function Reader({
         <button
           onClick={() => flipbook.current?.prev()}
           disabled={!pages.length || visible.includes(0)}
-          className="absolute top-1/2 left-1 grid h-16 w-10 -translate-y-1/2 place-items-center text-ink-400 transition enabled:hover:text-ink-900 disabled:opacity-30 sm:left-4"
+          className="absolute top-1/2 left-0 grid h-16 w-7 -translate-y-1/2 place-items-center text-ink-400 transition enabled:hover:text-ink-900 disabled:opacity-30 sm:left-4 sm:w-10"
           aria-label="Previous page"
         >
-          <ChevronLeft className="size-8" strokeWidth={1.25} />
+          <ChevronLeft className="size-6 sm:size-8" strokeWidth={1.25} />
         </button>
         <button
           onClick={() => flipbook.current?.next()}
           disabled={atEnd}
-          className="absolute top-1/2 right-1 grid h-16 w-10 -translate-y-1/2 place-items-center text-ink-400 transition enabled:hover:text-ink-900 disabled:opacity-30 sm:right-4"
+          className="absolute top-1/2 right-0 grid h-16 w-7 -translate-y-1/2 place-items-center text-ink-400 transition enabled:hover:text-ink-900 disabled:opacity-30 sm:right-4 sm:w-10"
           aria-label="Next page"
         >
-          <ChevronRight className="size-8" strokeWidth={1.25} />
+          <ChevronRight className="size-6 sm:size-8" strokeWidth={1.25} />
         </button>
       </div>
 
@@ -232,28 +240,29 @@ export function Reader({
       <div className="mx-auto w-full max-w-3xl shrink-0 px-6 pt-1 text-center">
         <div className="truncate text-[13px] text-ink-600">{backCover ? "Back cover" : shown.map((page, index) => <span key={page.id}>{index > 0 && " · "}<bdi lang={page.lang}>{page.title}</bdi></span>)}</div>
         {backCover && <span className="sr-only">Wonder begins with a question. {book.backCoverImageUrl && "Written and created by Iassam Houzi. All rights reserved."}</span>}
-        {captionPages.some((page) => page.story) && (
-          <p aria-hidden={backCover || undefined} className={cn("mx-auto mt-1 line-clamp-2 max-w-2xl font-serif text-[17px] leading-snug text-ink-700 italic", backCover && "invisible")}>
+        {readingPages.some((page) => page.story) && (
+          <p key={firstVisible} aria-hidden={backCover || !hasCaption || undefined} className={cn("mx-auto mt-1 h-[min(4.4rem,20dvh)] max-w-2xl overflow-y-auto font-serif text-[17px] leading-snug text-ink-700 italic sm:line-clamp-2 sm:h-auto", backCover && "invisible", !hasCaption && "sm:hidden")}>
             {captionPages.map((page) => page.story && <bdi key={page.id} lang={page.lang}>{page.story}{"  "}</bdi>)}
           </p>
         )}
       </div>
 
       {/* page strip */}
-      <nav className="flex shrink-0 justify-center gap-1.5 overflow-x-auto px-4 pt-3 pb-4 scrollbar-none safe-bottom" aria-label="Pages">
+      <nav ref={thumbnails} className="flex shrink-0 gap-1.5 overflow-x-auto px-4 pt-3 pb-4 scrollbar-none safe-bottom" aria-label="Pages">
         {pages.map((p, i) => (
           <button
             key={p.id}
             onClick={() => flipbook.current?.goToPage(i)}
             title={`${i + 1}. ${p.title}${isAr(p) ? " (AR)" : ""}`}
+            aria-current={visible.includes(i) ? "page" : undefined}
             className={cn(
-              "relative w-8 shrink-0 overflow-hidden rounded-[3px] shadow-sm ring-2 transition",
+              "relative w-8 shrink-0 overflow-hidden rounded-[3px] bg-[#f3e8d3] shadow-sm ring-2 transition first:ml-auto last:mr-auto",
               visible.includes(i) ? "ring-ink-800" : "opacity-55 ring-transparent hover:opacity-100",
             )}
             style={{ aspectRatio: `1 / ${aspect}` }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={readingPages[i]?.imageUrl ?? p.imageUrl} alt="" className="size-full object-cover" />
+            <img src={readingPages[i]?.imageUrl ?? p.imageUrl} alt="" className="size-full object-contain" />
             {isAr(p) && <span className="absolute right-0.5 bottom-0.5 size-2 rounded-full ring-1 ring-white" style={{ background: book.subject.color }} />}
           </button>
         ))}
