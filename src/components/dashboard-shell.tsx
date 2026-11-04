@@ -18,6 +18,7 @@ import {
   School,
   Shapes,
   Sparkles,
+  UserCheck,
   Users,
   X,
   type LucideIcon,
@@ -52,6 +53,7 @@ const NAV: Record<"admin" | "school", { title: string; items: NavItem[] }[]> = {
       title: "People",
       items: [
         { href: "/admin/users", label: "Users", icon: Users },
+        { href: "/admin/readers", label: "Reader access", icon: UserCheck, badgeKey: "readers" },
         { href: "/admin/schools", label: "Schools", icon: School },
         { href: "/admin/requests", label: "School access", icon: Inbox, badgeKey: "requests" },
       ],

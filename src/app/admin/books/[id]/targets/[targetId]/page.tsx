@@ -4,7 +4,9 @@ import { ArrowLeft, ChevronLeft, ChevronRight, ScanLine } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import type { ContentData } from "@/lib/content";
+import { pageAspect } from "@/lib/book-format";
 import { db } from "@/lib/db";
+import { textPositionOf } from "@/lib/story-text";
 import { TargetEditor } from "./target-editor";
 
 export default async function TargetEditorPage({ params }: { params: Promise<{ id: string; targetId: string }> }) {
@@ -74,7 +76,18 @@ export default async function TargetEditorPage({ params }: { params: Promise<{ i
       </div>
       <TargetEditor
         key={target.id}
-        target={{ id: target.id, name: target.name, description: target.description, imageUrl: target.imageUrl, width: target.width, height: target.height }}
+        target={{
+          id: target.id,
+          name: target.name,
+          description: target.description,
+          imageUrl: target.imageUrl,
+          width: target.width,
+          height: target.height,
+          narrationUrl: target.narrationUrl,
+          textPosition: textPositionOf(target.textPosition),
+          pageAspect: pageAspect(target.book.format),
+          isCover: index === 0,
+        }}
         initialContents={target.contents as ContentData[]}
       />
     </div>

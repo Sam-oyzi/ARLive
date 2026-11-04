@@ -2,9 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { pageAspect } from "@/lib/book-format";
-import { canUserReadBook, compileState } from "@/lib/books";
+import { backCoverFor, compileState, requireReadableBook } from "@/lib/books";
 import { db } from "@/lib/db";
 import { pageTranslationsSchema } from "@/lib/page-translations";
+import { textPositionOf } from "@/lib/story-text";
 import { Reader } from "./reader";
 
 export async function generateMetadata({ params }: { params: Promise<{ bookId: string }> }): Promise<Metadata> {
@@ -17,7 +18,7 @@ export const viewport: Viewport = { themeColor: "#efe8da" };
 export default async function ReadPage({ params }: { params: Promise<{ bookId: string }> }) {
   const user = await getCurrentUser();
   const { bookId } = await params;
-  if (!(await canUserReadBook(user, bookId))) notFound();
+  await requireReadableBook(user, bookId, `/read/${bookId}`);
 
   const book = await db.book.findUnique({
     where: { id: bookId },
@@ -43,7 +44,7 @@ export default async function ReadPage({ params }: { params: Promise<{ bookId: s
       book={{
         id: book.id,
         title: book.title,
-        backCoverImageUrl: book.title === "Example: The Journey of a Water Drop" ? "/book-art/water-drop/back-cover.svg" : undefined,
+        backCoverImageUrl: backCoverFor(book),
         format: book.format,
         subject: { name: book.subject.name, color: book.subject.color, icon: book.subject.icon },
         // Students can only scan once the AR data is compiled; admins see the compile status instead.
@@ -52,7 +53,8 @@ export default async function ReadPage({ params }: { params: Promise<{ bookId: s
       }}
       aspect={pageAspect(book.format)}
       pages={book.targets.map((t) => ({
-        id: t.id, imageUrl: t.imageUrl, title: t.name, story: t.description, ar: t.ar,
+        id: t.id, imageUrl: t.imageUrl, title: t.name, story: t.description, ar: t.ar, narrationUrl: t.narrationUrl,
+        textPosition: textPositionOf(t.textPosition),
         translations: pageTranslationsSchema.safeParse(t.translations).data,
       }))}
       editable={editable}

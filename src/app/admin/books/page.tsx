@@ -133,6 +133,7 @@ export default async function BooksPage({ searchParams }: { searchParams: Promis
                   <div className="absolute top-3 left-3 flex gap-1.5">
                     {book.published ? <Badge tone="dark">Published</Badge> : <Badge className="bg-white/90">Draft</Badge>}
                     {book.owner ? <Badge tone="amber">For {book.owner.name.split(" ")[0]}</Badge> : book.featured && <Badge tone="brand">Featured</Badge>}
+                    {!book.owner && book.visibility !== "PUBLIC" && <Badge tone="blue">{book.visibility === "MEMBERS" ? "Members" : "Approved only"}</Badge>}
                   </div>
                   <span aria-hidden="true" className="absolute top-3 right-3 grid size-8 place-items-center rounded-full bg-white/90 text-ink-600 shadow-soft transition group-hover:text-brand-700"><ArrowUpRight className="size-4" /></span>
                 </div>

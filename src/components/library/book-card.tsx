@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Download, Heart, ScanLine } from "lucide-react";
+import { Download, Heart, Lock, ScanLine, UserRound } from "lucide-react";
 import { Thumb } from "@/components/thumb";
 import { compactNumber, type BookCardData } from "@/lib/library";
 import { SubjectIcon } from "@/lib/subject-icons";
@@ -36,7 +36,7 @@ export function BookCard({ book }: { book: BookCardData }) {
             </span>
           )}
         </div>
-        <span className="absolute top-2.5 right-2.5 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold text-emerald-700 shadow-sm backdrop-blur">Free</span>
+        <AccessBadge visibility={book.visibility} />
       </div>
       <div className="mt-3 px-1">
         <div className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: book.category.color }}>
@@ -58,6 +58,24 @@ export function BookCard({ book }: { book: BookCardData }) {
         </div>
       </div>
     </Link>
+  );
+}
+
+/** Free for everyone, free with an account, or for approved readers only. */
+export function AccessBadge({ visibility, className }: { visibility: BookCardData["visibility"]; className?: string }) {
+  const base = "absolute top-2.5 right-2.5 flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold shadow-sm backdrop-blur";
+  if (visibility === "PUBLIC") return <span className={cn(base, "bg-white/90 text-emerald-700", className)}>Free</span>;
+  if (visibility === "MEMBERS") {
+    return (
+      <span className={cn(base, "bg-white/90 text-sky-700", className)} title="Free with an account">
+        <UserRound aria-hidden="true" className="size-3" /> Members
+      </span>
+    );
+  }
+  return (
+    <span className={cn(base, "bg-ink-950/75 text-white", className)} title="For approved readers">
+      <Lock aria-hidden="true" className="size-3" /> On request
+    </span>
   );
 }
 

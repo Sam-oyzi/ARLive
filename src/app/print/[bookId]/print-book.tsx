@@ -2,50 +2,84 @@
 
 import Link from "next/link";
 import { ArrowLeft, Printer, ScanLine } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
 import { Switch } from "@/components/ui/switch";
+import { composeStoryPage, type StoryPage } from "@/lib/story-page";
+import type { TextPosition } from "@/lib/story-text";
 import { cn } from "@/lib/utils";
 import { recordDownload } from "@/server/actions/library";
 
-type PrintPage = { id: string; imageUrl: string; title: string; ar: boolean };
+type PrintPage = { id: string; imageUrl: string; title: string; ar: boolean; story: string | null; textPosition: TextPosition };
+
+// Pixels per millimetre for the pages with words drawn in: about 240 dpi, crisp in print.
+const PRINT_PX_PER_MM = 240 / 25.4;
 
 /** One sheet per page at the book's real size; the browser's "Save as PDF" turns it into a print file. */
 export function PrintBook({
   book,
   format,
   pages,
+  backCover,
   countDownload,
 }: {
   book: { id: string; title: string };
+  /** The last sheet: the back cover art with a QR code that opens the book on a phone. */
+  backCover: { imageUrl: string; qrUrl: string; ar: boolean };
   countDownload: boolean;
   format: { label: string; widthMm: number; heightMm: number };
   pages: PrintPage[];
 }) {
   const [badges, setBadges] = useState(true);
   const [numbers, setNumbers] = useState(false);
+  const [qr, setQr] = useState(true);
+  const [words, setWords] = useState(true);
+  // What each sheet prints: the picture with its story drawn in, or the picture alone.
+  const [sheets, setSheets] = useState<Record<string, { url: string; words?: StoryPage["words"] }>>({});
   const [loaded, setLoaded] = useState(0);
-  const ready = loaded >= pages.length;
+  const ready = loaded >= pages.length + 1;
 
   useEffect(() => {
-    // Count images as they finish so "Print" only enables once every page is ready.
+    // Count sheets as they finish so "Print" only enables once every page is ready.
     let alive = true;
-    Promise.all(
-      pages.map(
-        (p) =>
-          new Promise<void>((resolve) => {
-            const img = new Image();
-            img.onload = img.onerror = () => {
-              if (alive) setLoaded((n) => n + 1);
-              resolve();
-            };
-            img.src = p.imageUrl;
-          }),
-      ),
-    );
+    const made: string[] = [];
+    setLoaded(0);
+    setSheets({});
+    const preload = (url: string) =>
+      new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = img.onerror = () => resolve();
+        img.src = url;
+      });
+    (async () => {
+      for (const [index, page] of pages.entries()) {
+        const drawn = words
+          ? await composeStoryPage({
+              imageUrl: page.imageUrl,
+              story: page.story,
+              position: page.textPosition,
+              aspect: format.heightMm / format.widthMm,
+              width: format.widthMm * PRINT_PX_PER_MM,
+              cover: index === 0,
+            }).catch(() => null)
+          : null;
+        if (!alive) {
+          if (drawn) URL.revokeObjectURL(drawn.url);
+          return;
+        }
+        if (drawn) made.push(drawn.url);
+        await preload(drawn?.url ?? page.imageUrl);
+        setSheets((s) => ({ ...s, [page.id]: drawn ? { url: drawn.url, words: drawn.words } : { url: page.imageUrl } }));
+        setLoaded((n) => n + 1);
+      }
+      await preload(backCover.imageUrl);
+      if (alive) setLoaded((n) => n + 1);
+    })();
     return () => {
       alive = false;
+      made.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [pages]);
+  }, [pages, backCover.imageUrl, words, format.widthMm, format.heightMm]);
 
   const w = `${format.widthMm}mm`;
   const h = `${format.heightMm}mm`;
@@ -78,6 +112,12 @@ export function PrintBook({
             <label className="flex items-center gap-2">
               <Switch checked={numbers} onCheckedChange={setNumbers} /> Page numbers
             </label>
+            <label className="flex items-center gap-2">
+              <Switch checked={words} onCheckedChange={setWords} /> Story text on the pages
+            </label>
+            <label className="flex items-center gap-2">
+              <Switch checked={qr} onCheckedChange={setQr} /> QR code on the back cover
+            </label>
             <button
               onClick={() => {
                 if (countDownload) recordDownload(book.id).catch(() => {});
@@ -86,7 +126,7 @@ export function PrintBook({
               disabled={!ready}
               className="flex h-10 items-center gap-2 rounded-xl bg-ink-900 px-4 font-semibold text-white hover:bg-ink-800 disabled:opacity-50"
             >
-              <Printer className="size-4" /> {ready ? "Save as PDF / Print" : `Loading ${loaded}/${pages.length}…`}
+              <Printer className="size-4" /> {ready ? "Save as PDF / Print" : `Loading ${loaded}/${pages.length + 1}…`}
             </button>
           </div>
         </div>
@@ -108,10 +148,15 @@ export function PrintBook({
               aria-label={`Page ${i + 1}: ${page.title}`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={page.imageUrl} alt="" className="absolute inset-0 size-full object-cover" />
+              <img src={sheets[page.id]?.url ?? page.imageUrl} alt="" className="absolute inset-0 size-full object-cover" />
               {badges && page.ar && (
                 <div
-                  className={cn("absolute bottom-[5mm] flex items-center gap-[1.5mm] rounded-[2mm] border border-[#a88b61] bg-[#f6eddb] px-[2mm] py-[1.2mm] text-[#624631]", recto ? "right-[5mm]" : "left-[5mm]")}
+                  // Bottom outer corner, or the top one when the page's words are down there.
+                  className={cn(
+                    "absolute flex items-center gap-[1.5mm] rounded-[2mm] border border-[#a88b61] bg-[#f6eddb] px-[2mm] py-[1.2mm] text-[#624631]",
+                    recto ? "right-[5mm]" : "left-[5mm]",
+                    (sheets[page.id]?.words?.bottom ?? 0) > 0.8 ? "top-[5mm]" : "bottom-[5mm]",
+                  )}
                   style={{ fontSize: "2.6mm", fontWeight: 700, printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}
                 >
                   <ScanLine style={{ width: "3.4mm", height: "3.4mm" }} /> AR · scan this page
@@ -125,6 +170,22 @@ export function PrintBook({
             </section>
           );
         })}
+        <section className="sheet relative overflow-hidden bg-white shadow-lift" style={{ width: w, height: h }} aria-label="Back cover">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={backCover.imageUrl} alt="" className="absolute inset-0 size-full object-cover" />
+          {qr && (
+            <div
+              className="absolute top-[10%] left-1/2 flex -translate-x-1/2 items-center gap-[3mm] rounded-[3mm] border border-[#a88b61] bg-[#fbf6ea] p-[2.5mm] text-[#624631]"
+              style={{ printColorAdjust: "exact", WebkitPrintColorAdjust: "exact", width: "62%" }}
+            >
+              <QRCodeSVG value={backCover.qrUrl} marginSize={0} bgColor="#fbf6ea" fgColor="#3b2a1c" style={{ width: "26mm", height: "26mm", flexShrink: 0 }} />
+              <div style={{ fontSize: "3mm", lineHeight: 1.35 }}>
+                <div style={{ fontWeight: 700, fontSize: "3.4mm" }}>{backCover.ar ? "Bring this book to life" : "Read it on any screen"}</div>
+                {backCover.ar ? "Scan with a phone camera, then point it at the pages marked AR." : "Scan with a phone camera to open the book."}
+              </div>
+            </div>
+          )}
+        </section>
       </main>
     </div>
   );

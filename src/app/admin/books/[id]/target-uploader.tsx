@@ -69,7 +69,7 @@ export function TargetUploader({ bookId, compact }: { bookId: string; compact?: 
             filename = `${filename.replace(/\.[^.]+$/, "")}-${page.crop}.jpg`;
           }
           const { url } = await uploadFile(body, "targets", filename, progress);
-          uploaded[index] = { name: page.name, imageUrl: url, ...size, description: page.description, translations: page.translations, ar: page.ar };
+          uploaded[index] = { name: page.name, imageUrl: url, ...size, description: page.description, translations: page.translations, ar: page.ar, textPosition: page.textPosition };
           progress(100);
         } catch (error) {
           setJobs((js) => js.map((j, i) => (i === index ? { ...j, error: (error as Error).message } : j)));

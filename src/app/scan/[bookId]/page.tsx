@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { canUserOpenBook } from "@/lib/books";
+import { requireReadableBook } from "@/lib/books";
 import type { ContentData } from "@/lib/content";
 import { db } from "@/lib/db";
+import { plainStory } from "@/lib/story-text";
 import { ARViewer } from "./ar-viewer";
 
 export const metadata: Metadata = { title: "Scan" };
@@ -12,7 +13,7 @@ export const viewport: Viewport = { themeColor: "#000000", maximumScale: 1, user
 export default async function ScanPage({ params }: { params: Promise<{ bookId: string }> }) {
   const user = await getCurrentUser();
   const { bookId } = await params;
-  if (!(await canUserOpenBook(user, bookId))) notFound();
+  await requireReadableBook(user, bookId, `/scan/${bookId}`);
 
   const book = await db.book.findUnique({
     where: { id: bookId },
@@ -25,13 +26,15 @@ export default async function ScanPage({ params }: { params: Promise<{ bookId: s
       },
     },
   });
-  if (!book?.mindUrl) notFound();
+  if (!book) notFound();
+  // A QR code from before the AR pages were compiled: read the book instead.
+  if (!book.mindUrl) redirect(`/read/${bookId}`);
 
   const backHref =
     user?.role === "SUPER_ADMIN" ? `/admin/books/${book.id}`
     : user?.role === "SCHOOL_ADMIN" ? "/school"
     : user?.role === "STUDENT" && !book.ownerId ? `/learn/${book.subject.slug}`
-    : `/read/${book.id}`;
+    : book.ownerId ? "/account" : `/library/${book.id}`;
 
   return (
     <ARViewer
@@ -45,7 +48,7 @@ export default async function ScanPage({ params }: { params: Promise<{ bookId: s
       targets={book.targets.map((t) => ({
         id: t.id,
         name: t.name,
-        description: t.description,
+        description: t.description && plainStory(t.description),
         imageUrl: t.imageUrl,
         targetIndex: t.targetIndex!,
         contents: t.contents as ContentData[],

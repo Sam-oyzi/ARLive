@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BookOpen, Box, Download, ExternalLink, Heart, Printer, Image as ImageIcon, Lightbulb, Pencil, ScanLine, Sparkles, Star, Type, TypeOutline, Video, Volume2, type LucideIcon } from "lucide-react";
+import { ArrowLeft, BookOpen, Box, Download, Mic, ExternalLink, Heart, Printer, Image as ImageIcon, Lightbulb, Pencil, ScanLine, Sparkles, Star, Type, TypeOutline, Video, Volume2, type LucideIcon } from "lucide-react";
 import { ButtonLink, Button } from "@/components/ui/button";
 import { Card, CardBody, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Thumb } from "@/components/thumb";
 import { requireUser } from "@/lib/auth";
 import { bookFormat } from "@/lib/book-format";
-import { arTargets, canPublish, compileState } from "@/lib/books";
+import { arTargets, canPublish, compileState, visibilityOf } from "@/lib/books";
 import type { ContentType } from "@/lib/content";
 import { db } from "@/lib/db";
 import { SubjectIcon } from "@/lib/subject-icons";
@@ -14,6 +14,7 @@ import { cn, plural, timeAgo } from "@/lib/utils";
 import { BookDialog } from "../book-dialog";
 import { ArToggle, BookMenu, PublishSwitch, TargetMenu } from "./book-controls";
 import { CompileCard } from "./compile-card";
+import { ReadersCard } from "./readers-card";
 import { TargetUploader } from "./target-uploader";
 
 const TYPE_ICONS: Record<ContentType, LucideIcon> = {
@@ -37,6 +38,7 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
         access: { include: { school: { select: { id: true, name: true } } } },
         owner: { select: { id: true, name: true, username: true } },
         storyRequest: { select: { id: true, childName: true, status: true } },
+        readers: { orderBy: { createdAt: "desc" }, select: { id: true, email: true, status: true, message: true } },
         _count: { select: { scans: true } },
       },
     }),
@@ -102,6 +104,9 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
               <ButtonLink href={`/read/${book.id}`} variant="outline">
                 <BookOpen /> Preview book
               </ButtonLink>
+              <ButtonLink href={`/admin/books/${book.id}/words`} variant="outline">
+                <Type /> Words on pages
+              </ButtonLink>
               <ButtonLink href={`/print/${book.id}`} variant="outline">
                 <Printer /> Print
               </ButtonLink>
@@ -158,6 +163,11 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
                     <div className="flex items-center justify-between gap-2 px-3.5 py-3">
                       <span className="truncate text-sm font-semibold text-ink-900">{target.name}</span>
                       <span className="flex shrink-0 gap-1">
+                        {target.narrationUrl && (
+                          <span className="grid size-6 place-items-center rounded-lg bg-sky-50 text-sky-600" title="Voice narration">
+                            <Mic className="size-3.5" />
+                          </span>
+                        )}
                         {types.map((t) => {
                           const Icon = TYPE_ICONS[t];
                           return (
@@ -184,6 +194,8 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
         </section>
 
         <aside className="flex flex-col gap-6">
+          <ReadersCard bookId={book.id} visibility={visibilityOf(book.visibility)} custom={!!book.ownerId} readers={book.readers} />
+
           <CompileCard
             bookId={book.id}
             state={state}

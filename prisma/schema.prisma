@@ -101,6 +101,9 @@ model Book {
   published   Boolean         @default(false)
   /// Shown first on the home page.
   featured    Boolean         @default(false)
+  /// Who may open a library book: PUBLIC (everyone) | MEMBERS (any signed-in account) |
+  /// APPROVED (only emails an admin approved, see BookReader). Custom stories always use the approved list.
+  visibility  String          @default("PUBLIC")
   /// A custom story made for one family: only its owner (and admins) can open it, and it never
   /// appears in the library. Null for library books, which are free for everyone.
   ownerId     String?
@@ -124,10 +127,30 @@ model Book {
   scans       ScanEvent[]
   likes       BookLike[]
   ratings     BookRating[]
+  readers     BookReader[]
   storyRequest StoryRequest?
 
   @@index([subjectId])
   @@index([published, ownerId])
+}
+
+/// An email allowed to open a book that isn't public: approved by an admin, or asked for by a reader
+/// and waiting. Matched against User.username, so an email can be approved before its account exists.
+model BookReader {
+  id        String    @id @default(cuid())
+  bookId    String
+  book      Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  email     String
+  /// PENDING | APPROVED | DECLINED
+  status    String    @default("APPROVED")
+  /// What the reader wrote when asking.
+  message   String?
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+
+  @@unique([bookId, email])
+  @@index([email, status])
+  @@index([status, createdAt])
 }
 
 model BookLike {
@@ -205,6 +228,10 @@ model Target {
   ar          Boolean     @default(true)
   /// Position of this target inside the book's compiled .mind file.
   targetIndex Int?
+  /// Voice reading this page aloud, played by the reader's "Read to me".
+  narrationUrl String?
+  /// Where the story text sits on the page: auto | top | middle | bottom | off (src/lib/story-text.ts).
+  textPosition String     @default("auto")
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   contents    Content[]

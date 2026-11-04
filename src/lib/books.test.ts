@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { arTargets, canPublish, compileState, readableWhere, targetsSignature } from "./books";
+import { accessState, arTargets, canPublish, compileState, readableWhere, targetsSignature } from "./books";
 
 const a = { id: "a", imageUrl: "/files/targets/a.jpg", ar: true };
 const b = { id: "b", imageUrl: "/files/targets/b.jpg", ar: true };
@@ -27,23 +27,47 @@ test("compile state follows the pages", () => {
   assert.equal(compileState(book, [a, { ...b, imageUrl: "/files/targets/new.jpg" }]), "stale");
 });
 
-test("visitors only see published library books", () => {
-  assert.deepEqual(readableWhere(null), { published: true, OR: [{ ownerId: null }] });
+const parent = { id: "p1", role: "PARENT", schoolId: null, username: "sara@example.com" };
+
+test("visitors only see public library books", () => {
+  assert.deepEqual(readableWhere(null), { published: true, OR: [{ ownerId: null, visibility: "PUBLIC" }] });
 });
 
-test("signed-in readers also see their own custom stories and their school's books", () => {
-  assert.deepEqual(readableWhere({ id: "p1", role: "PARENT", schoolId: null }), {
+test("signed-in readers also see members' books, books they're approved for and their school's books", () => {
+  assert.deepEqual(readableWhere(parent), {
     published: true,
-    OR: [{ ownerId: null }, { ownerId: "p1" }],
+    OR: [
+      { ownerId: null, visibility: "PUBLIC" },
+      { ownerId: null, visibility: "MEMBERS" },
+      { readers: { some: { email: "sara@example.com", status: "APPROVED" } } },
+    ],
   });
-  assert.deepEqual(readableWhere({ id: "s1", role: "STUDENT", schoolId: "sc1" }), {
-    published: true,
-    OR: [{ ownerId: null }, { ownerId: "s1" }, { access: { some: { schoolId: "sc1" } } }],
-  });
+  const student = { id: "s1", role: "STUDENT", schoolId: "sc1", username: "sami" };
+  assert.deepEqual(readableWhere(student).OR?.at(-1), { access: { some: { schoolId: "sc1" } } });
 });
 
 test("platform admins see every book, drafts included", () => {
-  assert.deepEqual(readableWhere({ id: "a1", role: "SUPER_ADMIN", schoolId: null }), {});
+  assert.deepEqual(readableWhere({ id: "a1", role: "SUPER_ADMIN", schoolId: null, username: "admin@example.com" }), {});
+});
+
+test("access to one book follows its visibility and the reader's approval", () => {
+  const open = { visibility: "PUBLIC", ownerId: null };
+  const members = { visibility: "MEMBERS", ownerId: null };
+  const approved = { visibility: "APPROVED", ownerId: null };
+  assert.equal(accessState(open, null, null), "open");
+  assert.equal(accessState(members, null, null), "sign-in");
+  assert.equal(accessState(members, parent, null), "open");
+  assert.equal(accessState(approved, parent, null), "request");
+  assert.equal(accessState(approved, parent, { status: "PENDING" }), "pending");
+  assert.equal(accessState(approved, parent, { status: "DECLINED" }), "declined");
+  assert.equal(accessState(approved, parent, { status: "APPROVED" }), "open");
+});
+
+test("a custom story only opens for approved emails, even when marked public", () => {
+  const story = { visibility: "PUBLIC", ownerId: "p1" };
+  assert.equal(accessState(story, null, null), "sign-in");
+  assert.equal(accessState(story, parent, null), "request");
+  assert.equal(accessState(story, parent, { status: "APPROVED" }), "open");
 });
 
 test("a book can be published once it has pages, unless its AR pages were never compiled", () => {

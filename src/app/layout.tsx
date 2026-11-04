@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Instrument_Serif, Plus_Jakarta_Sans } from "next/font/google";
+import { Bricolage_Grotesque, Fredoka, Gelasio, Instrument_Serif, Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -7,6 +7,9 @@ const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakart
 const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-bricolage", display: "swap" });
 // Book reader captions
 const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-instrument", display: "swap" });
+// Picture-book pages (src/lib/story-page.ts): a sturdy book serif for the text, a round bold face for sound words.
+const story = Gelasio({ subsets: ["latin"], weight: ["500", "600"], variable: "--font-story", display: "swap" });
+const sound = Fredoka({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-sound", display: "swap" });
 
 export const metadata: Metadata = {
   title: { default: "Sketchling — Illustrated stories for kids", template: "%s · Sketchling" },
@@ -28,7 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // suppressHydrationWarning: browser extensions (ColorZilla, Grammarly, password managers) add
     // attributes to <html>/<body> before React loads. Only these two elements' own attributes are
     // exempted; mismatches anywhere inside are still reported.
-    <html lang="en" className={`${jakarta.variable} ${bricolage.variable} ${serif.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${jakarta.variable} ${bricolage.variable} ${serif.variable} ${story.variable} ${sound.variable}`} suppressHydrationWarning>
       <body className="min-h-dvh" suppressHydrationWarning>
         {children}
         <Toaster

@@ -66,6 +66,7 @@ function drawPaper(
   stitchOpacity: number,
   front?: HTMLImageElement,
   back?: HTMLImageElement,
+  backFade = 0,
 ) {
   const spine = width * 1.5;
   const top = height * 0.5;
@@ -178,6 +179,13 @@ function drawPaper(
     context.transform(xx, xy, yx, yy, a.x - xx * ax - yx * a.v, a.y - xy * ax - yy * a.v);
     if (image?.complete && image.naturalWidth) {
       context.drawImage(image, 0, 0, width, height);
+      // The page's own picture showing through the back of the sheet, like thin paper.
+      if (!frontFacing && backFade > 0) {
+        context.fillStyle = PAPER;
+        context.globalAlpha = backFade;
+        context.fillRect(0, 0, width, height);
+        context.globalAlpha = 1;
+      }
     } else {
       context.fillStyle = PAPER;
       context.fillRect(0, 0, width, height);
@@ -218,7 +226,7 @@ function drawPaper(
   if (!stitchesPainted) drawStitches(context, spine, top, height, stitchOpacity);
 }
 
-export function PaperCurl({ width, height, direction, progress, pull, stitchOpacity, front, back }: {
+export function PaperCurl({ width, height, direction, progress, pull, stitchOpacity, front, back, backFade, spineLeft = width }: {
   width: number;
   height: number;
   direction: 1 | -1;
@@ -227,6 +235,10 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
   stitchOpacity: number;
   front?: HTMLImageElement;
   back?: HTMLImageElement;
+  /** 0–1: how much paper covers the back image (a single page shows its own picture, faded, on the back). */
+  backFade?: number;
+  /** Where the spine sits, from the left of the positioned parent: the middle of a spread, or a single page's left edge. */
+  spineLeft?: number;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
 
@@ -244,7 +256,7 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
       if (!context) return;
       context.setTransform(scale, 0, 0, scale, 0, 0);
       context.clearRect(0, 0, width * 3, height * 2);
-      drawPaper(context, width, height, direction, progress, pull, stitchOpacity, front, back);
+      drawPaper(context, width, height, direction, progress, pull, stitchOpacity, front, back, backFade);
     }
     paint();
     front?.addEventListener("load", paint);
@@ -253,7 +265,7 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
       front?.removeEventListener("load", paint);
       back?.removeEventListener("load", paint);
     };
-  }, [width, height, direction, progress, pull, stitchOpacity, front, back]);
+  }, [width, height, direction, progress, pull, stitchOpacity, front, back, backFade]);
 
-  return <canvas ref={canvas} aria-hidden="true" className="pointer-events-none absolute" style={{ left: -width / 2, top: -height / 2, width: width * 3, height: height * 2 }} />;
+  return <canvas ref={canvas} aria-hidden="true" className="pointer-events-none absolute" style={{ left: spineLeft - width * 1.5, top: -height / 2, width: width * 3, height: height * 2 }} />;
 }

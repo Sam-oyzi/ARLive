@@ -1,9 +1,10 @@
 // Turns a drop of images (+ optional pages.json) into an ordered list of pages to upload.
 // pages.json is what the "arlive-book" skill produces alongside the ChatGPT image prompts:
-//   { "pages": [ { "file": "01.png", "title": "…", "story": "…", "ar": true }, … ] }
+//   { "pages": [ { "file": "01.png", "title": "…", "story": "…", "ar": true, "textPosition": "top" }, … ] }
 // For two-page spreads, an entry may add "side": "left" | "right"; without it, both halves share it.
 import { z } from "zod";
 import { pageTranslationsSchema, type PageTranslations } from "./page-translations";
+import { TEXT_POSITION_KEYS, type TextPosition } from "./story-text";
 
 const manifestSchema = z.object({
   pages: z
@@ -15,6 +16,8 @@ const manifestSchema = z.object({
         story: z.string().max(1000).optional(),
         translations: pageTranslationsSchema.optional(),
         ar: z.boolean().optional(),
+        /** Where the story text goes on the page; "off" when the words are in the picture. */
+        textPosition: z.enum(TEXT_POSITION_KEYS).optional(),
       }),
     )
     .max(500),
@@ -46,6 +49,7 @@ export type PlannedPage = {
   description?: string;
   translations?: PageTranslations;
   ar?: boolean;
+  textPosition?: TextPosition;
 };
 
 export function planPages(
@@ -96,6 +100,7 @@ export function planPages(
         description: entry.story,
         translations: entry.translations,
         ar: entry.ar,
+        textPosition: entry.textPosition,
       });
     }
   }

@@ -3,11 +3,13 @@
 import Link from "next/link";
 import {
   ArrowLeft,
+  BookOpen,
   Camera,
   CameraOff,
   ChevronDown,
   Download,
   Hand,
+  Home,
   LoaderCircle,
   RotateCcw,
   Share2,
@@ -462,6 +464,15 @@ export function ARViewer({ book, targets, backHref }: Props) {
               <Camera className="size-5" /> Start scanning
             </button>
             <p className="mt-3 text-xs text-white/45">We&apos;ll ask for camera access. Nothing is recorded.</p>
+            {/* Someone who scanned the printed book's QR code may just want to read it, or go home. */}
+            <div className="mt-6 flex w-full gap-2">
+              <Link href={`/read/${book.id}`} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-white/10 text-sm font-semibold ring-1 ring-white/15">
+                <BookOpen className="size-4" /> Read the book
+              </Link>
+              <Link href="/" className="flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-white/10 text-sm font-semibold ring-1 ring-white/15">
+                <Home className="size-4" /> Home
+              </Link>
+            </div>
 
             {isDesktop && <PhoneQR path={`/scan/${book.id}`} dark className="mt-8 w-full text-left" />}
           </div>

@@ -5,6 +5,7 @@ import { assertRole } from "@/lib/auth";
 import { CONTENT_META, CONTENT_TYPES, defaultTransform, type ContentData } from "@/lib/content";
 import { parseMotion } from "@/lib/motion-schema";
 import { pageTranslationsSchema } from "@/lib/page-translations";
+import { TEXT_POSITION_KEYS } from "@/lib/story-text";
 import { BOOK_FORMATS, type BookFormat } from "@/lib/book-format";
 import { db } from "@/lib/db";
 import { deleteUpload } from "@/lib/storage";
@@ -69,7 +70,7 @@ export async function deleteBook(bookId: string): Promise<ActionState> {
       include: { targets: { include: { contents: true } } },
     });
     await db.book.delete({ where: { id: bookId } });
-    const urls = [book.coverUrl, book.mindUrl, ...book.targets.flatMap((t) => [t.imageUrl, ...t.contents.map((c) => c.url)])];
+    const urls = [book.coverUrl, book.mindUrl, ...book.targets.flatMap((t) => [t.imageUrl, t.narrationUrl, ...t.contents.map((c) => c.url)])];
     await Promise.all(urls.map((url) => deleteUpload(url)));
     refreshAll();
     return { ok: true, message: "Book deleted" };
@@ -90,6 +91,7 @@ const newTargets = z.array(
     description: z.string().max(1000).nullish(),
     translations: pageTranslationsSchema.optional(),
     ar: z.boolean().optional(),
+    textPosition: z.enum(TEXT_POSITION_KEYS).optional(),
   }),
 );
 
@@ -112,6 +114,7 @@ const targetSchema = z.object({
   id: z.string(),
   name: z.string({ error: "Enter a name" }).min(1).max(120),
   description: z.string().max(1000).optional(),
+  textPosition: z.enum(TEXT_POSITION_KEYS).default("auto"),
 });
 
 export async function updateTarget(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -119,8 +122,8 @@ export async function updateTarget(_prev: ActionState, formData: FormData): Prom
     await assertRole(["SUPER_ADMIN"]);
     const parsed = parseForm(targetSchema, formData);
     if (!parsed.success) return invalid(parsed.error);
-    const { id, name, description } = parsed.data;
-    await db.target.update({ where: { id }, data: { name, description: description ?? null } });
+    const { id, name, description, textPosition } = parsed.data;
+    await db.target.update({ where: { id }, data: { name, description: description ?? null, textPosition } });
     refreshAll();
     return { ok: true, message: "Page details saved" };
   } catch (error) {
@@ -158,6 +161,21 @@ export async function replaceTargetImage(
   }
 }
 
+/** The voice that reads a page aloud in the reader; null removes it. */
+export async function setPageNarration(targetId: string, url: string | null): Promise<ActionState> {
+  try {
+    await assertRole(["SUPER_ADMIN"]);
+    if (url !== null && !url.startsWith("/files/audio/")) return { error: "Upload an audio file (MP3, M4A, OGG or WAV)." };
+    const previous = await db.target.findUniqueOrThrow({ where: { id: targetId } });
+    await db.target.update({ where: { id: targetId }, data: { narrationUrl: url } });
+    if (previous.narrationUrl && previous.narrationUrl !== url) await deleteUpload(previous.narrationUrl);
+    refreshAll();
+    return { ok: true, message: url ? "Narration saved: tap Read to me in the reader to hear it" : "Narration removed" };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 export async function moveTarget(targetId: string, direction: -1 | 1): Promise<ActionState> {
   try {
     await assertRole(["SUPER_ADMIN"]);
@@ -181,7 +199,7 @@ export async function deleteTarget(targetId: string): Promise<ActionState> {
   try {
     await assertRole(["SUPER_ADMIN"]);
     const target = await db.target.delete({ where: { id: targetId }, include: { contents: true } });
-    await Promise.all([target.imageUrl, ...target.contents.map((c) => c.url)].map((url) => deleteUpload(url)));
+    await Promise.all([target.imageUrl, target.narrationUrl, ...target.contents.map((c) => c.url)].map((url) => deleteUpload(url)));
     refreshAll();
     return { ok: true, message: "Page deleted — recompile the book to apply" };
   } catch (error) {

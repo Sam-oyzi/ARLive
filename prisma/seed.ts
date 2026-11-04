@@ -73,74 +73,7 @@ async function main() {
     create: { name: "Sami Student", username: "student", role: "STUDENT", grade: "Grade 10 — B", schoolId: school.id, passwordHash: await hash("student123") },
   });
 
-  // Demo book: one page with an animated water molecule, compiled if the sample .mind exists.
   const science = subjects[0]!;
-  let book = await db.book.findFirst({ where: { title: "Discovering Molecules" } });
-  if (!book) {
-    const imageUrl = install("water-page.png", "targets", "demowaterpage.png");
-    const modelUrl = install("water.glb", "models", "demowatermolecule.glb");
-    if (!imageUrl || !modelUrl) {
-      console.warn("Sample assets missing — run `npx tsx scripts/make-sample-assets.ts` first. Skipping demo book.");
-    } else {
-      book = await db.book.create({
-        data: {
-          title: "Discovering Molecules",
-          description: "Your first AR chemistry book: scan the page to meet the water molecule.",
-          gradeLevel: "Ages 8–12",
-          subjectId: science.id,
-        },
-      });
-      const target = await db.target.create({
-        data: {
-          bookId: book.id,
-          name: "The water molecule",
-          description:
-            "Water (H₂O) is one oxygen atom bonded to two hydrogen atoms at an angle of 104.5°. That bent shape makes water polar, which is why it dissolves so many substances.",
-          imageUrl,
-          width: 800,
-          height: 1100,
-          order: 0,
-        },
-      });
-      await db.content.createMany({
-        data: [
-          { targetId: target.id, type: "MODEL", name: "Water molecule", url: modelUrl, posX: 0, posY: 0.05, posZ: 0, rotX: 90, scale: 0.55, order: 0 },
-          {
-            targetId: target.id,
-            type: "TEXT",
-            name: "Label",
-            text: "H₂O — bond angle 104.5°",
-            color: "#ffffff",
-            posX: 0,
-            posY: -0.5,
-            posZ: 0.02,
-            scale: 0.6,
-            order: 1,
-          },
-        ],
-      });
-
-      const mindUrl = install("water.mind", "mind", "demowater.mind");
-      if (mindUrl) {
-        await db.target.update({ where: { id: target.id }, data: { targetIndex: 0 } });
-        await db.book.update({
-          where: { id: book.id },
-          data: { mindUrl, mindHash: targetsSignature([target]), compiledAt: new Date(), published: true },
-        });
-      } else {
-        console.log("No prisma/sample/water.mind yet — open the book in /admin/books and click Compile.");
-      }
-    }
-  }
-
-  if (book) {
-    await db.schoolBook.upsert({
-      where: { schoolId_bookId: { schoolId: school.id, bookId: book.id } },
-      update: {},
-      create: { schoolId: school.id, bookId: book.id },
-    });
-  }
-
   const example = await seedExampleBook(science.id);
   if (example) {
     await db.schoolBook.upsert({
@@ -154,7 +87,7 @@ async function main() {
   const legacy = await db.subject.findMany({ where: { slug: { in: LEGACY_SUBJECTS } }, select: { id: true } });
   if (legacy.length > 0) {
     await db.book.updateMany({
-      where: { subjectId: { in: legacy.map((s) => s.id) }, title: { in: ["Discovering Molecules", EXAMPLE_TITLE] } },
+      where: { subjectId: { in: legacy.map((s) => s.id) }, title: EXAMPLE_TITLE },
       data: { subjectId: science.id },
     });
     await db.subject.deleteMany({ where: { id: { in: legacy.map((s) => s.id) }, books: { none: {} } } });
@@ -220,7 +153,7 @@ async function seedExampleBook(subjectId: string) {
     return null;
   }
   const manifest = JSON.parse(fs.readFileSync(path.join(dir, "pages.json"), "utf8")) as {
-    pages: { file: string; title: string; story: string; ar: boolean; translations?: Prisma.InputJsonObject }[];
+    pages: { file: string; title: string; story: string; ar: boolean; textPosition?: string; translations?: Prisma.InputJsonObject }[];
   };
 
   const book = await db.book.create({
@@ -255,7 +188,7 @@ async function seedExampleBook(subjectId: string) {
     const imageUrl = install(path.join("example-book", page.file), "targets", `example${page.file.replace(/[^a-z0-9.]/gi, "")}`);
     if (!imageUrl) continue;
     const target = await db.target.create({
-      data: { bookId: book.id, name: page.title, description: page.story, translations: page.translations, imageUrl, width: 768, height: 1024, order, ar: page.ar },
+      data: { bookId: book.id, name: page.title, description: page.story, translations: page.translations, imageUrl, width: 768, height: 1024, order, ar: page.ar, textPosition: page.textPosition },
     });
     for (const content of CONTENT[page.file] ?? []) await db.content.create({ data: { ...content, targetId: target.id } });
     if (page.ar) arTargets.push(target);

@@ -5,6 +5,10 @@
 // door. Each strip shows its slice of the front and back page and is lit with a gradient across its
 // width (from the angle at one edge to the angle at the other), so the curve shades smoothly.
 // Drag (or throw) a page, click a page, or use the arrow keys.
+//
+// `single` shows one page at a time, for phones held upright: the page is hinged on its left edge,
+// curls away to the left to reveal the next one, and the previous page curls back in over it.
+// Swipe, tap the outer thirds to turn, or tap the middle (onTap) to show the reader's controls.
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { PAPER_EDGE, PAPER_THICKNESS, STITCH_HIGHLIGHT, STITCH_POSITIONS, STITCH_THREAD, PaperCurl, type PaperPull } from "./paper-curl";
 
@@ -98,12 +102,19 @@ export const FlipBook = forwardRef<
     /** Extra UI drawn on top of a resting page (badges, toggles). */
     renderOverlay?: (page: FlipPage, index: number, side: "left" | "right") => ReactNode;
     onSpreadChange?: (pages: number[]) => void;
+    /** One page at a time instead of two-page spreads. */
+    single?: boolean;
+    /** Single mode: a tap in the middle of the screen. */
+    onTap?: () => void;
     className?: string;
   }
->(function FlipBook({ pages, backCoverImageUrl, aspect, initialPage = 0, magnifier, renderOverlay, onSpreadChange, className }, ref) {
+>(function FlipBook({ pages, backCoverImageUrl, aspect, initialPage = 0, magnifier, renderOverlay, onSpreadChange, single = false, onTap, className }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [spread, setSpread] = useState(() => spreadOf(initialPage));
+  // Single mode's position: a page index, or pages.length for the back cover.
+  const [index, setIndex] = useState(initialPage);
+  const singleRef = useRef(single);
   const [turn, setTurn] = useState<Turn | null>(null);
   const [lens, setLens] = useState<{ x: number; y: number } | null>(null);
   const animation = useRef(0);
@@ -118,6 +129,20 @@ export const FlipBook = forwardRef<
   const backCover = backCoverImageUrl ? { ...BACK_COVER, imageUrl: backCoverImageUrl } : BACK_COVER;
   const left = (s: number) => hasBackCover && s === spreads - 1 ? backCover : page(2 * s - 1);
   const right = (s: number) => page(2 * s);
+  // Single mode always ends on the back cover when there is one.
+  const singleCount = n + Number(n > 0 && !!backCoverImageUrl);
+  const singlePage = (i: number) => (i < n ? page(i) : i === n && singleCount > n ? backCover : null);
+
+  // Turning the phone keeps the reader on the same page.
+  useEffect(() => {
+    if (singleRef.current === single) return;
+    singleRef.current = single;
+    cancelAnimationFrame(animation.current);
+    drag.current = null;
+    setTurn(null);
+    if (single) setIndex(hasBackCover && spread === spreads - 1 ? singleCount - 1 : Math.max(0, 2 * spread - 1));
+    else setSpread(Math.min(spreads - 1, spreadOf(index)));
+  }, [single, spread, spreads, index, hasBackCover, singleCount]);
 
   // Fit two pages side by side inside the container.
   useLayoutEffect(() => {
@@ -147,8 +172,9 @@ export const FlipBook = forwardRef<
   }, [pages, backCoverImageUrl]);
 
   useEffect(() => {
-    onSpreadChange?.([2 * spread - 1, 2 * spread].filter((i) => i >= 0 && i < n));
-  }, [spread, n, onSpreadChange]);
+    if (single) onSpreadChange?.(index < n ? [index] : []);
+    else onSpreadChange?.([2 * spread - 1, 2 * spread].filter((i) => i >= 0 && i < n));
+  }, [single, index, spread, n, onSpreadChange]);
 
   useEffect(() => () => cancelAnimationFrame(animation.current), []);
 
@@ -156,7 +182,9 @@ export const FlipBook = forwardRef<
     cancelAnimationFrame(animation.current);
     const finish = () => {
       setTurn(null);
-      if (to === 1) setSpread((s) => s + dir);
+      if (to !== 1) return;
+      if (singleRef.current) setIndex((i) => i + dir);
+      else setSpread((s) => s + dir);
     };
     if (reducedMotion.current) {
       finish();
@@ -184,12 +212,17 @@ export const FlipBook = forwardRef<
     animation.current = requestAnimationFrame(step);
   }, []);
 
+  const canTurn = useCallback(
+    (dir: 1 | -1) => (single ? index + dir >= 0 && index + dir < singleCount : spread + dir >= 0 && spread + dir < spreads),
+    [single, index, singleCount, spread, spreads],
+  );
+
   const flip = useCallback(
     (dir: 1 | -1) => {
-      if (turn || drag.current || spread + dir < 0 || spread + dir >= spreads) return;
+      if (turn || drag.current || !canTurn(dir)) return;
       animateTo(dir, 0, 1);
     },
-    [turn, spread, spreads, animateTo],
+    [turn, canTurn, animateTo],
   );
 
   useImperativeHandle(
@@ -197,19 +230,20 @@ export const FlipBook = forwardRef<
     () => ({
       next: () => flip(1),
       prev: () => flip(-1),
-      goToPage: (index: number) => {
+      goToPage: (target: number) => {
         cancelAnimationFrame(animation.current);
         drag.current = null;
         setTurn(null);
-        setSpread(Math.max(0, Math.min(spreads - 1, spreadOf(index))));
+        if (singleRef.current) setIndex(Math.max(0, Math.min(singleCount - 1, target)));
+        else setSpread(Math.max(0, Math.min(spreads - 1, spreadOf(target))));
       },
     }),
-    [flip, spreads],
+    [flip, spreads, singleCount],
   );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || (e.target as HTMLElement).closest("input, textarea, select, [contenteditable], [role='menu']")) return;
+      if (e.defaultPrevented || (e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable], [role='menu']"))) return;
       if (e.key === "ArrowRight") flip(1);
       if (e.key === "ArrowLeft") flip(-1);
     };
@@ -218,7 +252,9 @@ export const FlipBook = forwardRef<
   }, [flip]);
 
   // ---------- layout ----------
-  const pageW = Math.max(0, Math.min(size.w / 2, size.h / aspect) * 0.88);
+  const pageW = single
+    ? Math.max(0, Math.min(size.w, size.h / aspect))
+    : Math.max(0, Math.min(size.w / 2, size.h / aspect) * 0.88);
   const pageH = pageW * aspect;
   const destination = spread + (turn?.dir ?? 0);
   const leafDir = turn?.dir;
@@ -285,7 +321,8 @@ export const FlipBook = forwardRef<
 
   // ---------- the turning leaf ----------
   // A plain render function (not a component) so the strips update in place every frame.
-  function renderLeaf(t: Turn) {
+  /** `backFade` shows the leaf's own picture faded on its back (single page) instead of `back`. */
+  function renderLeaf(t: Turn, front: FlipPage | null, back: FlipPage | null, left: number, backFade?: number) {
     const theta = t.p * Math.PI;
     const bend = BEND * Math.sin(theta);
     const hinge = theta - bend;
@@ -305,7 +342,7 @@ export const FlipBook = forwardRef<
       const shadeFar = shadeAt(far);
       const frontX = forward ? i * sw : pageW - (i + 1) * sw;
       const backX = forward ? pageW - (i + 1) * sw : i * sw;
-      const face = (p: FlipPage | null, x: number, isBack: boolean): ReactNode => (
+      const face = (p: FlipPage | null, x: number, isBack: boolean, fade?: number): ReactNode => (
         <div
           className="absolute inset-0"
           style={{
@@ -315,6 +352,7 @@ export const FlipBook = forwardRef<
             transform: `${isBack ? "rotateY(180deg) " : ""}translateZ(${PAPER_THICKNESS / 2}px)`,
           }}
         >
+          {fade !== undefined && <div className="absolute inset-0" style={{ background: PAPER, opacity: fade }} />}
           <div
             className="absolute inset-0"
             style={{
@@ -335,7 +373,7 @@ export const FlipBook = forwardRef<
           }}
         >
           {face(front, frontX, false)}
-          {face(back, backX, true)}
+          {backFade === undefined ? face(back, backX, true) : face(front, frontX, true, backFade)}
           {i === STRIPS - 1 && (
             <div className="absolute inset-y-0" style={{
               left: (forward ? sw + 1 : 0) - PAPER_THICKNESS / 2,
@@ -351,9 +389,114 @@ export const FlipBook = forwardRef<
     return (
       <div
         className="pointer-events-none absolute top-0"
-        style={{ width: pageW, height: pageH, transformStyle: "preserve-3d", left: forward ? pageW : 0 }}
+        style={{ width: pageW, height: pageH, transformStyle: "preserve-3d", left }}
       >
         {chain}
+      </div>
+    );
+  }
+
+  // ---------- single page ----------
+  function singleDown(e: React.PointerEvent) {
+    if (turn || e.button !== 0 || (e.target as HTMLElement).closest("button, a, input, label")) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    // Where the page was grabbed, top to bottom: it sets the angle of the fold, like a book app.
+    const pageTop = rect.top + (rect.height - pageH) / 2;
+    const edgeY = Math.max(0, Math.min(1, (e.clientY - pageTop) / pageH));
+    drag.current = { pointerId: e.pointerId, dir: 1, startX: e.clientX, startY: e.clientY, edgeY, samples: [{ x: e.clientX, t: performance.now() }] };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // The pointer already went away; the drag ends on the next up/cancel.
+    }
+  }
+
+  function singleMove(e: React.PointerEvent) {
+    const d = drag.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    const dx = e.clientX - d.startX;
+    if (!d.turn) {
+      // Wait for a clearly sideways swipe; anything else may still be a tap.
+      if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(e.clientY - d.startY)) return;
+      const dir: 1 | -1 = dx < 0 ? 1 : -1;
+      if (!canTurn(dir)) return;
+      d.dir = dir;
+    }
+    const now = performance.now();
+    d.samples.push({ x: e.clientX, t: now });
+    while (d.samples.length > 2 && now - d.samples[0]!.t > 100) d.samples.shift();
+    const offsetY = Math.max(-pageH * 0.5, Math.min(pageH * 0.5, e.clientY - d.startY));
+    d.turn = { dir: d.dir, p: Math.min(1, Math.max(0, (-dx * d.dir) / (pageW * 0.9))), pull: { edgeY: d.edgeY, offsetY } };
+    setTurn(d.turn);
+  }
+
+  function singleUp(e: React.PointerEvent) {
+    const d = drag.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    drag.current = null;
+    const released = e.type === "pointerup";
+    if (!d.turn) {
+      if (!released || Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 10) return;
+      // Like a book app: the outer thirds turn the page, the middle shows the controls.
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;
+      if (x < 0.3 && canTurn(-1)) animateTo(-1, 0, 1);
+      else if (x > 0.7 && canTurn(1)) animateTo(1, 0, 1);
+      else onTap?.();
+      return;
+    }
+    const first = d.samples[0]!;
+    const last = d.samples[d.samples.length - 1]!;
+    const velocity = ((first.x - last.x) * d.dir * 1000) / (pageW * 0.9 * Math.max(1, last.t - first.t));
+    const commit = released && (d.turn.p > 0.35 || (performance.now() - last.t < 100 && velocity > 0.9));
+    animateTo(d.dir, d.turn.p, commit ? 1 : 0, d.turn.pull);
+  }
+
+  if (single) {
+    // Forward, the current page curls away to the left. Back, the previous page curls in over it:
+    // the same motion played in reverse, so both use a leaf hinged on the left edge.
+    const forward = turn?.dir !== -1;
+    const leafPage = turn ? (forward ? singlePage(index) : singlePage(index - 1)) : null;
+    const under = turn && forward ? singlePage(index + 1) : singlePage(index);
+    const leafTurn: Turn | null = turn ? { dir: 1, p: forward ? turn.p : 1 - turn.p, pull: turn.pull } : null;
+    const singleLift = leafTurn ? Math.sin(leafTurn.p * Math.PI) : 0;
+    const resting = !turn && under;
+    const isBack = under === backCover;
+    const leafImage = images.current.get(leafPage?.imageUrl ?? "");
+    return (
+      <div
+        ref={container}
+        className={className ?? "relative size-full"}
+        style={{ perspective: Math.max(1600, pageW * 5), perspectiveOrigin: "50% 45%", touchAction: "none" }}
+        onPointerDown={singleDown}
+        onPointerMove={singleMove}
+        onPointerUp={singleUp}
+        onPointerCancel={singleUp}
+        onLostPointerCapture={singleUp}
+      >
+        {pageW > 0 && under && (
+          // Edge to edge, like a book app: no desk, no spine, just the page.
+          <div
+            className="absolute top-1/2 left-1/2 select-none"
+            style={{ width: pageW, height: pageH, transform: "translate(-50%, -50%)", transformStyle: "preserve-3d" }}
+          >
+            <div
+              className="absolute inset-0 overflow-hidden"
+              style={{ background: under.imageUrl ? `${PAPER} url("${under.imageUrl}") center / cover no-repeat` : PAPER }}
+            >
+              {turn && forward && (
+                <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-[55%] bg-[linear-gradient(to_right,rgb(52_38_20_/_0.22),transparent_85%)]" style={{ opacity: singleLift * 0.7 }} />
+              )}
+            </div>
+            {resting && (
+              <div className="absolute inset-0">{!isBack && renderOverlay?.(under, index, "right")}</div>
+            )}
+            {leafTurn && leafPage && (leafTurn.pull ? (
+              <PaperCurl width={pageW} height={pageH} direction={1} progress={leafTurn.p} pull={leafTurn.pull} stitchOpacity={0}
+                front={leafImage} back={leafImage} backFade={0.82} spineLeft={0} />
+            ) : renderLeaf(leafTurn, leafPage, null, 0, 0.82))}
+          </div>
+        )}
       </div>
     );
   }
@@ -475,7 +618,7 @@ export const FlipBook = forwardRef<
           {turn && (turn.pull ? (
             <PaperCurl width={pageW} height={pageH} direction={turn.dir} progress={turn.p} pull={turn.pull} stitchOpacity={stitchOpacity}
               front={images.current.get(front?.imageUrl ?? "")} back={images.current.get(back?.imageUrl ?? "")} />
-          ) : renderLeaf(turn))}
+          ) : renderLeaf(turn, front, back, turn.dir === 1 ? pageW : 0))}
 
           {showLens && (
             <div

@@ -79,6 +79,7 @@ export async function startStoryBook(requestId: string): Promise<ActionState<{ b
           gradeLevel: request.childAge != null ? `Age ${request.childAge}` : null,
           subjectId: category.id,
           ownerId: request.userId,
+          visibility: "APPROVED",
         },
       });
       await tx.storyRequest.update({ where: { id: requestId }, data: { bookId: created.id, status: "IN_PROGRESS" } });
@@ -114,22 +115,29 @@ export async function updateStoryRequest(_prev: ActionState, formData: FormData)
   }
 }
 
-/** Publishes the custom book for the family and marks the request delivered. */
+/** Publishes the custom book, approves the family's email to read it, and marks the request delivered. */
 export async function deliverStory(requestId: string): Promise<ActionState> {
   try {
     await assertRole(["SUPER_ADMIN"]);
     const request = await db.storyRequest.findUniqueOrThrow({
       where: { id: requestId },
-      include: { book: { include: { targets: { select: { ar: true } } } } },
+      include: { book: { include: { targets: { select: { ar: true } } } }, user: { select: { username: true } } },
     });
     const book = request.book;
     if (!book) return { error: "Create the book first." };
     if (book.targets.length === 0) return { error: "Add the story's pages in the studio first." };
     if (book.targets.some((t) => t.ar) && !book.mindUrl) return { error: "Compile the AR pages in the studio first." };
 
+    const now = new Date();
+    const email = request.user.username;
     await db.$transaction([
-      db.book.update({ where: { id: book.id }, data: { published: true, ownerId: request.userId } }),
-      db.storyRequest.update({ where: { id: requestId }, data: { status: "DELIVERED", deliveredAt: new Date() } }),
+      db.book.update({ where: { id: book.id }, data: { published: true, ownerId: request.userId, visibility: "APPROVED" } }),
+      db.bookReader.upsert({
+        where: { bookId_email: { bookId: book.id, email } },
+        update: { status: "APPROVED", decidedAt: now },
+        create: { bookId: book.id, email, status: "APPROVED", decidedAt: now },
+      }),
+      db.storyRequest.update({ where: { id: requestId }, data: { status: "DELIVERED", deliveredAt: now } }),
     ]);
     refreshAll();
     return { ok: true, message: `Delivered to ${request.childName}'s family` };

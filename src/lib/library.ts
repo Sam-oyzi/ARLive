@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { compileState } from "./books";
+import { visibilityOf, type Visibility } from "./visibility";
 
 /** Everything a library card needs, in one select. */
 export const bookCardSelect = {
@@ -10,6 +11,7 @@ export const bookCardSelect = {
   coverUrl: true,
   mindUrl: true,
   mindHash: true,
+  visibility: true,
   downloads: true,
   likeCount: true,
   ratingCount: true,
@@ -31,6 +33,7 @@ export type BookCardData = {
   pages: number;
   /** Has AR pages that a phone can scan right now. */
   ar: boolean;
+  visibility: Visibility;
   downloads: number;
   likes: number;
   rating: { average: number; count: number };
@@ -50,6 +53,7 @@ export function toBookCard(book: BookCardRow, now = Date.now()): BookCardData {
     category: book.subject,
     pages: book.targets.length,
     ar: !!book.mindUrl && (state === "ready" || state === "stale"),
+    visibility: visibilityOf(book.visibility),
     downloads: book.downloads,
     likes: book.likeCount,
     rating: { average: book.ratingAvg, count: book.ratingCount },
@@ -81,7 +85,4 @@ export function averageStars(stars: number[]): number {
   return Math.round((stars.reduce((sum, s) => sum + s, 0) / stars.length) * 10) / 10;
 }
 
-/** 1234 → "1.2k", for counters on small cards. */
-export function compactNumber(value: number): string {
-  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
-}
+export { compactNumber } from "./utils";

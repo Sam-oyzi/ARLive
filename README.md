@@ -15,7 +15,16 @@ nobody installs an app.
 - Search, category filters and sorting (most popular, top rated, newest)
 - Each book shows its star rating, downloads and likes; signed-in readers rate (1–5 stars) and like
 - Read online (`/read/:bookId`), download / print (`/print/:bookId`) and scan AR pages
-  (`/scan/:bookId`) without an account
+  (`/scan/:bookId`). Each book is readable by **everyone**, **any account**, or **approved emails only**;
+  readers of a locked book ask for access from its page
+- Reader: two-page spreads on a laptop; on a phone one full-screen page at a time with a page-curl
+  turn (drag to peel a corner, tap the edges to turn, tap the middle for the controls), and
+  **Read to me** when pages have a recorded voice
+- The printed back cover carries a QR code that opens the book's AR scanner on a phone (set `SITE_URL`)
+- Picture-book pages: on a phone and in print, each page's story is drawn onto the picture in the
+  calmest part of the art (or where the admin puts it). Each line of the story is a line on the page,
+  and `*Buzz buzz*` makes a big, colourful sound word. How to write books in this style:
+  [.claude/skills/arlive-book/references/picture-book.md](.claude/skills/arlive-book/references/picture-book.md)
 
 **Families (`/signup`, `/account`, `/stories`)**
 - Free parent accounts: profile, children (first name, age, what they love) and liked books
@@ -30,6 +39,9 @@ nobody installs an app.
   (publishes it for that family only)
 - Books: upload page images, mark AR pages, compile them into a MindAR `.mind` file in the browser,
   publish, and feature on the home page; library stats per book
+- Who can read each book, approved emails (e.g. buyers of the printed book) and a **Reader access**
+  inbox for requests. Custom stories open only for approved emails; delivering one approves the family
+- Voice narration per page (MP3, M4A, OGG or WAV), played in order by the reader's Read to me
 - 3D scene editor per page: add GLB models (with animation clips), video, images, audio and text
   labels, then place them with move/rotate/scale gizmos
 - Categories, users, and the school channel (schools, join codes, access requests)
@@ -162,6 +174,8 @@ hand: `npm run optimize:glb -- model.glb`.
 - Uploads are written to `storage/uploads`; mount it on a persistent volume, or replace
   `src/lib/storage.ts` with S3/R2 (same function signatures).
 - Set a strong `SESSION_SECRET`; cookies are `Secure` when `NODE_ENV=production`.
+- Set `SITE_URL` to the public address (e.g. `https://sketchling.app`): it's printed into the QR code on
+  every book's back cover. In development the QR uses this computer's Wi-Fi address instead.
 - Never use the demo accounts: their passwords are public in this README, and `npm run db:seed` refuses to
   run when `NODE_ENV=production`. Create the first platform admin with
   `npm run admin:create -- you@example.com "Your Name"`, which prints a generated password once. Anyone

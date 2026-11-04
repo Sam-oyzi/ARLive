@@ -19,7 +19,7 @@ export default async function Home() {
       orderBy: [{ order: "asc" }, { name: "asc" }],
       select: { id: true, name: true, slug: true, icon: true, color: true, _count: { select: { books: { where: libraryBooksWhere } } } },
     }),
-    db.book.aggregate({ where: libraryBooksWhere, _count: { _all: true }, _sum: { downloads: true, likeCount: true } }),
+    db.book.aggregate({ where: { ...libraryBooksWhere, visibility: { in: ["PUBLIC", "MEMBERS"] } }, _count: { _all: true }, _sum: { downloads: true, likeCount: true } }),
   ]);
   const popular = popularRows.map((b) => toBookCard(b));
   const topRated = ratedRows.map((b) => toBookCard(b));

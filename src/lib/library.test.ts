@@ -10,6 +10,7 @@ const row: BookCardRow = {
   coverUrl: null,
   mindUrl: null,
   mindHash: null,
+  visibility: "PUBLIC",
   downloads: 3,
   likeCount: 2,
   ratingCount: 1,

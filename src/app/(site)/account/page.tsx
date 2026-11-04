@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BookOpen, Heart, MessageSquareQuote, Smile, Sparkles } from "lucide-react";
+import { BookOpen, Clock, Heart, KeyRound, MessageSquareQuote, Smile, Sparkles } from "lucide-react";
 import { BookCover, BookGrid } from "@/components/library/book-card";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "My account" };
 
 export default async function AccountPage() {
   const user = await requireUser(["PARENT"]);
-  const [kids, requests, likes] = await Promise.all([
+  const [kids, requests, likes, shared, waiting] = await Promise.all([
     db.child.findMany({ where: { parentId: user.id }, orderBy: { createdAt: "asc" } }),
     db.storyRequest.findMany({
       where: { userId: user.id },
@@ -28,6 +28,16 @@ export default async function AccountPage() {
       orderBy: { createdAt: "desc" },
       take: 20,
       select: { book: { select: bookCardSelect } },
+    }),
+    db.book.findMany({
+      where: { ...libraryBooksWhere, visibility: "APPROVED", readers: { some: { email: user.username, status: "APPROVED" } } },
+      orderBy: { title: "asc" },
+      select: bookCardSelect,
+    }),
+    db.bookReader.findMany({
+      where: { email: user.username, status: "PENDING", book: libraryBooksWhere },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, createdAt: true, book: { select: { id: true, title: true } } },
     }),
   ]);
   const liked = likes.map((l) => toBookCard(l.book));
@@ -158,6 +168,27 @@ export default async function AccountPage() {
           </section>
         </div>
       </div>
+
+      {/* books shared with this family (bought in print, or approved on request) */}
+      {(shared.length > 0 || waiting.length > 0) && (
+        <section className="mt-12">
+          <h2 className="flex items-center gap-2 font-display text-2xl font-bold text-ink-900">
+            <KeyRound aria-hidden="true" className="size-6 text-sky-600" /> Books shared with you
+          </h2>
+          {waiting.length > 0 && (
+            <ul className="mt-4 flex flex-wrap gap-2">
+              {waiting.map((w) => (
+                <li key={w.id}>
+                  <Link href={`/library/${w.book.id}`} className="flex items-center gap-2 rounded-full bg-amber-50 px-3.5 py-1.5 text-sm font-medium text-amber-800 ring-1 ring-amber-200">
+                    <Clock aria-hidden="true" className="size-4" /> {w.book.title}: waiting for approval
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {shared.length > 0 && <BookGrid books={shared.map((b) => toBookCard(b))} className="mt-6" />}
+        </section>
+      )}
 
       {/* likes */}
       <section className="mt-12">

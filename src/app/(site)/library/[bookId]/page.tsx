@@ -8,12 +8,12 @@ import { Thumb } from "@/components/thumb";
 import { ButtonLink } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 import { bookFormat } from "@/lib/book-format";
-import { libraryBooksWhere, readableWhere } from "@/lib/books";
+import { accessState, libraryBooksWhere, readableWhere, VISIBILITIES } from "@/lib/books";
 import { db } from "@/lib/db";
 import { bookCardSelect, compactNumber, libraryOrderBy, toBookCard } from "@/lib/library";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { plural } from "@/lib/utils";
-import { LikeButton, RatingInput } from "./book-actions";
+import { AccessPanel, LikeButton, RatingInput } from "./book-actions";
 
 export async function generateMetadata({ params }: { params: Promise<{ bookId: string }> }): Promise<Metadata> {
   const { bookId } = await params;
@@ -24,13 +24,22 @@ export async function generateMetadata({ params }: { params: Promise<{ bookId: s
 export default async function BookPage({ params }: { params: Promise<{ bookId: string }> }) {
   const { bookId } = await params;
   const user = await getCurrentUser();
+  // Every library book has a page, locked or not, so readers can ask for access. Custom stories
+  // only exist for the readers they were shared with.
   const row = await db.book.findFirst({
-    where: { id: bookId, ...readableWhere(user) },
+    where: { id: bookId, OR: [libraryBooksWhere, readableWhere(user)] },
     select: { ...bookCardSelect, format: true, ownerId: true, subjectId: true, targets: { ...bookCardSelect.targets, select: { ...bookCardSelect.targets.select, name: true } } },
   });
   if (!row) notFound();
   const book = toBookCard(row);
   const custom = !!row.ownerId;
+
+  const [reader, schoolGrant] = await Promise.all([
+    user ? db.bookReader.findUnique({ where: { bookId_email: { bookId, email: user.username } }, select: { status: true } }) : null,
+    user?.schoolId ? db.schoolBook.findUnique({ where: { schoolId_bookId: { schoolId: user.schoolId, bookId } }, select: { bookId: true } }) : null,
+  ]);
+  const access = accessState(row, user, reader, !!schoolGrant);
+  const open = access === "open";
 
   const [mine, related] = await Promise.all([
     user
@@ -67,8 +76,10 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
               <span className="flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-amber-800">
                 <Sparkles aria-hidden="true" className="size-4" /> Made for your family
               </span>
-            ) : (
+            ) : book.visibility === "PUBLIC" ? (
               <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 ring-1 ring-emerald-100">Free</span>
+            ) : (
+              <span className="rounded-full bg-sky-50 px-3 py-1 text-sky-700 ring-1 ring-sky-100">{book.visibility === "MEMBERS" ? "Free with an account" : VISIBILITIES.APPROVED.label}</span>
             )}
           </div>
 
@@ -76,7 +87,9 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
           {!custom && <RatingSummary average={book.rating.average} count={book.rating.count} size="md" className="mt-3 text-sm" />}
           {book.description && <p className="mt-5 max-w-2xl text-lg leading-relaxed text-ink-600">{book.description}</p>}
 
-          <div className="mt-8 flex flex-wrap gap-3">
+          {!open && <AccessPanel bookId={book.id} access={access} visibility={custom ? "APPROVED" : book.visibility} />}
+
+          {open && <div className="mt-8 flex flex-wrap gap-3">
             {book.pages > 0 && (
               <ButtonLink href={`/read/${book.id}`} size="lg" className="shadow-glow">
                 <BookOpen /> Read now
@@ -92,7 +105,7 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
                 <Download /> Download PDF
               </ButtonLink>
             )}
-          </div>
+          </div>}
 
           <dl className="mt-8 grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
             <Fact icon={Download} label="Downloads" value={compactNumber(book.downloads)} />
@@ -101,7 +114,7 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
             <Fact icon={ScanLine} label="AR pages" value={String(arPages)} />
           </dl>
 
-          {!custom && (
+          {!custom && open && (
             <div className="mt-8 flex max-w-2xl flex-col gap-5 rounded-[24px] bg-white p-5 ring-1 ring-[#eadfca] sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-display font-bold text-ink-900">Did you enjoy it?</p>
@@ -113,7 +126,7 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
             </div>
           )}
 
-          {arPages > 0 && (
+          {open && arPages > 0 && (
             <div className="mt-6 flex max-w-2xl gap-3 rounded-[20px] bg-ink-950 p-4 text-sm text-white/80">
               <Printer aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-amber-300" />
               <p>
@@ -126,7 +139,8 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
         </div>
       </div>
 
-      {row.targets.length > 1 && (
+      {/* Locked books keep their pages to themselves. */}
+      {open && row.targets.length > 1 && (
         <section className="mt-16">
           <h2 className="font-display text-2xl font-bold text-ink-900">Inside the book</h2>
           <div className="-mx-4 mt-5 flex gap-3 overflow-x-auto px-4 pb-3 scrollbar-none sm:mx-0 sm:px-0">

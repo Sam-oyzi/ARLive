@@ -1,12 +1,17 @@
 "use client";
 
-import { Heart, Star } from "lucide-react";
+import { Clock, Heart, Lock, Star } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { runAction } from "@/lib/action-client";
-import { compactNumber } from "@/lib/library";
-import { cn } from "@/lib/utils";
+import { cn, compactNumber } from "@/lib/utils";
+import { buttonClasses, Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/form";
+import type { Access } from "@/lib/books";
+import type { Visibility } from "@/lib/visibility";
 import { rateBook, toggleLike } from "@/server/actions/library";
+import { requestBookAccess } from "@/server/actions/readers";
 
 /** Sends visitors to sign in (and back here) before they can like or rate. */
 function useSignInFirst(bookId: string, signedIn: boolean) {
@@ -86,6 +91,71 @@ export function RatingInput({ bookId, mine, signedIn }: { bookId: string; mine: 
         ))}
       </div>
       <p className="mt-1 text-xs text-ink-500">{!signedIn ? "Sign in to rate this story" : value ? "Your rating · tap to change" : "Tap a star to rate"}</p>
+    </div>
+  );
+}
+
+/** Shown instead of Read / Scan / Download when the viewer can't open the book yet. */
+export function AccessPanel({ bookId, access, visibility }: { bookId: string; access: Exclude<Access, "open">; visibility: Visibility }) {
+  const [message, setMessage] = useState("");
+  const [pending, start] = useTransition();
+  const router = useRouter();
+  const here = encodeURIComponent(`/library/${bookId}`);
+
+  return (
+    <div className="mt-8 max-w-2xl rounded-[24px] bg-white p-5 ring-1 ring-[#eadfca] sm:p-6">
+      <p className="flex items-center gap-2 font-display text-lg font-bold text-ink-900">
+        {access === "pending" ? <Clock aria-hidden="true" className="size-5 text-amber-500" /> : <Lock aria-hidden="true" className="size-5 text-brand-500" />}
+        {access === "sign-in" && (visibility === "MEMBERS" ? "Free with an account" : "For approved readers")}
+        {access === "request" && "Ask to read this book"}
+        {access === "pending" && "Access requested"}
+        {access === "declined" && "Your request wasn't approved"}
+      </p>
+      <p className="mt-1.5 text-[15px] text-ink-600">
+        {access === "sign-in" &&
+          (visibility === "MEMBERS"
+            ? "Sign in or create a free account to read, download and scan this story."
+            : "Sign in with your email, then ask for access. Bought the printed book? We'll approve your email.")}
+        {access === "request" && "We'll check your request and let you know. Tell us where you got the book if you bought it."}
+        {access === "pending" && "We'll approve it soon. The book opens here as soon as it is."}
+        {access === "declined" && "You can ask again if something changed, for example after buying the book."}
+      </p>
+
+      {access === "sign-in" && (
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Link href={`/login?next=${here}`} className={buttonClasses("primary", "lg")}>
+            Sign in to read
+          </Link>
+          <Link href={`/signup?next=${here}`} className={buttonClasses("outline", "lg")}>
+            Create a free account
+          </Link>
+        </div>
+      )}
+
+      {(access === "request" || access === "declined") && (
+        <form
+          className="mt-4 flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            start(async () => {
+              const result = await runAction(requestBookAccess(bookId, message));
+              if (result?.ok) router.refresh();
+            });
+          }}
+        >
+          <Textarea
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            maxLength={300}
+            aria-label="Message for the team (optional)"
+            placeholder="Optional: I bought the printed book at…"
+            className="min-h-20"
+          />
+          <Button type="submit" size="lg" disabled={pending} className="self-start">
+            {access === "declined" ? "Ask again" : "Ask for access"}
+          </Button>
+        </form>
+      )}
     </div>
   );
 }
