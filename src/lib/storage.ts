@@ -19,6 +19,8 @@ export const UPLOAD_KINDS = {
   videos: { exts: ["mp4", "webm", "mov"], maxMB: 200 },
   images: { exts: ["jpg", "jpeg", "png", "webp", "gif"], maxMB: 15 },
   audio: { exts: ["mp3", "m4a", "ogg", "wav"], maxMB: 50 },
+  // 360° story worlds: 2:1 panoramas, often 8K wide.
+  worlds: { exts: ["jpg", "jpeg", "png", "webp"], maxMB: 40 },
   mind: { exts: ["mind"], maxMB: 100 },
 } as const;
 

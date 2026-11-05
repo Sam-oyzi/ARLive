@@ -6,7 +6,9 @@ import { requireUser } from "@/lib/auth";
 import type { ContentData } from "@/lib/content";
 import { pageAspect } from "@/lib/book-format";
 import { db } from "@/lib/db";
+import { pageTranslationsSchema } from "@/lib/page-translations";
 import { textPositionOf } from "@/lib/story-text";
+import { worldEffectOf } from "@/lib/world-effects";
 import { TargetEditor } from "./target-editor";
 
 export default async function TargetEditorPage({ params }: { params: Promise<{ id: string; targetId: string }> }) {
@@ -87,6 +89,10 @@ export default async function TargetEditorPage({ params }: { params: Promise<{ i
           textPosition: textPositionOf(target.textPosition),
           pageAspect: pageAspect(target.book.format),
           isCover: index === 0,
+          translations: pageTranslationsSchema.safeParse(target.translations).data ?? {},
+          worldUrl: target.worldUrl,
+          worldEffect: worldEffectOf(target.worldEffect),
+          bookId: id,
         }}
         initialContents={target.contents as ContentData[]}
       />

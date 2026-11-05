@@ -50,6 +50,7 @@ export default async function ScanPage({ params }: { params: Promise<{ bookId: s
         name: t.name,
         description: t.description && plainStory(t.description),
         imageUrl: t.imageUrl,
+        worldUrl: t.worldUrl,
         targetIndex: t.targetIndex!,
         contents: t.contents as ContentData[],
       }))}

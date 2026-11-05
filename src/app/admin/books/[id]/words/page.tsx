@@ -26,7 +26,7 @@ export default async function WordsOnPages({ params }: { params: Promise<{ id: s
       </Link>
       <PageHeader
         title="Words on pages"
-        description="Every page as a phone shows it (and print prints it). Words only go on empty paper; when there's none, the picture is made smaller so the words never cover the drawing."
+        description="Every page as a phone shows it (and print prints it). Words only go on empty paper: split between two empty areas or set smaller when that helps, and only when nothing fits is the picture made smaller. They never cover the drawing."
       />
       <WordsPreview
         bookId={book.id}

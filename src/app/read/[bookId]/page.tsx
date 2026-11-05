@@ -53,7 +53,7 @@ export default async function ReadPage({ params }: { params: Promise<{ bookId: s
       }}
       aspect={pageAspect(book.format)}
       pages={book.targets.map((t) => ({
-        id: t.id, imageUrl: t.imageUrl, title: t.name, story: t.description, ar: t.ar, narrationUrl: t.narrationUrl,
+        id: t.id, imageUrl: t.imageUrl, title: t.name, story: t.description, ar: t.ar, narrationUrl: t.narrationUrl, worldUrl: t.worldUrl,
         textPosition: textPositionOf(t.textPosition),
         translations: pageTranslationsSchema.safeParse(t.translations).data,
       }))}

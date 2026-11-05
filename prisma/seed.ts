@@ -93,6 +93,15 @@ async function main() {
     await db.subject.deleteMany({ where: { id: { in: legacy.map((s) => s.id) }, books: { none: {} } } });
   }
 
+  if (example) {
+    // A 360° story world to step into from the sea pages (one story page, one AR page), where it
+    // rains: Lou goes round the water cycle in the room.
+    await db.target.updateMany({
+      where: { bookId: example.id, name: { in: ["Lou in the sea", "Meet H₂O"] }, worldUrl: null },
+      data: { worldUrl: "/book-art/water-drop/world-sea.jpg", worldEffect: "rain" },
+    });
+  }
+
   await seedFamily(example?.id);
 
   console.log("Seeded. Sign in as admin@arlive.app / admin1234 or parent@sketchling.app / parent1234");

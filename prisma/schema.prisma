@@ -230,6 +230,10 @@ model Target {
   targetIndex Int?
   /// Voice reading this page aloud, played by the reader's "Read to me".
   narrationUrl String?
+  /// A 360° panorama (2:1 equirectangular) readers can step into from this page: the story world.
+  worldUrl     String?
+  /// What moves inside the story world's room: none | rain | snow (src/lib/world-effects.ts).
+  worldEffect  String     @default("none")
   /// Where the story text sits on the page: auto | top | middle | bottom | off (src/lib/story-text.ts).
   textPosition String     @default("auto")
   createdAt   DateTime    @default(now())

@@ -32,7 +32,7 @@ const AREAS: [prefix: string, roles: Role[]][] = [
 ];
 
 /** Open to everyone: the library and its books. Each page still checks the book is one the viewer may open. */
-const PUBLIC_AREAS = ["/library", "/stories", "/read", "/scan", "/print"];
+const PUBLIC_AREAS = ["/library", "/stories", "/read", "/scan", "/print", "/world"];
 
 function inArea(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);

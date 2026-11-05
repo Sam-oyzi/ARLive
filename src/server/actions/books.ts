@@ -1,11 +1,13 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { assertRole } from "@/lib/auth";
 import { CONTENT_META, CONTENT_TYPES, defaultTransform, type ContentData } from "@/lib/content";
 import { parseMotion } from "@/lib/motion-schema";
 import { pageTranslationsSchema } from "@/lib/page-translations";
 import { TEXT_POSITION_KEYS } from "@/lib/story-text";
+import { WORLD_EFFECT_LABEL, WORLD_EFFECTS, type WorldEffect } from "@/lib/world-effects";
 import { BOOK_FORMATS, type BookFormat } from "@/lib/book-format";
 import { db } from "@/lib/db";
 import { deleteUpload } from "@/lib/storage";
@@ -70,7 +72,7 @@ export async function deleteBook(bookId: string): Promise<ActionState> {
       include: { targets: { include: { contents: true } } },
     });
     await db.book.delete({ where: { id: bookId } });
-    const urls = [book.coverUrl, book.mindUrl, ...book.targets.flatMap((t) => [t.imageUrl, t.narrationUrl, ...t.contents.map((c) => c.url)])];
+    const urls = [book.coverUrl, book.mindUrl, ...book.targets.flatMap((t) => [t.imageUrl, t.narrationUrl, t.worldUrl, ...t.contents.map((c) => c.url)])];
     await Promise.all(urls.map((url) => deleteUpload(url)));
     refreshAll();
     return { ok: true, message: "Book deleted" };
@@ -161,6 +163,62 @@ export async function replaceTargetImage(
   }
 }
 
+const translationInput = z.object({
+  locale: z.enum(["fr", "ar", "es", "de"]),
+  title: z.string().trim().max(120),
+  story: z.string().trim().max(1000),
+});
+
+/** Saves (or, with an empty title, removes) one language's title and story for a page. */
+export async function savePageTranslation(targetId: string, input: z.input<typeof translationInput>): Promise<ActionState> {
+  try {
+    await assertRole(["SUPER_ADMIN"]);
+    const parsed = translationInput.safeParse(input);
+    if (!parsed.success) return invalid(parsed.error);
+    const { locale, title, story } = parsed.data;
+    const target = await db.target.findUniqueOrThrow({ where: { id: targetId } });
+    const current = pageTranslationsSchema.safeParse(target.translations).data ?? {};
+    const next = { ...current };
+    if (title) next[locale] = { ...current[locale], title, story: story || undefined };
+    else delete next[locale];
+    const checked = pageTranslationsSchema.safeParse(next);
+    if (!checked.success) return invalid(checked.error);
+    await db.target.update({ where: { id: targetId }, data: { translations: Object.keys(checked.data).length ? checked.data : Prisma.DbNull } });
+    refreshAll();
+    return { ok: true, message: title ? "Translation saved" : "Translation removed" };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** The 360° story world readers can step into from this page; null removes it. */
+export async function setPageWorld(targetId: string, url: string | null): Promise<ActionState> {
+  try {
+    await assertRole(["SUPER_ADMIN"]);
+    if (url !== null && !url.startsWith("/files/worlds/")) return { error: "Upload a 360° panorama (JPG, PNG or WebP)." };
+    const previous = await db.target.findUniqueOrThrow({ where: { id: targetId } });
+    await db.target.update({ where: { id: targetId }, data: { worldUrl: url } });
+    if (previous.worldUrl && previous.worldUrl !== url) await deleteUpload(previous.worldUrl);
+    refreshAll();
+    return { ok: true, message: url ? "Story world saved" : "Story world removed" };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** What moves inside the page's story room (rain, snow, or nothing). */
+export async function setPageWorldEffect(targetId: string, effect: string): Promise<ActionState> {
+  try {
+    await assertRole(["SUPER_ADMIN"]);
+    if (!(WORLD_EFFECTS as readonly string[]).includes(effect)) return { error: "Choose rain, snow or nothing." };
+    await db.target.update({ where: { id: targetId }, data: { worldEffect: effect } });
+    refreshAll();
+    return { ok: true, message: effect === "none" ? "Nothing moves in the story world now" : `${WORLD_EFFECT_LABEL[effect as WorldEffect]} saved` };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 /** The voice that reads a page aloud in the reader; null removes it. */
 export async function setPageNarration(targetId: string, url: string | null): Promise<ActionState> {
   try {
@@ -199,7 +257,7 @@ export async function deleteTarget(targetId: string): Promise<ActionState> {
   try {
     await assertRole(["SUPER_ADMIN"]);
     const target = await db.target.delete({ where: { id: targetId }, include: { contents: true } });
-    await Promise.all([target.imageUrl, target.narrationUrl, ...target.contents.map((c) => c.url)].map((url) => deleteUpload(url)));
+    await Promise.all([target.imageUrl, target.narrationUrl, target.worldUrl, ...target.contents.map((c) => c.url)].map((url) => deleteUpload(url)));
     refreshAll();
     return { ok: true, message: "Page deleted — recompile the book to apply" };
   } catch (error) {

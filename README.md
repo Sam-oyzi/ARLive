@@ -54,7 +54,7 @@ nobody installs an app.
 
 Next.js 16 (App Router, server actions, `proxy.ts`) · React 19 · TypeScript · Tailwind CSS 4 ·
 Prisma (SQLite locally, PostgreSQL in production) · three.js + React Three Fiber · MindAR ·
-Radix primitives · JWT sessions (jose) with bcrypt.
+8th Wall engine (iPhone world tracking) · Radix primitives · JWT sessions (jose) with bcrypt.
 
 ## Getting started
 
@@ -124,6 +124,20 @@ CI runs these plus a production build on every push to `main` and every pull req
 - Content transforms are stored in page space: 1 unit = page width, origin = page centre, +Z points
   out of the page. Models are auto-scaled so their largest side is 1 unit before your scale applies.
 - Keep books under about 30 pages; split larger books into chapters for faster recognition.
+- A page can also have a **story world**: a 360° panorama shown as a closed box you walk into, with an
+  optional animation (rain with Lou the drop, or snow). Android Chrome places it with WebXR; iPhone uses
+  the 8th Wall engine (below), or AR Quick Look as a second choice; anything else looks round from
+  inside. `src/ar/` holds the box, its animation and the sessions.
+
+### 8th Wall engine (third-party)
+
+iPhone world tracking uses the **8th Wall engine binary** by Niantic Spatial, Inc., loaded unmodified from
+jsDelivr (`@8thwall/engine-binary@1.0.0`) only when someone opens that mode. It is not open source: it is
+used under the [XR Engine License Agreement](https://github.com/8thwall/engine/blob/main/LICENSE), which
+requires the credit shown on the story world page and during the AR session (Niantic Spatial as creator,
+copyright notice, and a link to the licence and its disclaimer of warranties). Keep that credit wherever
+the engine is used, don't modify the binary, and don't sell a product whose value comes
+mainly from the engine.
 
 ## Project layout
 

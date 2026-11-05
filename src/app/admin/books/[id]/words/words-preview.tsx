@@ -43,7 +43,7 @@ export function WordsPreview({ bookId, aspect, pages }: { bookId: string; aspect
         <p className="text-sm text-ink-600">
           {shrunk > 0 ? (
             <>
-              <span className="font-semibold text-amber-700">{shrunk} page{shrunk === 1 ? "" : "s"}</span> had no empty paper big enough, so the picture is shown smaller. Shorter lines, or a quieter top or bottom in the picture, keep it full size.
+              <span className="font-semibold text-amber-700">{shrunk} page{shrunk === 1 ? "" : "s"}</span> had no empty paper for their words, even split in two and smaller, so the picture is shown smaller. Shorter lines, or a quieter top or bottom in the picture, keep it full size.
             </>
           ) : (
             "Every page's words sit on empty paper."
@@ -69,7 +69,7 @@ export function WordsPreview({ bookId, aspect, pages }: { bookId: string; aspect
                 {result?.mode === "room" ? (
                   <Badge tone="amber">Picture smaller</Badge>
                 ) : result?.mode === "space" ? (
-                  <Badge tone="green">On empty paper</Badge>
+                  <Badge tone="green">{result.words.length > 1 ? "Split on empty paper" : "On empty paper"}</Badge>
                 ) : result === null ? (
                   <Badge>{page.story ? (i === 0 && page.textPosition === "auto" ? "Cover" : "Off") : "No words"}</Badge>
                 ) : null}

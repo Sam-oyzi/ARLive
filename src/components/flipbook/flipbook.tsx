@@ -32,7 +32,9 @@ type Drag = {
   samples: { x: number; t: number }[];
 };
 
+// Strips in a turning leaf: fewer on phones, where every strip is two textured 3D layers.
 const STRIPS = 18;
+const STRIPS_SINGLE = 10;
 /** Extra bend at mid-turn, in radians, split across the strips. */
 const BEND = 0.6;
 const PAPER = "#fbf8f1";
@@ -167,6 +169,8 @@ export const FlipBook = forwardRef<
       if (images.current.has(url)) continue;
       const img = new Image();
       img.src = url;
+      // Decode now, not on the first frame of a turn.
+      img.decode?.().catch(() => {});
       images.current.set(url, img);
     }
   }, [pages, backCoverImageUrl]);
@@ -198,10 +202,15 @@ export const FlipBook = forwardRef<
     let previousTime = performance.now();
     setTurn({ dir, p: from, pull });
     const step = (now: number) => {
-      const dt = Math.max(0, Math.min(0.032, (now - previousTime) / 1000));
+      // Real elapsed time in small fixed steps: the turn takes as long on a slow phone as on a fast one.
+      let elapsed = Math.min(0.1, Math.max(0, (now - previousTime) / 1000));
       previousTime = now;
-      velocity += (-stiffness * (position - to) - damping * velocity) * dt;
-      position += velocity * dt;
+      while (elapsed > 0) {
+        const dt = Math.min(elapsed, 1 / 120);
+        velocity += (-stiffness * (position - to) - damping * velocity) * dt;
+        position += velocity * dt;
+        elapsed -= dt;
+      }
       if (Math.abs(position - to) < 0.002 && Math.abs(velocity) < 0.02) {
         finish();
       } else {
@@ -271,8 +280,18 @@ export const FlipBook = forwardRef<
   const pagesRight = Math.max(0, n - 2 * spread);
 
   // ---------- pointer ----------
+  /** Menus opened from a page render elsewhere in the document but still bubble here through React. */
+  const offPage = (e: React.PointerEvent) =>
+    !e.currentTarget.contains(e.target as Node) || !!(e.target as HTMLElement).closest("button, a, input, label, [role='menu']") || nearControl(e);
+  /** A finger landing just beside a small button on the page (a near miss on the language chip) never turns it. */
+  const nearControl = (e: React.PointerEvent) =>
+    [...e.currentTarget.querySelectorAll("button, a")].some((control) => {
+      const r = control.getBoundingClientRect();
+      return e.clientX > r.left - 16 && e.clientX < r.right + 16 && e.clientY > r.top - 14 && e.clientY < r.bottom + 14;
+    });
+
   function onPointerDown(e: React.PointerEvent) {
-    if (turn || drag.current || spreads < 2 || e.button !== 0 || (e.target as HTMLElement).closest("button, a, input, label")) return;
+    if (turn || drag.current || spreads < 2 || e.button !== 0 || offPage(e)) return;
     const rect = e.currentTarget.getBoundingClientRect();
     // The rect already includes the centring shift; its middle is the spine.
     const dir: 1 | -1 = e.clientX > rect.left + rect.width / 2 ? 1 : -1;
@@ -326,8 +345,9 @@ export const FlipBook = forwardRef<
     const theta = t.p * Math.PI;
     const bend = BEND * Math.sin(theta);
     const hinge = theta - bend;
-    const joint = (2 * bend) / (STRIPS - 1);
-    const sw = pageW / STRIPS;
+    const strips = single ? STRIPS_SINGLE : STRIPS;
+    const joint = (2 * bend) / (strips - 1);
+    const sw = pageW / strips;
     const forward = t.dir === 1;
     const sign = forward ? -1 : 1;
     // Gradients run away from the spine on the front; the back face is mirrored.
@@ -335,7 +355,7 @@ export const FlipBook = forwardRef<
     const toward = forward ? "left" : "right";
 
     let chain: ReactNode = null;
-    for (let i = STRIPS - 1; i >= 0; i--) {
+    for (let i = strips - 1; i >= 0; i--) {
       const near = hinge + joint * i; // angle at the strip's spine-side edge
       const far = near + joint; // and at its outer edge
       const shadeNear = shadeAt(near);
@@ -374,7 +394,7 @@ export const FlipBook = forwardRef<
         >
           {face(front, frontX, false)}
           {backFade === undefined ? face(back, backX, true) : face(front, frontX, true, backFade)}
-          {i === STRIPS - 1 && (
+          {i === strips - 1 && (
             <div className="absolute inset-y-0" style={{
               left: (forward ? sw + 1 : 0) - PAPER_THICKNESS / 2,
               width: PAPER_THICKNESS,
@@ -398,7 +418,7 @@ export const FlipBook = forwardRef<
 
   // ---------- single page ----------
   function singleDown(e: React.PointerEvent) {
-    if (turn || e.button !== 0 || (e.target as HTMLElement).closest("button, a, input, label")) return;
+    if (turn || e.button !== 0 || offPage(e)) return;
     const rect = e.currentTarget.getBoundingClientRect();
     // Where the page was grabbed, top to bottom: it sets the angle of the fold, like a book app.
     const pageTop = rect.top + (rect.height - pageH) / 2;
@@ -493,7 +513,7 @@ export const FlipBook = forwardRef<
             )}
             {leafTurn && leafPage && (leafTurn.pull ? (
               <PaperCurl width={pageW} height={pageH} direction={1} progress={leafTurn.p} pull={leafTurn.pull} stitchOpacity={0}
-                front={leafImage} back={leafImage} backFade={0.82} spineLeft={0} />
+                front={leafImage} back={leafImage} backFade={0.82} spineLeft={0} detail="low" />
             ) : renderLeaf(leafTurn, leafPage, null, 0, 0.82))}
           </div>
         )}

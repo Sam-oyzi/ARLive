@@ -5,7 +5,7 @@ import { ArrowLeft, Printer, ScanLine } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
 import { Switch } from "@/components/ui/switch";
-import { composeStoryPage, type StoryPage } from "@/lib/story-page";
+import { composeStoryPage, freeCorner, type StoryPage } from "@/lib/story-page";
 import type { TextPosition } from "@/lib/story-text";
 import { cn } from "@/lib/utils";
 import { recordDownload } from "@/server/actions/library";
@@ -155,7 +155,7 @@ export function PrintBook({
                   className={cn(
                     "absolute flex items-center gap-[1.5mm] rounded-[2mm] border border-[#a88b61] bg-[#f6eddb] px-[2mm] py-[1.2mm] text-[#624631]",
                     recto ? "right-[5mm]" : "left-[5mm]",
-                    (sheets[page.id]?.words?.bottom ?? 0) > 0.8 ? "top-[5mm]" : "bottom-[5mm]",
+                    freeCorner(sheets[page.id]?.words, recto ? "right" : "left", "bottom") === "top" ? "top-[5mm]" : "bottom-[5mm]",
                   )}
                   style={{ fontSize: "2.6mm", fontWeight: 700, printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}
                 >

@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Download,
   Languages,
+  Orbit,
   Printer,
   ScanLine,
   Search,
@@ -18,13 +19,14 @@ import {
   Volume2,
 } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FlipBook, type FlipBookHandle, type FlipPage } from "@/components/flipbook/flipbook";
 import { Dropdown, DropdownContent, DropdownTrigger } from "@/components/ui/dropdown";
 import { Thumb } from "@/components/thumb";
 import { runAction } from "@/lib/action-client";
 import type { PageTranslations } from "@/lib/page-translations";
-import { composeStoryPage, type StoryPage } from "@/lib/story-page";
+import { nativeLanguageName, readerWords } from "@/lib/reader-words";
+import { composeStoryPageCached, freeCorner, whenIdle, type StoryPage } from "@/lib/story-page";
 import { plainStory, type TextPosition } from "@/lib/story-text";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { cn } from "@/lib/utils";
@@ -37,6 +39,7 @@ type ReaderPage = {
   story: string | null;
   ar: boolean;
   narrationUrl: string | null;
+  worldUrl: string | null;
   textPosition: TextPosition;
   translations?: PageTranslations;
 };
@@ -54,8 +57,56 @@ const chip = "flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medi
 const glass = "bg-[#f6efe1]/92 shadow-[0_6px_24px_rgb(81_58_32_/_0.12)] backdrop-blur-md";
 // Phones and upright tablets read one page at a time, like a book app.
 const SINGLE_PAGE_QUERY = "(max-width: 767px), (orientation: portrait) and (max-width: 1100px)";
+// Small controls on a page are bigger than they look: a clear margin round the pill takes the finger
+// too, so a near miss opens the control instead of turning the page.
+const PAD = "-m-2.5 p-2.5";
+// On a phone, pages are drawn with their words this many pages either side of the open one.
+const NEARBY = 2;
 // Controls fade out on their own this long after they appear.
 const CHROME_MS = 3200;
+
+/** A language in its own words ("Français", "العربية"); "" is the book as written, in English. */
+function languageLabel(lang: string) {
+  return nativeLanguageName(lang || "en");
+}
+
+/** Picks the reading language: in the top bar, and on each page on a phone. */
+function LanguageMenu({
+  locale,
+  languages,
+  onChange,
+  align = "end",
+  className,
+  children,
+}: {
+  locale: string;
+  languages: string[];
+  onChange: (lang: string) => void;
+  align?: "start" | "end";
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    // Modal, so a tap outside only closes the menu: on a phone it would otherwise turn the page under it.
+    <Dropdown>
+      <DropdownTrigger aria-label={`Book language: ${languageLabel(locale)}`} className={className}>
+        {children}
+      </DropdownTrigger>
+      <DropdownContent align={align} className="max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-36 overflow-y-auto border-[#a88b61]/30 bg-[#faf2e4] shadow-[0_10px_26px_rgb(81_58_32_/_0.18)]">
+        <DropdownMenu.RadioGroup value={locale} onValueChange={onChange} aria-label="Book language">
+          {["", ...languages].map((lang) => (
+            <DropdownMenu.RadioItem key={lang} value={lang} textValue={languageLabel(lang)} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl px-3 py-2 text-sm text-[#58432f] outline-none select-none data-[state=checked]:bg-[#eee2cb] data-[state=checked]:font-semibold data-[highlighted]:bg-[#e9d9bc]">
+              <bdi lang={lang || undefined}>{languageLabel(lang)}</bdi>
+              <span className="size-4 shrink-0">
+                <DropdownMenu.ItemIndicator><Check aria-hidden="true" className="size-4" /></DropdownMenu.ItemIndicator>
+              </span>
+            </DropdownMenu.RadioItem>
+          ))}
+        </DropdownMenu.RadioGroup>
+      </DropdownContent>
+    </Dropdown>
+  );
+}
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(false);
@@ -123,7 +174,6 @@ export function Reader({
   const chromeHidden = single && !chrome;
 
   const languages = useMemo(() => [...new Set(pages.flatMap((page) => Object.keys(page.translations ?? {})))].sort(), [pages]);
-  const languageName = (lang: string) => lang ? new Intl.DisplayNames([lang], { type: "language" }).of(lang) ?? lang : "Original";
   const readingPages = useMemo(() => pages.map((page) => {
     const translation = page.translations?.[locale];
     return translation
@@ -135,35 +185,30 @@ export function Reader({
   // Like a picture book, the story is part of the page on a phone: drawn into the picture so it turns
   // with it. Laptops keep the caption under the spread.
   const [composed, setComposed] = useState<Record<string, StoryPage>>({});
-  const visibleRef = useRef(visible);
-  visibleRef.current = visible;
+  const here = single ? (visible[0] ?? 0) : 0;
   useEffect(() => {
     if (!single) return;
     let alive = true;
-    const made: string[] = [];
     (async () => {
-      // The open page first, then outwards, so the next turn is ready.
-      const here = visibleRef.current[0] ?? 0;
-      const order = readingPages.map((_, i) => i).sort((a, b) => Math.abs(a - here) - Math.abs(b - here));
-      for (const i of order) {
+      // The open page first, then the pages either side so the next turn is ready. Only those:
+      // drawing a page is heavy work for a phone, so the others wait until the reader gets near them.
+      const order = readingPages.map((_, i) => i).filter((i) => Math.abs(i - here) <= NEARBY).sort((a, b) => Math.abs(a - here) - Math.abs(b - here));
+      for (const [n, i] of order.entries()) {
+        // The open page right away; the others in the browser's quiet moments, never during a turn.
+        if (n > 0) await whenIdle();
+        if (!alive) return;
         const page = readingPages[i]!;
-        const drawn = await composeStoryPage({ imageUrl: page.imageUrl, story: page.story, position: page.textPosition, aspect, lang: page.lang, cover: i === 0 }).catch(() => null);
-        if (!drawn) continue;
-        if (!alive) {
-          URL.revokeObjectURL(drawn.url);
-          return;
-        }
-        made.push(drawn.url);
-        setComposed((m) => ({ ...m, [page.id]: drawn }));
+        const drawn = await composeStoryPageCached({ imageUrl: page.imageUrl, story: page.story, position: page.textPosition, aspect, lang: page.lang, cover: i === 0 }).catch(() => null);
+        if (!alive) return;
+        if (drawn) setComposed((m) => (m[page.id]?.url === drawn.url ? m : { ...m, [page.id]: drawn }));
       }
     })();
     return () => {
       alive = false;
-      setComposed({});
-      // After the reader has swapped back to the plain pictures.
-      setTimeout(() => made.forEach((url) => URL.revokeObjectURL(url)), 1000);
     };
-  }, [single, readingPages, aspect]);
+  }, [single, readingPages, aspect, here]);
+  // Another language means other words on every page: back to the bare pictures until they're drawn.
+  useEffect(() => () => setComposed({}), [single, readingPages, aspect]);
 
   const flipPages: FlipPage[] = useMemo(
     () => readingPages.map((p) => ({ id: p.id, imageUrl: composed[p.id]?.url ?? p.imageUrl, title: p.title, ar: arOverride[p.id] ?? p.ar })),
@@ -246,6 +291,8 @@ export function Reader({
   // On a phone the words are on the page once it's drawn; until then (or with no words) the caption shows them.
   const wordsOnPage = single && (backCover || shown.every((p) => composed[p.id] || !p.story || p.textPosition === "off" || (p === readingPages[0] && p.textPosition === "auto")));
   const position = backCover ? pages.length + 1 : (visible[0] ?? 0) + 1;
+  // What the reader writes on the page itself follows the book's language.
+  const say = readerWords(locale || "en");
 
   const header = (
     <header
@@ -277,25 +324,16 @@ export function Reader({
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
         {languages.length > 0 && (
-          <Dropdown modal={false}>
-            <DropdownTrigger aria-label={`Book language: ${languageName(locale)}`} className={cn(chip, "max-w-36 bg-[#f6eedf]/70 text-[#58432f] ring-1 ring-[#947a55]/25 hover:bg-[#f9f1e4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a88b61] data-[state=open]:bg-[#eee1ca]", single && "px-2.5")}>
-              <Languages aria-hidden="true" className="size-4 shrink-0" />
-              <bdi lang={locale || undefined} className={cn("truncate", single && "sr-only")}>{languageName(locale)}</bdi>
-              <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
-            </DropdownTrigger>
-            <DropdownContent align="end" className="max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-36 overflow-y-auto border-[#a88b61]/30 bg-[#faf2e4] shadow-[0_10px_26px_rgb(81_58_32_/_0.18)]">
-              <DropdownMenu.RadioGroup value={locale} onValueChange={setLocale} aria-label="Book language">
-                {["", ...languages].map((lang) => (
-                  <DropdownMenu.RadioItem key={lang} value={lang} textValue={languageName(lang)} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl px-3 py-2 text-sm text-[#58432f] outline-none select-none data-[state=checked]:bg-[#eee2cb] data-[state=checked]:font-semibold data-[highlighted]:bg-[#e9d9bc]">
-                    <bdi lang={lang || undefined}>{languageName(lang)}</bdi>
-                    <span className="size-4 shrink-0">
-                      <DropdownMenu.ItemIndicator><Check aria-hidden="true" className="size-4" /></DropdownMenu.ItemIndicator>
-                    </span>
-                  </DropdownMenu.RadioItem>
-                ))}
-              </DropdownMenu.RadioGroup>
-            </DropdownContent>
-          </Dropdown>
+          <LanguageMenu
+            locale={locale}
+            languages={languages}
+            onChange={setLocale}
+            className={cn(chip, "max-w-36 bg-[#f6eedf]/70 text-[#58432f] ring-1 ring-[#947a55]/25 hover:bg-[#f9f1e4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a88b61] data-[state=open]:bg-[#eee1ca]", single && "px-2.5")}
+          >
+            <Languages aria-hidden="true" className="size-4 shrink-0" />
+            <bdi lang={locale || undefined} className={cn("truncate", single && "sr-only")}>{languageLabel(locale)}</bdi>
+            <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
+          </LanguageMenu>
         )}
         {narrated && (
           <button
@@ -353,7 +391,7 @@ export function Reader({
     >
       {single && (
         <div className="text-center text-xs font-semibold text-ink-500 tabular-nums">
-          {backCover ? "Back cover" : `Page ${position} of ${pages.length}`}
+          {backCover ? say.backCover : say.page(position, pages.length)}
         </div>
       )}
       <div className={cn("flex gap-1.5", single ? "overflow-x-auto px-1 pb-1 scrollbar-none" : "contents")}>
@@ -412,26 +450,57 @@ export function Reader({
             renderOverlay={(_, index, side) => {
               const page = pages[index]!;
               const ar = isAr(page);
-              // Badges sit in a top corner, or a bottom one when the words drawn on the page are up there.
               const words = composed[page.id]?.words;
-              const corner = cn(side === "left" ? "left-3" : "right-3", words && words.top < 0.2 ? "bottom-3" : "top-3");
-              return editable ? (
+              // Badges sit in a top corner, or a bottom one when the words drawn on the page are up there.
+              const at = (edge: "left" | "right") => cn(edge === "left" ? "left-3" : "right-3", freeCorner(words, edge) === "top" ? "top-3" : "bottom-3");
+              const badge = editable ? (
                 <button
                   onClick={() => toggleAr(page)}
-                  className={cn(
-                    "absolute flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md ring-1 backdrop-blur transition",
-                    corner,
-                    ar ? "bg-brand-600 text-white ring-white/30" : "bg-white/85 text-ink-700 ring-ink-200",
-                  )}
+                  className={PAD}
                   title={ar ? "Compiled as an AR target — click to make it a story page" : "Story page — click to compile it as an AR target"}
                 >
-                  <ScanLine className="size-3.5" /> {ar ? "AR page" : "Story page"}
+                  <span
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md ring-1 backdrop-blur transition",
+                      ar ? "bg-brand-600 text-white ring-white/30" : "bg-white/85 text-ink-700 ring-ink-200",
+                    )}
+                  >
+                    <ScanLine className="size-3.5" /> {ar ? "AR page" : "Story page"}
+                  </span>
                 </button>
               ) : ar ? (
-                <span className={cn("pointer-events-none absolute flex items-center gap-1.5 rounded-full bg-ink-950/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur", corner)}>
-                  <ScanLine className="size-3.5" /> Scan me
+                <span className="pointer-events-none flex items-center gap-1.5 rounded-full bg-ink-950/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
+                  <ScanLine className="size-3.5" /> <bdi lang={locale || undefined}>{say.scanMe}</bdi>
                 </span>
               ) : null;
+              const world = page.worldUrl ? (
+                <Link href={`/world/${book.id}/${page.id}`} className={PAD}>
+                  <span className="flex items-center gap-1.5 rounded-full bg-sky-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-md">
+                    <Orbit aria-hidden="true" className="size-3.5" /> <bdi lang={locale || undefined}>{say.stepInside}</bdi>
+                  </span>
+                </Link>
+              ) : null;
+              // On a phone the controls hide while reading, so each page carries its own language switch.
+              const other = side === "left" ? "right" : "left";
+              return (
+                <>
+                  {(badge || world) && <div className={cn("absolute flex flex-col gap-1.5", at(side), side === "left" ? "items-start" : "items-end")}>{badge}{world}</div>}
+                  {single && languages.length > 0 && (
+                    <LanguageMenu
+                      locale={locale}
+                      languages={languages}
+                      onChange={setLocale}
+                      align={other === "left" ? "start" : "end"}
+                      className={cn("absolute", PAD, at(other))}
+                    >
+                      <span className="flex items-center gap-1 rounded-full bg-[#faf2e4]/90 px-2 py-1 text-[11px] font-bold text-[#58432f] shadow-md ring-1 ring-[#947a55]/30 backdrop-blur">
+                        <Languages aria-hidden="true" className="size-3.5" />
+                        {locale ? locale.toUpperCase() : <span className="sr-only">{languageLabel("")}</span>}
+                      </span>
+                    </LanguageMenu>
+                  )}
+                </>
+              );
             }}
           />
         )}
@@ -459,7 +528,7 @@ export function Reader({
 
       {/* caption for the open pages: part of the story, so it stays when the controls hide */}
       <div className={cn("mx-auto w-full max-w-3xl shrink-0 px-6 pt-1 text-center", single && "px-5 pb-3 safe-bottom", wordsOnPage && "sr-only")}>
-        <div className="truncate text-[13px] text-ink-600">{backCover ? "Back cover" : shown.map((page, index) => <span key={page.id}>{index > 0 && " · "}<bdi lang={page.lang}>{page.title}</bdi></span>)}</div>
+        <div className="truncate text-[13px] text-ink-600">{backCover ? say.backCover : shown.map((page, index) => <span key={page.id}>{index > 0 && " · "}<bdi lang={page.lang}>{page.title}</bdi></span>)}</div>
         {backCover && <span className="sr-only">Wonder begins with a question.</span>}
         {captionPages.some((page) => page.story) && (
           <p aria-hidden={backCover || undefined} className={cn("mx-auto mt-1 max-w-2xl font-serif leading-snug text-ink-700 italic", single ? "line-clamp-3 text-base" : "line-clamp-2 text-[17px]", backCover && "invisible")}>
@@ -470,7 +539,7 @@ export function Reader({
 
       {strip}
 
-      <span className="sr-only" aria-live="polite">{backCover ? "Back cover" : `Page ${position} of ${pages.length}`}</span>
+      <span className="sr-only" aria-live="polite">{backCover ? say.backCover : say.page(position, pages.length)}</span>
     </div>
   );
 }

@@ -5,8 +5,8 @@ export type PaperPull = { edgeY: number; offsetY: number };
 type Vertex = { x: number; y: number; z: number; u: number; v: number; shade: number; edgeX: number; edgeY: number };
 type Triangle = { a: Vertex; b: Vertex; c: Vertex; depth: number; facing: number };
 
-const COLUMNS = 24;
-const ROWS = 14;
+// Mesh resolution of the curling sheet; phones get a lighter one (each triangle is a clipped drawImage).
+const DETAIL = { high: { columns: 24, rows: 14, pixels: 2 }, low: { columns: 14, rows: 8, pixels: 1.25 } };
 const PAPER = "#fbf8f1";
 export const PAPER_THICKNESS = 2.2;
 export const PAPER_EDGE = "#d5c8ad";
@@ -67,7 +67,9 @@ function drawPaper(
   front?: HTMLImageElement,
   back?: HTMLImageElement,
   backFade = 0,
+  detail: keyof typeof DETAIL = "high",
 ) {
+  const { columns: COLUMNS, rows: ROWS } = DETAIL[detail];
   const spine = width * 1.5;
   const top = height * 0.5;
   const perspective = Math.max(2000, width * 7);
@@ -226,7 +228,7 @@ function drawPaper(
   if (!stitchesPainted) drawStitches(context, spine, top, height, stitchOpacity);
 }
 
-export function PaperCurl({ width, height, direction, progress, pull, stitchOpacity, front, back, backFade, spineLeft = width }: {
+export function PaperCurl({ width, height, direction, progress, pull, stitchOpacity, front, back, backFade, spineLeft = width, detail = "high" }: {
   width: number;
   height: number;
   direction: 1 | -1;
@@ -239,6 +241,7 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
   backFade?: number;
   /** Where the spine sits, from the left of the positioned parent: the middle of a spread, or a single page's left edge. */
   spineLeft?: number;
+  detail?: keyof typeof DETAIL;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
 
@@ -246,7 +249,7 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
     const element = canvas.current;
     const context = element?.getContext("2d");
     if (!element || !context) return;
-    const scale = Math.min(window.devicePixelRatio, 2);
+    const scale = Math.min(window.devicePixelRatio, DETAIL[detail].pixels);
     const pixelWidth = Math.ceil(width * 3 * scale);
     const pixelHeight = Math.ceil(height * 2 * scale);
     if (element.width !== pixelWidth) element.width = pixelWidth;
@@ -256,7 +259,7 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
       if (!context) return;
       context.setTransform(scale, 0, 0, scale, 0, 0);
       context.clearRect(0, 0, width * 3, height * 2);
-      drawPaper(context, width, height, direction, progress, pull, stitchOpacity, front, back, backFade);
+      drawPaper(context, width, height, direction, progress, pull, stitchOpacity, front, back, backFade, detail);
     }
     paint();
     front?.addEventListener("load", paint);
@@ -265,7 +268,7 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
       front?.removeEventListener("load", paint);
       back?.removeEventListener("load", paint);
     };
-  }, [width, height, direction, progress, pull, stitchOpacity, front, back, backFade]);
+  }, [width, height, direction, progress, pull, stitchOpacity, front, back, backFade, detail]);
 
   return <canvas ref={canvas} aria-hidden="true" className="pointer-events-none absolute" style={{ left: spineLeft - width * 1.5, top: -height / 2, width: width * 3, height: height * 2 }} />;
 }

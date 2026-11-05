@@ -11,6 +11,7 @@ import {
   Hand,
   Home,
   LoaderCircle,
+  Orbit,
   RotateCcw,
   Share2,
   ShieldAlert,
@@ -36,6 +37,8 @@ type ViewerTarget = {
   name: string;
   description: string | null;
   imageUrl: string;
+  /** A 360° story world to step into from this page. */
+  worldUrl: string | null;
   targetIndex: number;
   contents: ContentData[];
 };
@@ -413,6 +416,14 @@ export function ARViewer({ book, targets, backHref }: Props) {
               {active.description && <ChevronDown className={cn("mt-1 size-5 shrink-0 text-ink-400 transition", expanded && "rotate-180")} />}
             </button>
             <QuickLook key={active.id} contents={active.contents} />
+            {active.worldUrl && (
+              <Link
+                href={`/world/${book.id}/${active.id}?from=scan`}
+                className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 to-sky-700 text-sm font-bold text-white shadow-lift active:scale-[0.99]"
+              >
+                <Orbit className="size-4" /> Step into the story world
+              </Link>
+            )}
             <div className="mt-3 flex gap-2">
               <button onClick={replay} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-2xl bg-ink-100 text-sm font-semibold text-ink-800 active:bg-ink-200">
                 <RotateCcw className="size-4" /> Replay

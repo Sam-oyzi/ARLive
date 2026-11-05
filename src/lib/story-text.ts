@@ -44,6 +44,52 @@ export function parseStory(text: string): StoryLine[] {
   return parsed;
 }
 
+/**
+ * A piece of the story that can start a new block of words: a line, or a sentence inside a long line.
+ * `before` is what joined it to the previous piece, so pieces put back together read as written.
+ */
+export type StoryUnit = { text: string; before: "" | " " | "\n" | "\n\n" };
+
+/** Sentence ends inside a line, never inside a *sound word*. */
+function sentences(line: string): string[] {
+  const parts: string[] = [];
+  let stars = 0;
+  let start = 0;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]!;
+    if (char === "*") stars++;
+    if (stars % 2 === 0 && /[.!?…]/.test(char) && /\s/.test(line[i + 1] ?? "") && !/[.!?…]/.test(line[i + 1] ?? "")) {
+      parts.push(line.slice(start, i + 1).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(line.slice(start).trim());
+  return parts.filter(Boolean);
+}
+
+/** The story in pieces that can be split between two empty areas of a page. */
+export function storyUnits(text: string): StoryUnit[] {
+  const units: StoryUnit[] = [];
+  let gap = false;
+  for (const raw of text.replace(/\r\n?/g, "\n").trim().split("\n")) {
+    const line = raw.trim();
+    if (!line) {
+      gap = units.length > 0;
+      continue;
+    }
+    for (const [i, sentence] of sentences(line).entries()) {
+      units.push({ text: sentence, before: units.length === 0 ? "" : i > 0 ? " " : gap ? "\n\n" : "\n" });
+    }
+    gap = false;
+  }
+  return units;
+}
+
+/** Pieces back into story text (the first piece's join is dropped: it starts a block). */
+export function joinUnits(units: StoryUnit[]): string {
+  return units.map((unit, i) => (i ? unit.before : "") + unit.text).join("");
+}
+
 /** The story without markup, for captions, screen readers and the AR info card. */
 export function plainStory(text: string): string {
   return text.replace(/\*([^*]+)\*/g, "$1");
