@@ -15,17 +15,26 @@ const COLUMNS = 40;
 const CELL = 5;
 
 type Fonts = { story: string; sound: string };
+/** A sample of Arabic, so the Arabic face is fetched before a page in Arabic is drawn. */
+const ARABIC_SAMPLE = "سارة";
 let fonts: Promise<Fonts> | null = null;
 
 /** The families next/font registered in the root layout (--font-story, --font-sound), loaded. */
 function storyFonts(): Promise<Fonts> {
   fonts ??= (async () => {
     const css = getComputedStyle(document.documentElement);
+    // The book faces have no Arabic letters: those come from the Arabic face, letter by letter.
+    const arabic = css.getPropertyValue("--font-arabic").trim();
+    const withArabic = (family: string) => (arabic ? `${family}, ${arabic}` : family);
     const found = {
-      story: css.getPropertyValue("--font-story").trim() || "Georgia, serif",
-      sound: css.getPropertyValue("--font-sound").trim() || "system-ui, sans-serif",
+      story: withArabic(css.getPropertyValue("--font-story").trim() || "Georgia, serif"),
+      sound: withArabic(css.getPropertyValue("--font-sound").trim() || "system-ui, sans-serif"),
     };
-    await Promise.all([document.fonts.load(`500 40px ${found.story}`), document.fonts.load(`700 40px ${found.sound}`)]).catch(() => {});
+    await Promise.all([
+      document.fonts.load(`500 40px ${found.story}`),
+      document.fonts.load(`700 40px ${found.sound}`),
+      arabic && document.fonts.load(`600 40px ${arabic}`, ARABIC_SAMPLE),
+    ]).catch(() => {});
     return found;
   })();
   return fonts;

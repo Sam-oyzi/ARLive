@@ -1,0 +1,74 @@
+{
+  "book": {
+    "title": "Sarra and the Little Lost Roar",
+    "description": "An original watercolor listening adventure made for Sarra. A little lion has lost his roar; a friend who listens helps him find his courage. English and French.",
+    "gradeLevel": "Ages 4–7",
+    "format": "SKETCH",
+    "subjectSlug": "animals"
+  },
+  "arPages": [
+    {
+      "page": 3,
+      "world": "world-forest.jpg",
+      "scanAction": "world",
+      "effect": "none",
+      "purpose": "Meet the cub in the sunlit listening woodland."
+    },
+    {
+      "page": 6,
+      "model": "bird.glb",
+      "scanAction": "ar",
+      "purpose": "An original little songbird flutters its wings over the printed page."
+    },
+    {
+      "page": 8,
+      "world": "world-forest.jpg",
+      "scanAction": "world",
+      "effect": "none",
+      "purpose": "Return to the same woodland beside Owl’s tree, at the same scale."
+    },
+    {
+      "page": 12,
+      "model": "tortoise.glb",
+      "scanAction": "ar",
+      "purpose": "A small original animated tortoise takes gentle brave steps."
+    },
+    {
+      "page": 15,
+      "model": "lion.glb",
+      "scanAction": "ar",
+      "purpose": "The original cub breathes calmly as he chooses to help his friend."
+    },
+    {
+      "page": 17,
+      "world": "world-river.jpg",
+      "scanAction": "world",
+      "effect": "none",
+      "purpose": "Celebrate inside the golden river glade, with the same room scale and forward view."
+    },
+    {
+      "page": 19,
+      "world": "world-river.jpg",
+      "scanAction": "world",
+      "effect": "none",
+      "purpose": "Listen again in the same sunset glade without changing its scale or scene."
+    }
+  ],
+  "typography": {
+    "story": "Gelasio 500, existing app book typography",
+    "sounds": "Fredoka 700, existing app colored sound words",
+    "position": "top",
+    "quietBand": "Upper 27–33% of each half-page",
+    "note": "Story text stays editable and is typeset by the app, never baked into spread artwork."
+  },
+  "assumptions": [
+    "Child’s supplied first name: Sarra.",
+    "Age not supplied: written for approximately 4–7.",
+    "Language not supplied: English with full French reading option.",
+    "Physical appearance is a fictional illustration, not a claimed likeness."
+  ],
+  "worlds": {
+    "world-forest.jpg": "A seamless watercolor woodland clearing: cub straight ahead, owl in a gnarled tree to the left, rabbit and elephant further around, small garden gate behind. No lettering.",
+    "world-river.jpg": "A seamless golden-hour stream glade: cub, safe twig footbridge and tortoise ahead, elephant, rabbit and owl around the banks, golden fireflies. No lettering."
+  }
+}

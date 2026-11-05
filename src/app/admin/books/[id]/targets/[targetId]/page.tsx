@@ -2,13 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, ScanLine } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
+import { PageExperienceSelect, ExperiencePreviewLink } from "@/components/page-experience-select";
 import { requireUser } from "@/lib/auth";
 import type { ContentData } from "@/lib/content";
 import { pageAspect } from "@/lib/book-format";
 import { db } from "@/lib/db";
+import { pageSoundRow } from "@/lib/sound-layers";
 import { pageTranslationsSchema } from "@/lib/page-translations";
 import { textPositionOf } from "@/lib/story-text";
+import { scanActionOf, worldExperienceOf, placementModel, opensModel } from "@/lib/scan-actions";
 import { worldEffectOf } from "@/lib/world-effects";
+import { withReturnTo } from "@/lib/reader-navigation";
 import { TargetEditor } from "./target-editor";
 
 export default async function TargetEditorPage({ params }: { params: Promise<{ id: string; targetId: string }> }) {
@@ -18,6 +22,7 @@ export default async function TargetEditorPage({ params }: { params: Promise<{ i
     where: { id: targetId, bookId: id },
     include: {
       contents: { orderBy: { order: "asc" } },
+      sounds: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] },
       book: { include: { targets: { orderBy: [{ order: "asc" }, { createdAt: "asc" }], select: { id: true } } } },
     },
   });
@@ -27,6 +32,8 @@ export default async function TargetEditorPage({ params }: { params: Promise<{ i
   const index = siblings.findIndex((t) => t.id === target.id);
   const prev = siblings[index - 1];
   const next = siblings[index + 1];
+  const model = placementModel(target.contents);
+  const experience = worldExperienceOf(target.scanAction, target.worldUrl);
 
   return (
     // On wide screens the editor is a full-height workspace: compact header, then the editor fills
@@ -49,7 +56,12 @@ export default async function TargetEditorPage({ params }: { params: Promise<{ i
             </h1>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex w-56 flex-col gap-1">
+            <span className="text-[11px] font-semibold text-ink-500">Page experience</span>
+            <PageExperienceSelect targetId={target.id} action={scanActionOf(target.scanAction)} hasWorld={!!target.worldUrl} hasModel={!!placementModel(target.contents)} compact />
+          </label>
+          {opensModel(target.scanAction) && <ExperiencePreviewLink href={withReturnTo(`/place/${id}/${target.id}`, `/admin/books/${id}/targets/${target.id}`)} withMotion={target.scanAction === "eighthwall"} />}
           <div className="flex rounded-xl border border-ink-200 bg-white shadow-soft">
             {prev ? (
               <Link href={`/admin/books/${id}/targets/${prev.id}`} className="grid size-9 place-items-center text-ink-600 hover:text-ink-900" aria-label="Previous page">
@@ -76,6 +88,18 @@ export default async function TargetEditorPage({ params }: { params: Promise<{ i
           )}
         </div>
       </div>
+      {experience && (
+        <p className="mb-3 shrink-0 rounded-xl bg-sky-50 px-3 py-2 text-xs text-sky-800">
+          Scanning opens {experience === "panorama" ? "only the 360° view" : "the Step Inside story box"}.
+          {" "}3D models stay editable here; readers won’t see them or AR Quick Look in this mode.
+        </p>
+      )}
+      {opensModel(target.scanAction) && (
+        <p className="mb-3 shrink-0 rounded-xl bg-sky-50 px-3 py-2 text-xs text-sky-800">
+          Scanning automatically opens {model?.name ?? "the first 3D item in Layers"} with {target.scanAction === "quicklook" ? "Apple AR Quick Look (Safari on iPhone/iPad)" : "8th Wall room tracking"}.
+          {" "}No engine picker appears. Put the model you want first in Layers.
+        </p>
+      )}
       <TargetEditor
         key={target.id}
         target={{
@@ -86,12 +110,16 @@ export default async function TargetEditorPage({ params }: { params: Promise<{ i
           width: target.width,
           height: target.height,
           narrationUrl: target.narrationUrl,
+          sounds: target.sounds.map(pageSoundRow),
+          note: target.note,
           textPosition: textPositionOf(target.textPosition),
           pageAspect: pageAspect(target.book.format),
           isCover: index === 0,
           translations: pageTranslationsSchema.safeParse(target.translations).data ?? {},
           worldUrl: target.worldUrl,
           worldEffect: worldEffectOf(target.worldEffect),
+          scanAction: scanActionOf(target.scanAction),
+          ar: target.ar,
           bookId: id,
         }}
         initialContents={target.contents as ContentData[]}

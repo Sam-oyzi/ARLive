@@ -5,6 +5,9 @@ import * as THREE from "three";
 /** A running AR session: end it, or put the box round the reader. */
 export type RoomSession = { end: () => void; stepInside: () => void };
 
+/** Page actions put the reader inside immediately; explicit box placement can still be manual. */
+export type RoomOptions = { enterAutomatically?: boolean };
+
 /** How much bigger or smaller than life size the box can be pinched. */
 const SCALE = { min: 0.3, max: 4 };
 
@@ -69,4 +72,15 @@ export function standAround(room: THREE.Object3D, camera: THREE.Camera, floorY: 
   // The box's "ahead" is -Z: turn it to the phone's heading.
   room.rotation.set(0, Math.atan2(-ahead.x, -ahead.z), 0);
   room.visible = true;
+}
+
+/** Place once after both tracking and the story are ready, preserving the anchor on later frames. */
+export function automaticRoomEntry(room: THREE.Object3D, enabled: boolean) {
+  let entered = false;
+  return (camera: THREE.Camera | null, floorY: number | null, contentReady = true): boolean => {
+    if (!enabled || entered || !camera || floorY === null || !contentReady) return false;
+    standAround(room, camera, floorY);
+    entered = true;
+    return true;
+  };
 }

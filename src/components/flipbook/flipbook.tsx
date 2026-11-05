@@ -10,6 +10,7 @@
 // curls away to the left to reveal the next one, and the previous page curls back in over it.
 // Swipe, tap the outer thirds to turn, or tap the middle (onTap) to show the reader's controls.
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { completesPageTurn, PAGE_PULL_PX } from "./page-turn";
 import { PAPER_EDGE, PAPER_THICKNESS, STITCH_HIGHLIGHT, STITCH_POSITIONS, STITCH_THREAD, PaperCurl, type PaperPull } from "./paper-curl";
 
 export type FlipPage = { id: string; imageUrl: string; title: string; ar: boolean };
@@ -17,6 +18,8 @@ export type FlipPage = { id: string; imageUrl: string; title: string; ar: boolea
 export type FlipBookHandle = {
   next: () => void;
   prev: () => void;
+  /** Turn forward the way a reader's finger does (Auto read): the same curl and release as a drag. */
+  turnByHand: () => void;
   /** Jump (without animation) to the spread showing this page index. */
   goToPage: (index: number) => void;
 };
@@ -29,7 +32,6 @@ type Drag = {
   startY: number;
   edgeY: number;
   turn?: Turn;
-  samples: { x: number; t: number }[];
 };
 
 // Strips in a turning leaf: fewer on phones, where every strip is two textured 3D layers.
@@ -42,6 +44,13 @@ const RADIUS = 6;
 const LENS = 180;
 const ZOOM = 2.4;
 const BACK_COVER: FlipPage = { id: "back-cover", imageUrl: "", title: "Back cover", ar: false };
+/** A scripted turn: the corner is drawn this far across in this long, then let go like a drag. */
+const HAND_PULL = 0.32;
+const HAND_PULL_MS = 700;
+/** Where a hand takes hold of the outer edge, from the top (0) to the bottom (1). */
+const HAND_GRIP = 0.8;
+/** Single page: taps this close to either side (share of the width) turn the page; the rest show the controls. */
+const SIDE_TAP = 0.2;
 
 const spreadOf = (pageIndex: number) => Math.floor((pageIndex + 1) / 2);
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
@@ -135,6 +144,10 @@ export const FlipBook = forwardRef<
   const singleCount = n + Number(n > 0 && !!backCoverImageUrl);
   const singlePage = (i: number) => (i < n ? page(i) : i === n && singleCount > n ? backCover : null);
 
+  // The page that was asked for, until the reader turns one: a phone first lays the book out as a
+  // spread, and switching to one page must open this page, not the spread's left one.
+  const asked = useRef<number | null>(initialPage);
+
   // Turning the phone keeps the reader on the same page.
   useEffect(() => {
     if (singleRef.current === single) return;
@@ -142,7 +155,8 @@ export const FlipBook = forwardRef<
     cancelAnimationFrame(animation.current);
     drag.current = null;
     setTurn(null);
-    if (single) setIndex(hasBackCover && spread === spreads - 1 ? singleCount - 1 : Math.max(0, 2 * spread - 1));
+    if (single && asked.current !== null && spreadOf(asked.current) === spread) setIndex(asked.current);
+    else if (single) setIndex(hasBackCover && spread === spreads - 1 ? singleCount - 1 : Math.max(0, 2 * spread - 1));
     else setSpread(Math.min(spreads - 1, spreadOf(index)));
   }, [single, spread, spreads, index, hasBackCover, singleCount]);
 
@@ -187,6 +201,7 @@ export const FlipBook = forwardRef<
     const finish = () => {
       setTurn(null);
       if (to !== 1) return;
+      asked.current = null;
       if (singleRef.current) setIndex((i) => i + dir);
       else setSpread((s) => s + dir);
     };
@@ -234,12 +249,37 @@ export const FlipBook = forwardRef<
     [turn, canTurn, animateTo],
   );
 
+  // The page's height at the last render, for the scripted pull.
+  const pageHeight = useRef(0);
+  const turnByHand = useCallback(() => {
+    if (turn || drag.current || !canTurn(1)) return;
+    if (reducedMotion.current) return animateTo(1, 0, 1);
+    cancelAnimationFrame(animation.current);
+    const start = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / HAND_PULL_MS);
+      const eased = easeInOut(t);
+      // Lifted slightly as it is drawn across, as a real pull does.
+      const pull = { edgeY: HAND_GRIP, offsetY: -0.05 * pageHeight.current * eased };
+      if (t < 1) {
+        setTurn({ dir: 1, p: HAND_PULL * eased, pull });
+        animation.current = requestAnimationFrame(step);
+      } else {
+        // Letting go: exactly what releasing a drag does.
+        animateTo(1, HAND_PULL, 1, pull);
+      }
+    };
+    animation.current = requestAnimationFrame(step);
+  }, [turn, canTurn, animateTo]);
+
   useImperativeHandle(
     ref,
     () => ({
       next: () => flip(1),
       prev: () => flip(-1),
+      turnByHand,
       goToPage: (target: number) => {
+        asked.current = null;
         cancelAnimationFrame(animation.current);
         drag.current = null;
         setTurn(null);
@@ -247,7 +287,7 @@ export const FlipBook = forwardRef<
         else setSpread(Math.max(0, Math.min(spreads - 1, spreadOf(target))));
       },
     }),
-    [flip, spreads, singleCount],
+    [flip, turnByHand, spreads, singleCount],
   );
 
   useEffect(() => {
@@ -265,6 +305,7 @@ export const FlipBook = forwardRef<
     ? Math.max(0, Math.min(size.w, size.h / aspect))
     : Math.max(0, Math.min(size.w / 2, size.h / aspect) * 0.88);
   const pageH = pageW * aspect;
+  pageHeight.current = pageH;
   const destination = spread + (turn?.dir ?? 0);
   const leafDir = turn?.dir;
   const shiftFor = (s: number) => (left(s) ? 0 : -pageW / 2) + (right(s) ? 0 : pageW / 2);
@@ -297,7 +338,7 @@ export const FlipBook = forwardRef<
     const dir: 1 | -1 = e.clientX > rect.left + rect.width / 2 ? 1 : -1;
     if (spread + dir < 0 || spread + dir >= spreads) return;
     const edgeY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-    drag.current = { pointerId: e.pointerId, dir, startX: e.clientX, startY: e.clientY, edgeY, samples: [{ x: e.clientX, t: performance.now() }] };
+    drag.current = { pointerId: e.pointerId, dir, startX: e.clientX, startY: e.clientY, edgeY };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
@@ -310,10 +351,7 @@ export const FlipBook = forwardRef<
     if (!d || e.pointerId !== d.pointerId) return;
     const dx = (d.startX - e.clientX) * d.dir;
     const dy = e.clientY - d.startY;
-    if (!d.turn && Math.hypot(dx, dy) < 6) return;
-    const now = performance.now();
-    d.samples.push({ x: e.clientX, t: now });
-    while (d.samples.length > 2 && now - d.samples[0]!.t > 100) d.samples.shift();
+    if (!d.turn && (dx < PAGE_PULL_PX || dx < Math.abs(dy))) return;
     const lift = Math.min(0.2, Math.abs(dy) / pageH * 0.45);
     const p = Math.min(1, Math.max(0, dx / (pageW * 2 * 0.62), lift));
     const offsetY = Math.max(-pageH * 0.5, Math.min(pageH * 0.5, dy));
@@ -327,14 +365,11 @@ export const FlipBook = forwardRef<
     drag.current = null;
     const released = e.type === "pointerup";
     if (!d.turn) {
-      if (released && !(e.target as HTMLElement).closest("button, a, input, label")) animateTo(d.dir, 0, 1);
+      if (released && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 10 && !(e.target as HTMLElement).closest("button, a, input, label")) animateTo(d.dir, 0, 1);
       return;
     }
-    const first = d.samples[0]!;
-    const last = d.samples[d.samples.length - 1]!;
-    const velocity = ((first.x - last.x) * d.dir * 1000) / (pageW * 2 * 0.62 * Math.max(1, last.t - first.t));
     const { p, pull } = d.turn;
-    const commit = released && (p > 0.42 || (performance.now() - last.t < 100 && velocity > 1.1));
+    const commit = completesPageTurn(released, (d.startX - e.clientX) * d.dir);
     animateTo(d.dir, p, commit ? 1 : 0, pull);
   }
 
@@ -418,12 +453,12 @@ export const FlipBook = forwardRef<
 
   // ---------- single page ----------
   function singleDown(e: React.PointerEvent) {
-    if (turn || e.button !== 0 || offPage(e)) return;
+    if (turn || drag.current || e.button !== 0 || offPage(e)) return;
     const rect = e.currentTarget.getBoundingClientRect();
     // Where the page was grabbed, top to bottom: it sets the angle of the fold, like a book app.
     const pageTop = rect.top + (rect.height - pageH) / 2;
     const edgeY = Math.max(0, Math.min(1, (e.clientY - pageTop) / pageH));
-    drag.current = { pointerId: e.pointerId, dir: 1, startX: e.clientX, startY: e.clientY, edgeY, samples: [{ x: e.clientX, t: performance.now() }] };
+    drag.current = { pointerId: e.pointerId, dir: 1, startX: e.clientX, startY: e.clientY, edgeY };
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
@@ -437,14 +472,11 @@ export const FlipBook = forwardRef<
     const dx = e.clientX - d.startX;
     if (!d.turn) {
       // Wait for a clearly sideways swipe; anything else may still be a tap.
-      if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(e.clientY - d.startY)) return;
+      if (Math.abs(dx) < PAGE_PULL_PX || Math.abs(dx) < Math.abs(e.clientY - d.startY)) return;
       const dir: 1 | -1 = dx < 0 ? 1 : -1;
       if (!canTurn(dir)) return;
       d.dir = dir;
     }
-    const now = performance.now();
-    d.samples.push({ x: e.clientX, t: now });
-    while (d.samples.length > 2 && now - d.samples[0]!.t > 100) d.samples.shift();
     const offsetY = Math.max(-pageH * 0.5, Math.min(pageH * 0.5, e.clientY - d.startY));
     d.turn = { dir: d.dir, p: Math.min(1, Math.max(0, (-dx * d.dir) / (pageW * 0.9))), pull: { edgeY: d.edgeY, offsetY } };
     setTurn(d.turn);
@@ -457,18 +489,18 @@ export const FlipBook = forwardRef<
     const released = e.type === "pointerup";
     if (!d.turn) {
       if (!released || Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 10) return;
-      // Like a book app: the outer thirds turn the page, the middle shows the controls.
+      // Like a book app: a tap near either edge turns the page that way, and the middle (top to
+      // bottom, page or not) shows or hides the controls.
       const rect = e.currentTarget.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
-      if (x < 0.3 && canTurn(-1)) animateTo(-1, 0, 1);
-      else if (x > 0.7 && canTurn(1)) animateTo(1, 0, 1);
-      else onTap?.();
+      if (x < SIDE_TAP) {
+        if (canTurn(-1)) animateTo(-1, 0, 1);
+      } else if (x > 1 - SIDE_TAP) {
+        if (canTurn(1)) animateTo(1, 0, 1);
+      } else onTap?.();
       return;
     }
-    const first = d.samples[0]!;
-    const last = d.samples[d.samples.length - 1]!;
-    const velocity = ((first.x - last.x) * d.dir * 1000) / (pageW * 0.9 * Math.max(1, last.t - first.t));
-    const commit = released && (d.turn.p > 0.35 || (performance.now() - last.t < 100 && velocity > 0.9));
+    const commit = completesPageTurn(released, (d.startX - e.clientX) * d.dir);
     animateTo(d.dir, d.turn.p, commit ? 1 : 0, d.turn.pull);
   }
 

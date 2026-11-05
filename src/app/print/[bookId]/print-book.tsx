@@ -10,7 +10,7 @@ import type { TextPosition } from "@/lib/story-text";
 import { cn } from "@/lib/utils";
 import { recordDownload } from "@/server/actions/library";
 
-type PrintPage = { id: string; imageUrl: string; title: string; ar: boolean; story: string | null; textPosition: TextPosition };
+type PrintPage = { id: string; imageUrl: string; title: string; ar: boolean; experience: "box" | "panorama" | null; story: string | null; textPosition: TextPosition };
 
 // Pixels per millimetre for the pages with words drawn in: about 240 dpi, crisp in print.
 const PRINT_PX_PER_MM = 240 / 25.4;
@@ -151,15 +151,17 @@ export function PrintBook({
               <img src={sheets[page.id]?.url ?? page.imageUrl} alt="" className="absolute inset-0 size-full object-cover" />
               {badges && page.ar && (
                 <div
-                  // Bottom outer corner, or the top one when the page's words are down there.
+                  // Bottom outer corner, or the top one when the page's words are down there. One badge per
+                  // page, coloured by what scanning does: blue steps into the story world, cream shows AR.
                   className={cn(
-                    "absolute flex items-center gap-[1.5mm] rounded-[2mm] border border-[#a88b61] bg-[#f6eddb] px-[2mm] py-[1.2mm] text-[#624631]",
+                    "absolute flex items-center gap-[1.5mm] rounded-[2mm] border px-[2mm] py-[1.2mm]",
+                    page.experience ? "border-[#0369a1] bg-[#0284c7] text-white" : "border-[#a88b61] bg-[#f6eddb] text-[#624631]",
                     recto ? "right-[5mm]" : "left-[5mm]",
                     freeCorner(sheets[page.id]?.words, recto ? "right" : "left", "bottom") === "top" ? "top-[5mm]" : "bottom-[5mm]",
                   )}
                   style={{ fontSize: "2.6mm", fontWeight: 700, printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}
                 >
-                  <ScanLine style={{ width: "3.4mm", height: "3.4mm" }} /> AR · scan this page
+                  <ScanLine style={{ width: "3.4mm", height: "3.4mm" }} /> {page.experience === "box" ? "Scan me · step inside" : page.experience === "panorama" ? "Scan me · 360° view" : "AR · scan this page"}
                 </div>
               )}
               {numbers && (

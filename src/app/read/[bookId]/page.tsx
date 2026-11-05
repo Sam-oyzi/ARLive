@@ -4,8 +4,11 @@ import { getCurrentUser } from "@/lib/auth";
 import { pageAspect } from "@/lib/book-format";
 import { backCoverFor, compileState, requireReadableBook } from "@/lib/books";
 import { db } from "@/lib/db";
+import { soundLayers } from "@/lib/sound-layers";
 import { pageTranslationsSchema } from "@/lib/page-translations";
 import { textPositionOf } from "@/lib/story-text";
+import { scanActionOf, isPlaceableModel } from "@/lib/scan-actions";
+import { readerPageIndex } from "@/lib/reader-navigation";
 import { Reader } from "./reader";
 
 export async function generateMetadata({ params }: { params: Promise<{ bookId: string }> }): Promise<Metadata> {
@@ -15,9 +18,10 @@ export async function generateMetadata({ params }: { params: Promise<{ bookId: s
 }
 export const viewport: Viewport = { themeColor: "#efe8da" };
 
-export default async function ReadPage({ params }: { params: Promise<{ bookId: string }> }) {
+export default async function ReadPage({ params, searchParams }: { params: Promise<{ bookId: string }>; searchParams: Promise<{ page?: string; lang?: string }> }) {
   const user = await getCurrentUser();
   const { bookId } = await params;
+  const { page, lang } = await searchParams;
   await requireReadableBook(user, bookId, `/read/${bookId}`);
 
   const book = await db.book.findUnique({
@@ -26,6 +30,10 @@ export default async function ReadPage({ params }: { params: Promise<{ bookId: s
       subject: true,
       targets: {
         orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+        include: {
+          contents: { select: { type: true, url: true, text: true } },
+          sounds: { where: { kind: "reading" }, orderBy: [{ order: "asc" }, { createdAt: "asc" }] },
+        },
       },
     },
   });
@@ -41,6 +49,9 @@ export default async function ReadPage({ params }: { params: Promise<{ bookId: s
 
   return (
     <Reader
+      key={`${book.id}:${page ?? "cover"}:${lang ?? "en"}`}
+      initialPage={readerPageIndex(book.targets.map((target) => target.id), page)}
+      initialLanguage={lang}
       book={{
         id: book.id,
         title: book.title,
@@ -53,8 +64,8 @@ export default async function ReadPage({ params }: { params: Promise<{ bookId: s
       }}
       aspect={pageAspect(book.format)}
       pages={book.targets.map((t) => ({
-        id: t.id, imageUrl: t.imageUrl, title: t.name, story: t.description, ar: t.ar, narrationUrl: t.narrationUrl, worldUrl: t.worldUrl,
-        textPosition: textPositionOf(t.textPosition),
+        id: t.id, imageUrl: t.imageUrl, title: t.name, story: t.description, ar: t.ar, narrationUrl: t.narrationUrl, soundtrack: soundLayers(t.sounds), note: t.note, worldUrl: t.worldUrl,
+        scanAction: scanActionOf(t.scanAction), hasModel: t.contents.some(isPlaceableModel), textPosition: textPositionOf(t.textPosition),
         translations: pageTranslationsSchema.safeParse(t.translations).data,
       }))}
       editable={editable}

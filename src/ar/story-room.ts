@@ -1,12 +1,13 @@
 // The story world as a box to walk into: a closed cube standing on the floor, painted inside and out
 // with the page's 360° panorama. From across the room it's a box of the story; step through a wall
-// (in AR, walls are only pictures) and you're inside, with the world all round you: seen from the
-// middle it looks exactly like the panorama.
+// (in AR, walls are only pictures) and the walls give way to the world itself: the sky far away and
+// the ground of the panorama under your feet, with no corners or joins wherever you stand.
 // Used by WebXR on Android (placed where the reader taps on the floor), exported as USDZ for AR Quick
 // Look on iPhone, and looked round from the inside by the 360° view.
 // Units are metres; the group's origin is the floor under the centre, and the side facing the reader
 // is +Z.
 import * as THREE from "three";
+import { GroundedSkybox } from "three/examples/jsm/objects/GroundedSkybox.js";
 import { addWorldEffect } from "./world-effects";
 import type { WorldEffect } from "@/lib/world-effects";
 
@@ -34,8 +35,8 @@ function faces(): Face[] {
   ];
 }
 
-/** The panorama's pixels, at most `maxWidth` wide. */
-async function loadPanorama(url: string, maxWidth: number): Promise<ImageData> {
+/** The panorama's pixels, at most `maxWidth` wide, and the picture itself. */
+async function loadPanorama(url: string, maxWidth: number): Promise<{ pixels: ImageData; image: HTMLImageElement }> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -51,7 +52,54 @@ async function loadPanorama(url: string, maxWidth: number): Promise<ImageData> {
   const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
   // Phones keep canvas memory until it is shrunk.
   canvas.width = canvas.height = 0;
-  return pixels;
+  return { pixels, image };
+}
+
+/** How far away the sky is drawn from inside: far enough that walking round the box shows no parallax. */
+const WORLD_RADIUS = 40;
+
+/**
+ * The world seen from inside the box: the panorama on a far sphere whose lower half is flattened into
+ * ground at the floor, so the child stands on the story's ground with its sky all round.
+ */
+function insideWorld(image: HTMLImageElement): THREE.Mesh {
+  let source: HTMLImageElement | HTMLCanvasElement = image;
+  // Phones cap texture sizes; 4096 wide is plenty for a sky.
+  if (image.naturalWidth > 4096) {
+    source = document.createElement("canvas");
+    source.width = 4096;
+    source.height = Math.round((4096 * image.naturalHeight) / image.naturalWidth);
+    source.getContext("2d")!.drawImage(image, 0, 0, source.width, source.height);
+  }
+  const texture = source instanceof HTMLCanvasElement ? new THREE.CanvasTexture(source) : new THREE.Texture(source);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  const world = new GroundedSkybox(texture, ROOM.eye, WORLD_RADIUS);
+  world.name = "StoryWorld";
+  // The ground sits at the floor; the middle of the panorama straight ahead (-Z), as on the walls.
+  world.position.y = ROOM.eye;
+  world.rotation.y = Math.PI / 2;
+  world.renderOrder = -1;
+  world.visible = false;
+  return world;
+}
+
+const viewer = new THREE.Vector3();
+
+/**
+ * Call each frame: inside the box, the walls give way to the world; outside, it's a closed box again.
+ * Rain, snow and Lou stay where they are either way.
+ */
+export function updateStoryRoom(room: THREE.Object3D, camera: THREE.Camera) {
+  const world = room.getObjectByName("StoryWorld");
+  if (!world) return;
+  const at = room.worldToLocal(camera.getWorldPosition(viewer));
+  // A little inside the walls, so the view doesn't flicker while stepping through one.
+  const half = ROOM.size / 2 - 0.05;
+  const inside = Math.abs(at.x) < half && Math.abs(at.z) < half && at.y > -0.5 && at.y < ROOM.size;
+  if (inside === world.visible) return;
+  world.visible = inside;
+  for (const wall of room.children) if (wall.name.endsWith("Inside")) wall.visible = !inside;
 }
 
 /**
@@ -141,7 +189,7 @@ export type StoryRoom = { room: THREE.Group; clip: THREE.AnimationClip | null };
  * basic materials (cheaper, for WebXR and the 360° view). `faceSize` is each face's picture in pixels.
  */
 export async function loadStoryRoom(worldUrl: string, { effect = "none", lit = false, faceSize = 1024 }: { effect?: WorldEffect; lit?: boolean; faceSize?: number } = {}): Promise<StoryRoom> {
-  const panorama = await loadPanorama(worldUrl, faceSize * 4);
+  const { pixels: panorama, image } = await loadPanorama(worldUrl, faceSize * 4);
   const paint = (color: number, map: THREE.Texture | null = null): THREE.Material =>
     lit
       ? new THREE.MeshStandardMaterial({ map, emissiveMap: map, emissive: color, color: 0x000000, roughness: 1, metalness: 0 })
@@ -161,6 +209,9 @@ export async function loadStoryRoom(worldUrl: string, { effect = "none", lit = f
       room.add(mesh);
     }
   }
+
+  // The world inside, for the viewers that draw it themselves (a USDZ file can't swap walls for it).
+  if (!lit) room.add(insideWorld(image));
 
   const clip = addWorldEffect(room, effect, (color) => paint(color));
   return { room, clip };

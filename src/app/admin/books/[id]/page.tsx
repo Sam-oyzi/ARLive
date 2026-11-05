@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BookOpen, Box, Download, Mic, ExternalLink, Heart, Printer, Image as ImageIcon, Lightbulb, Pencil, ScanLine, Sparkles, Star, Type, TypeOutline, Video, Volume2, type LucideIcon } from "lucide-react";
+import { ArrowLeft, BookOpen, Box, Download, Mic, ExternalLink, Heart, Printer, Image as ImageIcon, Lightbulb, Pencil, ScanLine, Sparkles, Star, Trees, Type, TypeOutline, Video, Volume2, type LucideIcon } from "lucide-react";
 import { ButtonLink, Button } from "@/components/ui/button";
 import { Card, CardBody, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Thumb } from "@/components/thumb";
+import { PageExperienceSelect } from "@/components/page-experience-select";
 import { requireUser } from "@/lib/auth";
 import { bookFormat } from "@/lib/book-format";
 import { arTargets, canPublish, compileState, visibilityOf } from "@/lib/books";
 import type { ContentType } from "@/lib/content";
 import { db } from "@/lib/db";
+import { scanActionOf, worldExperienceOf, isPlaceableModel } from "@/lib/scan-actions";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { cn, plural, timeAgo } from "@/lib/utils";
 import { BookDialog } from "../book-dialog";
@@ -34,7 +36,7 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
       where: { id },
       include: {
         subject: true,
-        targets: { orderBy: [{ order: "asc" }, { createdAt: "asc" }], include: { contents: { select: { type: true } } } },
+        targets: { orderBy: [{ order: "asc" }, { createdAt: "asc" }], include: { contents: { select: { type: true, url: true, text: true } }, _count: { select: { sounds: true } } } },
         access: { include: { school: { select: { id: true, name: true } } } },
         owner: { select: { id: true, name: true, username: true } },
         storyRequest: { select: { id: true, childName: true, status: true } },
@@ -130,19 +132,19 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
         <section>
           <div className="mb-4 flex items-baseline justify-between">
             <h2 className="font-display text-lg font-bold text-ink-900">Pages</h2>
-            <span className="text-sm text-ink-500">Click a page to place 3D content · AR pages are compiled, story pages are for reading and print</span>
+            <span className="text-sm text-ink-500">Choose each page’s experience below · Click its picture to edit content</span>
           </div>
           {book.targets.length === 0 ? (
             <TargetUploader bookId={book.id} />
           ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 2xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3">
               {book.targets.map((target, i) => {
                 const types = [...new Set(target.contents.map((c) => c.type))] as ContentType[];
                 return (
-                  <div key={target.id} className="group relative">
+                  <div key={target.id} className="group relative flex flex-col rounded-3xl border border-ink-200/70 bg-white shadow-soft transition hover:shadow-lift">
                   <Link
                     href={`/admin/books/${book.id}/targets/${target.id}`}
-                    className="relative flex h-full flex-col overflow-hidden rounded-3xl border border-ink-200/70 bg-white shadow-soft transition group-hover:-translate-y-0.5 group-hover:shadow-lift"
+                    className="relative flex flex-1 flex-col overflow-hidden rounded-t-3xl"
                   >
                     <div className="relative aspect-[3/4] overflow-hidden bg-ink-100">
                       <Thumb
@@ -154,7 +156,7 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
                       <span className="absolute top-2.5 left-2.5 rounded-full bg-ink-950/75 px-2 py-0.5 text-[11px] font-bold text-white backdrop-blur">
                         #{i + 1}
                       </span>
-                      {target.ar && types.length === 0 && (
+                      {target.ar && types.length === 0 && !worldExperienceOf(target.scanAction, target.worldUrl) && (
                         <span className="absolute inset-x-2.5 bottom-2.5 rounded-xl bg-white/90 px-2.5 py-1.5 text-center text-[11px] font-semibold text-ink-600 backdrop-blur">
                           No AR content yet
                         </span>
@@ -168,6 +170,11 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
                             <Mic className="size-3.5" />
                           </span>
                         )}
+                        {target._count.sounds > 0 && (
+                          <span className="grid size-6 place-items-center rounded-lg bg-emerald-50 text-emerald-600" title={`${target._count.sounds} sound(s)`}>
+                            <Trees className="size-3.5" />
+                          </span>
+                        )}
                         {types.map((t) => {
                           const Icon = TYPE_ICONS[t];
                           return (
@@ -179,6 +186,19 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
                       </span>
                     </div>
                   </Link>
+                  <div className="px-3.5 pb-3.5">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[11px] font-semibold text-ink-500">Page experience</span>
+                      <PageExperienceSelect
+                        targetId={target.id}
+                        action={scanActionOf(target.scanAction)}
+                        hasWorld={!!target.worldUrl}
+                        hasModel={target.contents.some(isPlaceableModel)}
+                        compact
+                        label={`Experience for page ${i + 1}: ${target.name}`}
+                      />
+                    </label>
+                  </div>
                   <span className="absolute top-10 left-2.5">
                     <ArToggle targetId={target.id} ar={target.ar} />
                   </span>

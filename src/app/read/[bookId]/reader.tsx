@@ -4,13 +4,18 @@ import Link from "next/link";
 import {
   ArrowLeft,
   AudioLines,
+  BookOpenText,
+  Box,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
   Languages,
+  Lightbulb,
+  Music,
   Orbit,
+  Pause,
   Printer,
   ScanLine,
   Search,
@@ -23,14 +28,18 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { FlipBook, type FlipBookHandle, type FlipPage } from "@/components/flipbook/flipbook";
 import { Dropdown, DropdownContent, DropdownTrigger } from "@/components/ui/dropdown";
 import { Thumb } from "@/components/thumb";
-import { runAction } from "@/lib/action-client";
+import { worldExperienceOf, opensModel, type ScanAction } from "@/lib/scan-actions";
 import type { PageTranslations } from "@/lib/page-translations";
 import { nativeLanguageName, readerWords } from "@/lib/reader-words";
 import { composeStoryPageCached, freeCorner, whenIdle, type StoryPage } from "@/lib/story-page";
 import { plainStory, type TextPosition } from "@/lib/story-text";
+import { isReadingSpeed, READING_SPEED_LABEL, readingSeconds, type ReadingSpeed } from "@/lib/reading-time";
+import { usePageSounds } from "@/lib/page-sound";
+import { soundtrackFor, type SoundLayer } from "@/lib/sound-layers";
+import { readerHref, withReturnTo } from "@/lib/reader-navigation";
+import { requestStoryMotion } from "@/lib/story-motion";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { cn } from "@/lib/utils";
-import { setTargetAr } from "@/server/actions/books";
 
 type ReaderPage = {
   id: string;
@@ -39,7 +48,13 @@ type ReaderPage = {
   story: string | null;
   ar: boolean;
   narrationUrl: string | null;
+  /** Loops in the reader when the soundtrack is on; pages without one keep the previous page's. */
+  soundtrack: SoundLayer[];
+  /** Under the page on a laptop, where the story itself is on the page. */
+  note: string | null;
   worldUrl: string | null;
+  scanAction: ScanAction;
+  hasModel: boolean;
   textPosition: TextPosition;
   translations?: PageTranslations;
 };
@@ -71,6 +86,65 @@ function languageLabel(lang: string) {
 }
 
 /** Picks the reading language: in the top bar, and on each page on a phone. */
+const AUTO_READ_KEY = "sketchling.autoRead";
+const menuItem = "flex cursor-pointer items-center justify-between gap-4 rounded-xl px-3 py-2 text-sm text-[#58432f] outline-none select-none data-[state=checked]:bg-[#eee2cb] data-[state=checked]:font-semibold data-[highlighted]:bg-[#e9d9bc]";
+
+/** Auto read: a button to start and stop, and a menu for the voice and the reading speed. */
+function AutoReadControl({ reading, onToggle, narrated, voice, onVoice, speed, onSpeed, compact }: {
+  reading: boolean;
+  onToggle: () => void;
+  /** The book has voices in this language. */
+  narrated: boolean;
+  voice: boolean;
+  onVoice: (voice: boolean) => void;
+  speed: ReadingSpeed;
+  onSpeed: (speed: ReadingSpeed) => void;
+  compact: boolean;
+}) {
+  const speaking = narrated && voice;
+  return (
+    <div className={cn("flex items-center rounded-full", reading ? "bg-sky-600 text-white" : "text-ink-700 ring-1 ring-ink-900/10")}>
+      <button
+        onClick={onToggle}
+        aria-pressed={reading}
+        title={reading ? "Stop turning the pages" : speaking ? "Read the story aloud and turn the pages" : "Turn the pages by themselves, at a child's reading speed"}
+        className={cn(chip, "rounded-r-none pr-2", !reading && "hover:bg-white/60", compact && "pl-2.5")}
+      >
+        {reading ? (speaking ? <AudioLines className="size-4 animate-pulse" /> : <Pause className="size-4" />) : speaking ? <Volume2 className="size-4" /> : <BookOpenText className="size-4" />}
+        <span className={cn(compact ? "sr-only" : "hidden sm:inline")}>{reading ? "Reading…" : "Auto read"}</span>
+      </button>
+      {/* Modal, like the language menu: a tap outside only closes it, never turns a page. */}
+      <Dropdown>
+        <DropdownTrigger aria-label="Auto read settings" className={cn("grid h-9 place-items-center rounded-r-full pr-2.5 pl-1", !reading && "hover:bg-white/60")}>
+          <ChevronDown aria-hidden="true" className="size-3.5" />
+        </DropdownTrigger>
+        <DropdownContent align="end" className="min-w-60 border-[#a88b61]/30 bg-[#faf2e4] shadow-[0_10px_26px_rgb(81_58_32_/_0.18)]">
+          {narrated && (
+            <>
+              <DropdownMenu.CheckboxItem checked={voice} onCheckedChange={onVoice} onSelect={(event) => event.preventDefault()} className={menuItem}>
+                Read the words aloud
+                <span className="size-4 shrink-0"><DropdownMenu.ItemIndicator><Check aria-hidden="true" className="size-4" /></DropdownMenu.ItemIndicator></span>
+              </DropdownMenu.CheckboxItem>
+              <DropdownMenu.Separator className="my-1 h-px bg-[#a88b61]/20" />
+            </>
+          )}
+          <DropdownMenu.Label className="px-3 pt-1.5 pb-1 text-xs font-semibold text-[#8a7358]">
+            {narrated ? "Reading speed (pages without a voice)" : "Reading speed"}
+          </DropdownMenu.Label>
+          <DropdownMenu.RadioGroup value={speed} onValueChange={(value) => isReadingSpeed(value) && onSpeed(value)}>
+            {(Object.keys(READING_SPEED_LABEL) as ReadingSpeed[]).map((key) => (
+              <DropdownMenu.RadioItem key={key} value={key} onSelect={(event) => event.preventDefault()} className={menuItem}>
+                {READING_SPEED_LABEL[key]}
+                <span className="size-4 shrink-0"><DropdownMenu.ItemIndicator><Check aria-hidden="true" className="size-4" /></DropdownMenu.ItemIndicator></span>
+              </DropdownMenu.RadioItem>
+            ))}
+          </DropdownMenu.RadioGroup>
+        </DropdownContent>
+      </Dropdown>
+    </div>
+  );
+}
+
 function LanguageMenu({
   locale,
   languages,
@@ -126,6 +200,8 @@ export function Reader({
   pages,
   editable,
   backHref,
+  initialPage = 0,
+  initialLanguage = "",
 }: {
   book: {
     id: string;
@@ -137,20 +213,22 @@ export function Reader({
     needsCompile: boolean;
   };
   aspect: number;
+  initialPage?: number;
+  initialLanguage?: string;
   pages: ReaderPage[];
-  /** Platform admins can choose which pages are AR targets. */
+  /** Platform admins can open the studio and see compilation status. */
   editable: boolean;
   backHref: string;
 }) {
   const flipbook = useRef<FlipBookHandle>(null);
-  const [visible, setVisible] = useState<number[]>([0]);
+  const [visible, setVisible] = useState<number[]>(initialPage < pages.length ? [initialPage] : []);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const [focusedPage, setFocusedPage] = useState(initialPage);
   const [magnifier, setMagnifier] = useState(false);
   const [finePointer, setFinePointer] = useState(false);
-  const [locale, setLocale] = useState("");
-  // Optimistic AR flags while toggling.
-  const [arOverride, setArOverride] = useState<Record<string, boolean>>({});
-  const isAr = (p: ReaderPage) => arOverride[p.id] ?? p.ar;
-  const changed = Object.keys(arOverride).length > 0;
+  const [locale, setLocale] = useState(pages.some((page) => page.translations?.[initialLanguage]) ? initialLanguage : "");
+  const isAr = (p: ReaderPage) => p.ar;
   const single = useMediaQuery(SINGLE_PAGE_QUERY);
 
   useEffect(() => setFinePointer(window.matchMedia("(pointer: fine)").matches), []);
@@ -177,7 +255,7 @@ export function Reader({
   const readingPages = useMemo(() => pages.map((page) => {
     const translation = page.translations?.[locale];
     return translation
-      ? { ...page, imageUrl: translation.imageUrl ?? page.imageUrl, title: translation.title, story: translation.story ?? null, lang: locale }
+      ? { ...page, imageUrl: translation.imageUrl ?? page.imageUrl, title: translation.title, story: translation.story ?? null, note: translation.note ?? null, lang: locale }
       : { ...page, lang: "en" };
   }), [pages, locale]);
 
@@ -185,9 +263,9 @@ export function Reader({
   // Like a picture book, the story is part of the page on a phone: drawn into the picture so it turns
   // with it. Laptops keep the caption under the spread.
   const [composed, setComposed] = useState<Record<string, StoryPage>>({});
-  const here = single ? (visible[0] ?? 0) : 0;
+  // Laptops too: the words are part of the page, so the space under the book is free for notes.
+  const here = visible[0] ?? 0;
   useEffect(() => {
-    if (!single) return;
     let alive = true;
     (async () => {
       // The open page first, then the pages either side so the next turn is ready. Only those:
@@ -211,76 +289,128 @@ export function Reader({
   useEffect(() => () => setComposed({}), [single, readingPages, aspect]);
 
   const flipPages: FlipPage[] = useMemo(
-    () => readingPages.map((p) => ({ id: p.id, imageUrl: composed[p.id]?.url ?? p.imageUrl, title: p.title, ar: arOverride[p.id] ?? p.ar })),
-    [readingPages, arOverride, composed],
+    () => readingPages.map((p) => ({ id: p.id, imageUrl: composed[p.id]?.url ?? p.imageUrl, title: p.title, ar: p.ar })),
+    [readingPages, composed],
   );
 
-  // ---------- read to me ----------
-  // Narration is recorded in the book's original language only.
+  // ---------- auto read ----------
+  // The pages turn by themselves, with the same curl as a finger: after the page's voice when it has
+  // one (and the voice is on), otherwise after the time a child takes to read it. Voices are recorded
+  // in the book's original language only.
   const narrated = locale === "" && pages.some((p) => p.narrationUrl);
   const [reading, setReading] = useState(false);
   const readingRef = useRef(false);
+  const [voice, setVoice] = useState(true);
+  const [speed, setSpeed] = useState<ReadingSpeed>("normal");
+  const [music, setMusic] = useState(false);
+  const [voicePlaying, setVoicePlaying] = useState(false);
+  const settings = useRef({ voice: true, speed: "normal" as ReadingSpeed, locale });
+  settings.current = { voice, speed, locale };
+  // When the open pages turn, for the bar along the top.
+  const [countdown, setCountdown] = useState<{ key: number; seconds: number } | null>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const turnTimer = useRef(0);
+
+  // The reader's choices stay for the next book (only on this device).
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(AUTO_READ_KEY) ?? "{}") as { voice?: unknown; speed?: unknown; music?: unknown };
+      if (typeof saved.voice === "boolean") setVoice(saved.voice);
+      if (typeof saved.music === "boolean") setMusic(saved.music);
+      if (isReadingSpeed(saved.speed)) setSpeed(saved.speed);
+    } catch {
+      // private mode or blocked storage: the defaults are fine
+    }
+  }, []);
+  /** Saved only when the reader changes it, so loading the saved choice can never overwrite it. */
+  const choose = (next: { voice?: boolean; speed?: ReadingSpeed; music?: boolean }) => {
+    if (next.voice !== undefined) setVoice(next.voice);
+    if (next.speed !== undefined) setSpeed(next.speed);
+    if (next.music !== undefined) setMusic(next.music);
+    try {
+      localStorage.setItem(AUTO_READ_KEY, JSON.stringify({ voice, speed, music, ...next }));
+    } catch {
+      // as above
+    }
+  };
 
   const stopReading = useCallback(() => {
     readingRef.current = false;
     setReading(false);
+    setCountdown(null);
     window.clearTimeout(turnTimer.current);
     audio.current?.pause();
   }, []);
 
-  /** Plays the open pages' voices in order, then turns the page like a read-along book. */
+  /** Reads the open pages, then turns to the next ones. */
   const readPages = useCallback((indexes: number[]) => {
     const el = audio.current;
     if (!el) return;
     window.clearTimeout(turnTimer.current);
     el.pause();
+    setCountdown(null);
     if (indexes.length === 0) return stopReading(); // the back cover
-    const urls = indexes.flatMap((i) => (pages[i]?.narrationUrl ? [pages[i]!.narrationUrl!] : []));
+    const { voice: speaking, speed: pace, locale: language } = settings.current;
+    const story = (i: number) => plainStory(readingPages[i]?.story ?? "");
+    const voiced = speaking && language === "" ? indexes.filter((i) => pages[i]?.narrationUrl) : [];
+    const silent = indexes.filter((i) => !voiced.includes(i));
+    const turnAfter = (seconds: number) => {
+      setCountdown({ key: Date.now(), seconds });
+      turnTimer.current = window.setTimeout(() => readingRef.current && flipbook.current?.turnByHand(), seconds * 1000);
+    };
+    // Pages without a voice (or with the voice off) get a child's reading time.
+    const readSilently = () => turnAfter(silent.length ? readingSeconds(silent.map(story), pace) : 1.2);
     let next = 0;
     const playNext = () => {
       if (!readingRef.current) return;
-      if (next < urls.length) {
-        el.src = urls[next++]!;
-        el.play().catch(stopReading);
+      if (next < voiced.length) {
+        el.src = pages[voiced[next++]!]!.narrationUrl!;
+        // If the phone refuses to play it, the child reads it instead.
+        el.play().catch(() => turnAfter(readingSeconds(indexes.map(story), pace)));
         return;
       }
-      // Pages without a voice (a picture spread, the cover) get a moment to look at.
-      turnTimer.current = window.setTimeout(() => readingRef.current && flipbook.current?.next(), urls.length ? 900 : 3000);
+      readSilently();
     };
     el.onended = playNext;
     playNext();
-  }, [pages, stopReading]);
+  }, [pages, readingPages, stopReading]);
 
   function toggleReading() {
     if (readingRef.current) return stopReading();
     readingRef.current = true;
     setReading(true);
-    // Started inside the tap, so phones allow the audio for the rest of the book.
+    // Started inside the tap, so phones allow the voice for the rest of the book.
     readPages(visible);
   }
 
+  // A new speed, voice setting or language applies from the open pages.
   useEffect(() => {
-    if (!narrated && readingRef.current) stopReading();
-  }, [narrated, stopReading]);
+    if (readingRef.current) readPages(visibleRef.current);
+  }, [voice, speed, locale, readPages]);
+  // Hidden (another app, the lock screen): stop counting, and read these pages again on return.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (!readingRef.current) return;
+      if (document.hidden) {
+        window.clearTimeout(turnTimer.current);
+        audio.current?.pause();
+        setCountdown(null);
+      } else readPages(visibleRef.current);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [readPages]);
   useEffect(() => () => window.clearTimeout(turnTimer.current), []);
 
   const firstSpread = useRef(true);
   const onSpreadChange = useCallback((indexes: number[]) => {
     setVisible(indexes);
+    setFocusedPage((current) => indexes.includes(current) ? current : (indexes[0] ?? pages.length));
     if (readingRef.current) readPages(indexes);
     // Turning a page puts the controls away, like a book app.
     if (!firstSpread.current) setChrome(false);
     firstSpread.current = false;
-  }, [readPages]);
-
-  async function toggleAr(page: ReaderPage) {
-    const next = !isAr(page);
-    setArOverride((m) => ({ ...m, [page.id]: next }));
-    const result = await runAction(setTargetAr(page.id, next));
-    if (!result?.ok) setArOverride((m) => ({ ...m, [page.id]: !next }));
-  }
+  }, [readPages, pages.length]);
 
   const arCount = pages.filter(isAr).length;
   const shown = visible.flatMap((i) => readingPages[i] ? [readingPages[i]] : []);
@@ -288,11 +418,25 @@ export function Reader({
   const atEnd = pages.length === 0 || backCover;
   // Preserve the last spread's caption height while the back cover is closed.
   const captionPages = backCover ? readingPages.slice(-2) : shown;
+  const notes = backCover ? [] : shown.filter((page) => page.note);
+
+  // ---------- soundtrack ----------
+  // Loops under the reading when the reader turns it on, quieter while a voice reads. A page without
+  // its own keeps the one before it, so one set on the first page plays through the book.
+  const hasSoundtrack = pages.some((page) => page.soundtrack.length > 0);
+  const soundtrack = useMemo(() => soundtrackFor(pages, visible), [pages, visible]);
+  usePageSounds(music && hasSoundtrack ? soundtrack : null, { ducked: voicePlaying });
   // On a phone the words are on the page once it's drawn; until then (or with no words) the caption shows them.
-  const wordsOnPage = single && (backCover || shown.every((p) => composed[p.id] || !p.story || p.textPosition === "off" || (p === readingPages[0] && p.textPosition === "auto")));
+  const wordsOnPage = (backCover || shown.every((p) => composed[p.id] || !p.story || p.textPosition === "off" || (p === readingPages[0] && p.textPosition === "auto")));
   const position = backCover ? pages.length + 1 : (visible[0] ?? 0) + 1;
   // What the reader writes on the page itself follows the book's language.
   const say = readerWords(locale || "en");
+  const currentPageId = backCover ? "back-cover" : pages[focusedPage]?.id;
+  useEffect(() => {
+    const href = readerHref(book.id, currentPageId, locale);
+    if (`${window.location.pathname}${window.location.search}` !== href) window.history.replaceState(window.history.state, "", href);
+  }, [book.id, currentPageId, locale]);
+
 
   const header = (
     <header
@@ -335,16 +479,29 @@ export function Reader({
             <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
           </LanguageMenu>
         )}
-        {narrated && (
+        {hasSoundtrack && (
           <button
-            onClick={toggleReading}
-            aria-pressed={reading}
-            title={reading ? "Stop reading aloud" : "Read the story aloud, page by page"}
-            className={cn(chip, reading ? "bg-sky-600 text-white" : "text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60", single && "px-2.5")}
+            onClick={() => choose({ music: !music })}
+            aria-pressed={music}
+            aria-label="Soundtrack"
+            title={music ? "Turn the soundtrack off" : "Play the soundtrack while reading"}
+            className={cn(chip, music ? "bg-emerald-600 text-white" : "text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60", single && "px-2.5")}
           >
-            {reading ? <AudioLines className="size-4 animate-pulse" /> : <Volume2 className="size-4" />}
-            <span className={cn(single ? "sr-only" : "hidden sm:inline")}>{reading ? "Reading…" : "Read to me"}</span>
+            <Music className={cn("size-4", music && "animate-pulse")} />
+            <span className={cn(single ? "sr-only" : "hidden lg:inline")}>Soundtrack</span>
           </button>
+        )}
+        {pages.length > 0 && (
+          <AutoReadControl
+            reading={reading}
+            onToggle={toggleReading}
+            narrated={narrated}
+            voice={voice}
+            onVoice={(value) => choose({ voice: value })}
+            speed={speed}
+            onSpeed={(value) => choose({ speed: value })}
+            compact={single}
+          />
         )}
         {finePointer && !single && (
           <button
@@ -371,11 +528,7 @@ export function Reader({
             <Download className="size-4" /> Download
           </Link>
         )}
-        {!editable && book.canScan && (
-          <Link href={`/scan/${book.id}`} className={cn(chip, "font-semibold text-white shadow-soft", single && "px-3")} style={{ background: book.subject.color }}>
-            <ScanLine className="size-4" /> {single ? "Scan" : "Scan with camera"}
-          </Link>
-        )}
+
       </div>
     </header>
   );
@@ -418,11 +571,24 @@ export function Reader({
     // Phones read on plain paper so the edge-to-edge page blends into the screen, like a book app.
     <div className="fixed inset-0 flex flex-col overflow-hidden text-ink-900" style={{ background: single ? PAGE_PAPER : DESK }}>
       {/* Shared by every page so phones keep allowing playback after the first tap. */}
-      <audio ref={audio} preload="none" className="hidden" />
+      <audio
+        ref={audio}
+        preload="none"
+        className="hidden"
+        onPlaying={() => setVoicePlaying(true)}
+        onPause={() => setVoicePlaying(false)}
+        onEnded={() => setVoicePlaying(false)}
+      />
+      {/* Auto read: how long until the page turns, right along the top so it shows with the controls away. */}
+      {reading && countdown && (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-30 h-1 bg-sky-600/15">
+          <div key={countdown.key} className="h-full origin-left bg-sky-600 animate-auto-read" style={{ animationDuration: `${countdown.seconds}s` }} />
+        </div>
+      )}
 
       {header}
 
-      {editable && (book.needsCompile || changed) && !chromeHidden && (
+      {editable && book.needsCompile && !chromeHidden && (
         <div className={cn("mx-auto mt-1 flex w-fit max-w-[calc(100%-2rem)] shrink-0 items-center gap-2 rounded-full bg-amber-100/80 px-4 py-1.5 text-xs font-medium text-amber-900 ring-1 ring-amber-300/60", single && "absolute inset-x-0 top-24 z-20")}>
           <TriangleAlert className="size-3.5 shrink-0" />
           AR pages changed: recompile in the studio so phones recognise them.
@@ -442,6 +608,7 @@ export function Reader({
             pages={flipPages}
             backCoverImageUrl={book.backCoverImageUrl}
             aspect={aspect}
+            initialPage={initialPage}
             magnifier={magnifier && !single}
             single={single}
             onTap={() => showChrome(!chrome)}
@@ -453,30 +620,24 @@ export function Reader({
               const words = composed[page.id]?.words;
               // Badges sit in a top corner, or a bottom one when the words drawn on the page are up there.
               const at = (edge: "left" | "right") => cn(edge === "left" ? "left-3" : "right-3", freeCorner(words, edge) === "top" ? "top-3" : "bottom-3");
-              const badge = editable ? (
-                <button
-                  onClick={() => toggleAr(page)}
-                  className={PAD}
-                  title={ar ? "Compiled as an AR target — click to make it a story page" : "Story page — click to compile it as an AR target"}
-                >
-                  <span
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md ring-1 backdrop-blur transition",
-                      ar ? "bg-brand-600 text-white ring-white/30" : "bg-white/85 text-ink-700 ring-ink-200",
-                    )}
-                  >
-                    <ScanLine className="size-3.5" /> {ar ? "AR page" : "Story page"}
-                  </span>
-                </button>
-              ) : ar ? (
-                <span className="pointer-events-none flex items-center gap-1.5 rounded-full bg-ink-950/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
-                  <ScanLine className="size-3.5" /> <bdi lang={locale || undefined}>{say.scanMe}</bdi>
-                </span>
-              ) : null;
-              const world = page.worldUrl ? (
-                <Link href={`/world/${book.id}/${page.id}`} className={PAD}>
+              const experience = worldExperienceOf(page.scanAction, page.worldUrl);
+              const returnTo = readerHref(book.id, page.id, locale);
+              const badge = opensModel(page.scanAction) && page.hasModel ? (
+                <Link href={withReturnTo(`/place/${book.id}/${page.id}`, returnTo)} onClick={() => { if (page.scanAction === "eighthwall") void requestStoryMotion(); }} className={PAD} title="Place this model in your room. No printed book needed.">
                   <span className="flex items-center gap-1.5 rounded-full bg-sky-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-md">
-                    <Orbit aria-hidden="true" className="size-3.5" /> <bdi lang={locale || undefined}>{say.stepInside}</bdi>
+                    <Box aria-hidden="true" className="size-3.5" /> <bdi lang={locale || undefined}>{say.placeModel}</bdi>
+                  </span>
+                </Link>
+              ) : experience ? (
+                <Link href={withReturnTo(`/world/${book.id}/${page.id}`, returnTo)} onClick={() => { void requestStoryMotion(); }} className={PAD}>
+                  <span className="flex items-center gap-1.5 rounded-full bg-sky-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-md">
+                    <Orbit aria-hidden="true" className="size-3.5" /> <bdi lang={locale || undefined}>{experience === "box" ? say.stepInside : say.lookAround}</bdi>
+                  </span>
+                </Link>
+              ) : page.scanAction === "ar" && ar && book.canScan ? (
+                <Link href={withReturnTo(`/scan/${book.id}`, returnTo)} className={PAD} title="Point your camera at this page in the printed book">
+                  <span className="flex items-center gap-1.5 rounded-full bg-ink-950/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
+                    <ScanLine aria-hidden="true" className="size-3.5" /> <bdi lang={locale || undefined}>{say.scanPrintedBook}</bdi>
                   </span>
                 </Link>
               ) : null;
@@ -484,7 +645,7 @@ export function Reader({
               const other = side === "left" ? "right" : "left";
               return (
                 <>
-                  {(badge || world) && <div className={cn("absolute flex flex-col gap-1.5", at(side), side === "left" ? "items-start" : "items-end")}>{badge}{world}</div>}
+                  {badge && <div className={cn("absolute flex flex-col gap-1.5", at(side), side === "left" ? "items-start" : "items-end")}>{badge}</div>}
                   {single && languages.length > 0 && (
                     <LanguageMenu
                       locale={locale}
@@ -526,14 +687,25 @@ export function Reader({
         )}
       </div>
 
-      {/* caption for the open pages: part of the story, so it stays when the controls hide */}
-      <div className={cn("mx-auto w-full max-w-3xl shrink-0 px-6 pt-1 text-center", single && "px-5 pb-3 safe-bottom", wordsOnPage && "sr-only")}>
+      {/* Under the book: the page titles and their notes. The story itself is on the page (and stays here
+          for screen readers); until a page is drawn, or when it carries no words, it shows here instead. */}
+      <div className={cn("mx-auto w-full max-w-3xl shrink-0 px-6 pt-1 text-center", single && "px-5 pb-3 safe-bottom", single && wordsOnPage && "sr-only")}>
         <div className="truncate text-[13px] text-ink-600">{backCover ? say.backCover : shown.map((page, index) => <span key={page.id}>{index > 0 && " · "}<bdi lang={page.lang}>{page.title}</bdi></span>)}</div>
         {backCover && <span className="sr-only">Wonder begins with a question.</span>}
         {captionPages.some((page) => page.story) && (
-          <p aria-hidden={backCover || undefined} className={cn("mx-auto mt-1 max-w-2xl font-serif leading-snug text-ink-700 italic", single ? "line-clamp-3 text-base" : "line-clamp-2 text-[17px]", backCover && "invisible")}>
+          <p aria-hidden={backCover || undefined} className={cn("mx-auto mt-1 max-w-2xl font-serif leading-snug text-ink-700 italic", single ? "line-clamp-3 text-base" : "line-clamp-2 text-[17px]", (backCover || (wordsOnPage && !single)) && "sr-only")}>
             {captionPages.map((page) => page.story && <bdi key={page.id} lang={page.lang}>{plainStory(page.story)}{"  "}</bdi>)}
           </p>
+        )}
+        {!single && notes.length > 0 && (
+          <div className="mx-auto mt-1.5 flex max-w-2xl flex-col gap-1">
+            {notes.map((page) => (
+              <p key={page.id} lang={page.lang} dir="auto" className="flex items-start justify-center gap-2 text-[15px] leading-snug text-ink-700">
+                <Lightbulb aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                <span>{page.note}</span>
+              </p>
+            ))}
+          </div>
         )}
       </div>
 

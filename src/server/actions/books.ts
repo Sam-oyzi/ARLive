@@ -7,11 +7,14 @@ import { CONTENT_META, CONTENT_TYPES, defaultTransform, type ContentData } from 
 import { parseMotion } from "@/lib/motion-schema";
 import { pageTranslationsSchema } from "@/lib/page-translations";
 import { TEXT_POSITION_KEYS } from "@/lib/story-text";
+import { SCAN_ACTIONS, placementModel, opensModel } from "@/lib/scan-actions";
 import { WORLD_EFFECT_LABEL, WORLD_EFFECTS, type WorldEffect } from "@/lib/world-effects";
 import { BOOK_FORMATS, type BookFormat } from "@/lib/book-format";
+import { DEFAULT_BOOK_AUTHOR, defaultBookQuote } from "@/lib/book-credits";
 import { db } from "@/lib/db";
 import { deleteUpload } from "@/lib/storage";
 import { canPublish, compileState } from "@/lib/books";
+import { pageSoundRow, SOUND_LIMIT, soundKindOf, type PageSoundRow, type SoundKind } from "@/lib/sound-layers";
 import { checkbox, failure, invalid, parseForm, refreshAll, type ActionState } from "../forms";
 
 const bookSchema = z.object({
@@ -20,7 +23,10 @@ const bookSchema = z.object({
   description: z.string().max(600).optional(),
   gradeLevel: z.string().max(60).optional(),
   subjectId: z.string({ error: "Pick a category" }),
-  coverUrl: z.string().startsWith("/files/").optional(),
+  coverUrl: z.union([z.string().startsWith("/files/"), z.string().startsWith("/book-art/")]).optional(),
+  authorName: z.string().min(1).max(120).optional(),
+  copyrightYear: z.coerce.number().int().min(1900).max(2100).optional(),
+  bookQuote: z.string().min(1).max(360).optional(),
   format: z.enum(Object.keys(BOOK_FORMATS) as [BookFormat, ...BookFormat[]]).default("A5"),
   featured: checkbox,
 });
@@ -34,12 +40,12 @@ export async function saveBook(_prev: ActionState<{ id: string }>, formData: For
     const fields = { ...data, coverUrl: data.coverUrl ?? null };
     if (id) {
       const previous = await db.book.findUniqueOrThrow({ where: { id } });
-      await db.book.update({ where: { id }, data: fields });
+      await db.book.update({ where: { id }, data: { ...fields, authorName: data.authorName ?? previous.authorName, copyrightYear: data.copyrightYear ?? previous.copyrightYear, bookQuote: data.bookQuote ?? previous.bookQuote ?? defaultBookQuote(data.title) } });
       if (previous.coverUrl && previous.coverUrl !== fields.coverUrl) await deleteUpload(previous.coverUrl);
       refreshAll();
       return { ok: true, message: "Book updated", data: { id } };
     }
-    const book = await db.book.create({ data: fields });
+    const book = await db.book.create({ data: { ...fields, authorName: data.authorName ?? DEFAULT_BOOK_AUTHOR, copyrightYear: data.copyrightYear ?? new Date().getUTCFullYear(), bookQuote: data.bookQuote ?? defaultBookQuote(data.title) } });
     refreshAll();
     return { ok: true, message: "Book created", data: { id: book.id } };
   } catch (error) {
@@ -69,10 +75,10 @@ export async function deleteBook(bookId: string): Promise<ActionState> {
     await assertRole(["SUPER_ADMIN"]);
     const book = await db.book.findUniqueOrThrow({
       where: { id: bookId },
-      include: { targets: { include: { contents: true } } },
+      include: { targets: { include: { contents: true, sounds: true } } },
     });
     await db.book.delete({ where: { id: bookId } });
-    const urls = [book.coverUrl, book.mindUrl, ...book.targets.flatMap((t) => [t.imageUrl, t.narrationUrl, t.worldUrl, ...t.contents.map((c) => c.url)])];
+    const urls = [book.coverUrl, book.mindUrl, ...book.targets.flatMap((t) => [t.imageUrl, t.narrationUrl, t.worldUrl, ...t.contents.map((c) => c.url), ...t.sounds.map((s) => s.url)])];
     await Promise.all(urls.map((url) => deleteUpload(url)));
     refreshAll();
     return { ok: true, message: "Book deleted" };
@@ -117,6 +123,7 @@ const targetSchema = z.object({
   name: z.string({ error: "Enter a name" }).min(1).max(120),
   description: z.string().max(1000).optional(),
   textPosition: z.enum(TEXT_POSITION_KEYS).default("auto"),
+  note: z.string().max(600).optional(),
 });
 
 export async function updateTarget(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -124,8 +131,8 @@ export async function updateTarget(_prev: ActionState, formData: FormData): Prom
     await assertRole(["SUPER_ADMIN"]);
     const parsed = parseForm(targetSchema, formData);
     if (!parsed.success) return invalid(parsed.error);
-    const { id, name, description, textPosition } = parsed.data;
-    await db.target.update({ where: { id }, data: { name, description: description ?? null, textPosition } });
+    const { id, name, description, textPosition, note } = parsed.data;
+    await db.target.update({ where: { id }, data: { name, description: description ?? null, textPosition, note: note ?? null } });
     refreshAll();
     return { ok: true, message: "Page details saved" };
   } catch (error) {
@@ -167,19 +174,20 @@ const translationInput = z.object({
   locale: z.enum(["fr", "ar", "es", "de"]),
   title: z.string().trim().max(120),
   story: z.string().trim().max(1000),
+  note: z.string().trim().max(600).default(""),
 });
 
-/** Saves (or, with an empty title, removes) one language's title and story for a page. */
+/** Saves (or, with an empty title, removes) one language's title, story and note for a page. */
 export async function savePageTranslation(targetId: string, input: z.input<typeof translationInput>): Promise<ActionState> {
   try {
     await assertRole(["SUPER_ADMIN"]);
     const parsed = translationInput.safeParse(input);
     if (!parsed.success) return invalid(parsed.error);
-    const { locale, title, story } = parsed.data;
+    const { locale, title, story, note } = parsed.data;
     const target = await db.target.findUniqueOrThrow({ where: { id: targetId } });
     const current = pageTranslationsSchema.safeParse(target.translations).data ?? {};
     const next = { ...current };
-    if (title) next[locale] = { ...current[locale], title, story: story || undefined };
+    if (title) next[locale] = { ...current[locale], title, story: story || undefined, note: note || undefined };
     else delete next[locale];
     const checked = pageTranslationsSchema.safeParse(next);
     if (!checked.success) return invalid(checked.error);
@@ -197,7 +205,8 @@ export async function setPageWorld(targetId: string, url: string | null): Promis
     await assertRole(["SUPER_ADMIN"]);
     if (url !== null && !url.startsWith("/files/worlds/")) return { error: "Upload a 360° panorama (JPG, PNG or WebP)." };
     const previous = await db.target.findUniqueOrThrow({ where: { id: targetId } });
-    await db.target.update({ where: { id: targetId }, data: { worldUrl: url } });
+    // Without a world, scanning the page can only show its AR content.
+    await db.target.update({ where: { id: targetId }, data: url ? { worldUrl: url } : { worldUrl: null, scanAction: "ar" } });
     if (previous.worldUrl && previous.worldUrl !== url) await deleteUpload(previous.worldUrl);
     refreshAll();
     return { ok: true, message: url ? "Story world saved" : "Story world removed" };
@@ -219,6 +228,22 @@ export async function setPageWorldEffect(targetId: string, effect: string): Prom
   }
 }
 
+/** The single page experience used in the reader and when its printed target is recognised. */
+export async function savePageScanAction(targetId: string, action: string): Promise<ActionState> {
+  try {
+    await assertRole(["SUPER_ADMIN"]);
+    if (!(SCAN_ACTIONS as readonly string[]).includes(action)) return { error: "Choose a model engine, Step Inside, or 360° view." };
+    const target = await db.target.findUniqueOrThrow({ where: { id: targetId }, include: { contents: { orderBy: { order: "asc" } } } });
+    if ((action === "world" || action === "panorama") && !target.worldUrl) return { error: "Add a story world to this page first." };
+    if (opensModel(action) && !placementModel(target.contents)) return { error: "Add a 3D model or 3D text to this page first." };
+    await db.target.update({ where: { id: targetId }, data: { scanAction: action } });
+    refreshAll();
+    return { ok: true, message: action === "world" ? "This page now opens the story box automatically" : action === "panorama" ? "This page now opens the 360° view" : action === "quicklook" ? "Scanning now opens AR Quick Look" : action === "eighthwall" ? "Scanning now opens the 8th Wall model" : "Scanning now shows content with MindAR" };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 /** The voice that reads a page aloud in the reader; null removes it. */
 export async function setPageNarration(targetId: string, url: string | null): Promise<ActionState> {
   try {
@@ -229,6 +254,58 @@ export async function setPageNarration(targetId: string, url: string | null): Pr
     if (previous.narrationUrl && previous.narrationUrl !== url) await deleteUpload(previous.narrationUrl);
     refreshAll();
     return { ok: true, message: url ? "Narration saved: tap Read to me in the reader to hear it" : "Narration removed" };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+// ---------- Sounds that play on their own in the page's experience ----------
+
+const soundSettings = z.object({
+  name: z.string().trim().min(1, "Give the sound a name").max(60),
+  volume: z.number().min(0).max(1),
+  loop: z.boolean(),
+  delay: z.number().min(0).max(120),
+});
+
+/** Adds an uploaded sound to the page: a scene sound or a reading soundtrack, up to SOUND_LIMIT of each. */
+export async function addPageSound(targetId: string, input: { name: string; url: string; kind: SoundKind }): Promise<ActionState<PageSoundRow>> {
+  try {
+    await assertRole(["SUPER_ADMIN"]);
+    if (!input.url.startsWith("/files/audio/")) return { error: "Upload an audio file (MP3, M4A, OGG or WAV)." };
+    const kind = soundKindOf(input.kind);
+    const count = await db.pageSound.count({ where: { targetId, kind } });
+    if (count >= SOUND_LIMIT[kind]) return { error: `A page can mix up to ${SOUND_LIMIT[kind]} of these. Remove one first.` };
+    const name = input.name.replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").trim().slice(0, 60) || "Sound";
+    const sound = await db.pageSound.create({ data: { targetId, kind, name, url: input.url, order: count } });
+    refreshAll();
+    return { ok: true, message: kind === "reading" ? "Soundtrack added: readers can turn it on while they read" : "Sound added: it plays on its own in this page's experience", data: pageSoundRow(sound) };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function updatePageSound(soundId: string, input: z.input<typeof soundSettings>): Promise<ActionState> {
+  try {
+    await assertRole(["SUPER_ADMIN"]);
+    const parsed = soundSettings.safeParse(input);
+    if (!parsed.success) return invalid(parsed.error);
+    await db.pageSound.update({ where: { id: soundId }, data: parsed.data });
+    refreshAll();
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function deletePageSound(soundId: string): Promise<ActionState> {
+  try {
+    await assertRole(["SUPER_ADMIN"]);
+    const sound = await db.pageSound.delete({ where: { id: soundId } });
+    // The same file may still be used by another page's sound.
+    if ((await db.pageSound.count({ where: { url: sound.url } })) === 0) await deleteUpload(sound.url);
+    refreshAll();
+    return { ok: true, message: "Sound removed" };
   } catch (error) {
     return failure(error);
   }
@@ -256,8 +333,8 @@ export async function moveTarget(targetId: string, direction: -1 | 1): Promise<A
 export async function deleteTarget(targetId: string): Promise<ActionState> {
   try {
     await assertRole(["SUPER_ADMIN"]);
-    const target = await db.target.delete({ where: { id: targetId }, include: { contents: true } });
-    await Promise.all([target.imageUrl, target.narrationUrl, target.worldUrl, ...target.contents.map((c) => c.url)].map((url) => deleteUpload(url)));
+    const target = await db.target.delete({ where: { id: targetId }, include: { contents: true, sounds: true } });
+    await Promise.all([target.imageUrl, target.narrationUrl, target.worldUrl, ...target.contents.map((c) => c.url), ...target.sounds.map((s) => s.url)].map((url) => deleteUpload(url)));
     refreshAll();
     return { ok: true, message: "Page deleted — recompile the book to apply" };
   } catch (error) {

@@ -110,8 +110,8 @@ export async function requireReadableBook(viewer: Viewer, bookId: string, here: 
 }
 
 /** The back cover drawn after the last page, in the reader and in print. */
-export function backCoverFor(book: { title: string }): string {
-  return book.title === "Example: The Journey of a Water Drop" ? "/book-art/water-drop/back-cover.svg" : "/book-art/back-cover.svg";
+export function backCoverFor(book: { id: string; updatedAt: Date }): string {
+  return `/api/books/${encodeURIComponent(book.id)}/back-cover?v=${book.updatedAt.getTime()}`;
 }
 
 /** A book needs pages to be published. AR pages are optional, but must be compiled once there are some. */

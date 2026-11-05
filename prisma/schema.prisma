@@ -95,6 +95,11 @@ model Book {
   title       String
   description String?
   gradeLevel  String?
+  /// Printed and digital back-cover credit, editable in Studio.
+  authorName  String          @default("Iassam Houzi")
+  copyrightYear Int?
+  /// An original quote for this story, editable in Studio.
+  bookQuote   String?
   coverUrl    String?
   /// Printed page size: A5 | SKETCH | A4 | LETTER | SQUARE (src/lib/book-format.ts)
   format      String          @default("A5")
@@ -228,20 +233,49 @@ model Target {
   ar          Boolean     @default(true)
   /// Position of this target inside the book's compiled .mind file.
   targetIndex Int?
-  /// Voice reading this page aloud, played by the reader's "Read to me".
+  /// Voice reading this page aloud, played by the reader's Auto read.
   narrationUrl String?
+  /// Shown under the page in the laptop reader, where the story itself is on the page: a comment,
+  /// an explanation or a question to talk about.
+  note         String?
   /// A 360° panorama (2:1 equirectangular) readers can step into from this page: the story world.
   worldUrl     String?
   /// What moves inside the story world's room: none | rain | snow (src/lib/world-effects.ts).
   worldEffect  String     @default("none")
+  /// Reader/scan experience: ar (MindAR) | quicklook (native model) | eighthwall (tracked model) | world (tracked story box) | panorama (360°).
+  scanAction   String     @default("ar")
   /// Where the story text sits on the page: auto | top | middle | bottom | off (src/lib/story-text.ts).
   textPosition String     @default("auto")
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   contents    Content[]
+  sounds      PageSound[]
   scans       ScanEvent[]
 
   @@index([bookId, order])
+}
+
+/// A sound of a page, mixed with its others. `scene` sounds play on their own in the page's
+/// experience (MindAR, 8th Wall, the story box, the 360° view): up to four, e.g. a brook, birds and an
+/// owl. `reading` sounds are the reader's soundtrack, from this page on (src/lib/sound-layers.ts).
+model PageSound {
+  id        String   @id @default(cuid())
+  targetId  String
+  target    Target   @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  /// scene | reading
+  kind      String   @default("scene")
+  name      String
+  url       String
+  /// 0 to 1, before the reader's own volume.
+  volume    Float    @default(0.7)
+  /// Loops (its end crossfades into its start) or plays once.
+  loop      Boolean  @default(true)
+  /// Seconds after the experience opens before it starts.
+  delay     Float    @default(0)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([targetId, kind])
 }
 
 /// Something shown when a target is recognised. Transforms are in target space:

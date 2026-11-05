@@ -29,7 +29,7 @@ Use what the user already said; ask once, in one message, only for what's missin
 - **Topic** (e.g. the water cycle, bedtime, sharing), **audience** (age), **language** of the text.
 - **Custom story** (from an admin's story request): the child's first name (the hero), age, what they
   love, and the lesson the parent asked for. The lesson is shown in the story and asked in the refrain.
-- **Length**: default a cover + 6 spreads (13 pages).
+- **Length**: at least **20 story pages**, plus the cover. Default to **a cover + 10 spreads (21 pages total)**. Only make a shorter book when the user explicitly asks for a shorter format. Expand through meaningful story beats, not repeated filler.
 - **Layout and style**: default is the **sketchbook spreads** look (cover + two-page watercolour spreads,
   like an open travel sketchbook). It is defined once, for Claude and ChatGPT alike, in
   [docs/chatgpt/arlive-book-studio-instructions.md](../../../docs/chatgpt/arlive-book-studio-instructions.md):
@@ -101,9 +101,25 @@ Tell the user: for consistency, generate page 1 first, then in the same ChatGPT 
   applies to both halves.
 - `story`: `\n` between lines, `*…*` around sound words. `textPosition`: `auto`, `top`, `middle`,
   `bottom` or `off` (the cover is always `off`).
-- Validate before saving: every page has `file`, titles ≤ 120 characters, stories ≤ 1000.
+- Validate before saving: every page has `file`, titles ≤ 120 characters, stories ≤ 1000, and the default manifest has at least 21 entries (cover + 20 story pages). Match each left/right image half to its own story beat.
 
-## 5. Hand-off to the user
+## 5. Story order and visual continuity review
+
+After generating illustrations, inspect them together in reading order against `pages.json` before
+importing or handing off. Check that each half-spread depicts its own story beat and that a page turn
+does not reveal a later event early. Keep the recurring characters' appearance, clothes, props and
+relative body proportions consistent. Establish a reference illustration and record a simple scale
+relationship between the child and each animal; a change in foreground perspective should not make
+an animal look like it has changed size. Keep neighboring scenes' camera height and framing coherent,
+using deliberate transitions rather than unexplained jumps. Check bedtime and other costume changes
+against the narrative.
+
+For Step Inside worlds, compare recurring animals' apparent size, initial forward view, panorama
+horizon and room scale across worlds. Correct continuity defects and inspect the corrected pictures
+again. Compile AR targets from the final corrected art; regenerate tracking data after replacing any
+compiled page image. Record the check and corrections in the book's `continuity.md`.
+
+## 6. Hand-off to the user
 
 End with these steps (adapt names):
 

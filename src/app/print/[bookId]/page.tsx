@@ -5,6 +5,7 @@ import { backCoverFor, requireReadableBook } from "@/lib/books";
 import { bookFormat } from "@/lib/book-format";
 import { db } from "@/lib/db";
 import { bookQrPath, siteOrigin } from "@/lib/site-url";
+import { worldExperienceOf } from "@/lib/scan-actions";
 import { textPositionOf } from "@/lib/story-text";
 import { PrintBook } from "./print-book";
 
@@ -27,7 +28,16 @@ export default async function PrintPage({ params }: { params: Promise<{ bookId: 
       // Admins print proofs; everyone else's print or PDF counts as a download.
       countDownload={user?.role !== "SUPER_ADMIN"}
       format={{ label: format.label, widthMm: format.widthMm, heightMm: format.heightMm }}
-      pages={book.targets.map((t) => ({ id: t.id, imageUrl: t.imageUrl, title: t.name, ar: t.ar, story: t.description, textPosition: textPositionOf(t.textPosition) }))}
+      pages={book.targets.map((t) => ({
+        id: t.id,
+        imageUrl: t.imageUrl,
+        title: t.name,
+        ar: t.ar,
+        // Scanning this page takes the reader into its story world: its badge says so in blue.
+        experience: worldExperienceOf(t.scanAction, t.worldUrl),
+        story: t.description,
+        textPosition: textPositionOf(t.textPosition),
+      }))}
       backCover={{ imageUrl: backCoverFor(book), qrUrl: `${await siteOrigin()}${bookQrPath(book)}`, ar: !!book.mindUrl }}
     />
   );

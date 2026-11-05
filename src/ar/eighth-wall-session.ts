@@ -7,9 +7,9 @@
 // for the credit shown during the session (EIGHTH_WALL_CREDIT).
 import * as THREE from "three";
 import type { WorldEffect } from "@/lib/world-effects";
-import { pinchToResize, standAround, type RoomSession } from "./room-controls";
+import { automaticRoomEntry, pinchToResize, standAround, type RoomOptions, type RoomSession } from "./room-controls";
 import type { RoomState } from "./room-session";
-import { disposeRoom, loadStoryRoom, ROOM } from "./story-room";
+import { disposeRoom, loadStoryRoom, ROOM, updateStoryRoom } from "./story-room";
 
 const ENGINE_URL = "https://cdn.jsdelivr.net/npm/@8thwall/engine-binary@1.0.0/dist/xr.js";
 export const EIGHTH_WALL_LICENSE_URL = "https://github.com/8thwall/engine/blob/main/LICENSE";
@@ -21,11 +21,9 @@ export const EIGHTH_WALL_CREDIT =
  * real metres (absolute scale) and moves the camera to its measured height once it knows it.
  */
 const PHONE_HEIGHT = 1.35;
-/** If measuring the room takes longer than this, the ring shows anyway (the box may then be off size). */
-const MEASURE_MS = 8000;
 
 // The few parts of the engine's API used here.
-type PipelineModule = {
+export type PipelineModule = {
   name: string;
   onStart?: (args: { canvas: HTMLCanvasElement }) => void;
   onUpdate?: (args: { processCpuResult?: { reality?: { trackingStatus?: string } } }) => void;
@@ -100,15 +98,169 @@ export async function startEighthWallSession(
   stage: HTMLElement,
   onState: (state: RoomState) => void,
   onError: (message: string) => void,
+  { enterAutomatically = false }: RoomOptions = {},
 ): Promise<RoomSession> {
   onState("starting");
-  const [xr8, { room, clip }] = await Promise.all([loadEighthWall(), loadStoryRoom(worldUrl, { effect })]);
+  let ended = false;
+  // The camera starts as soon as the engine is here; the box (its pictures take a moment to paint)
+  // arrives while the child is still aiming. Placing, pinching and stepping in move this holder, so
+  // they work before it has.
+  const box = new THREE.Group();
+  box.visible = false;
+  let room: THREE.Group | null = null;
+  let mixer: THREE.AnimationMixer | null = null;
+  loadStoryRoom(worldUrl, { effect })
+    .then(({ room: built, clip }) => {
+      if (ended) return disposeRoom(built);
+      room = built;
+      box.add(built);
+      if (clip) {
+        mixer = new THREE.AnimationMixer(built);
+        mixer.clipAction(clip).play();
+      }
+    })
+    .catch(() => onError("This story world couldn't be loaded. Check your connection and try again."));
+
+  const xr8 = await loadEighthWall();
   if (!xr8.XrDevice.isDeviceBrowserCompatible({ allowedDevices: xr8.XrConfig.device().MOBILE })) {
-    disposeRoom(room);
+    ended = true;
     throw new Error("This browser can't track the camera. Open the page in Safari or Chrome on a phone.");
   }
 
-  // Under the controls, never over them: a canvas on top would swallow the tap that places the box.
+  const { canvas, fill, sized, dispose: removeCanvas } = createEighthWallCanvas(stage);
+
+  const enter = automaticRoomEntry(box, enterAutomatically);
+  let placed = false;
+  let last = performance.now();
+  let seen = false;
+  const reticle = new THREE.Mesh(
+    new THREE.RingGeometry(0.16, 0.22, 48).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: 0xfff1c9, transparent: true, opacity: 0.9 }),
+  );
+  reticle.visible = false;
+  const floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const ray = new THREE.Raycaster();
+  const centre = new THREE.Vector2(0, 0);
+  const hit = new THREE.Vector3();
+  let camera: THREE.PerspectiveCamera | null = null;
+
+  const storyBox: PipelineModule = {
+    name: "sketchling-story-box",
+    onAttach: sized,
+    onVideoSizeChange: sized,
+    onDeviceOrientationChange: () => requestAnimationFrame(fill),
+    onCanvasSizeChange: fill,
+    onStart: () => {
+      const xr = xr8.Threejs.xrScene();
+      camera = xr.camera;
+      xr.scene.add(box, reticle);
+      // The floor is y = 0: the real floor, with the box at life size, once the engine has measured the
+      // room. The ring doesn't wait for that, so the child can aim and tap straight away.
+      camera.position.set(0, PHONE_HEIGHT, 0);
+      xr8.XrController.updateCameraProjectionMatrix({ origin: camera.position, facing: camera.quaternion });
+      onState("finding");
+    },
+    onUpdate: () => {
+      // The engine's three.js renderer sizes the canvas in pixels; put it back to the full screen, or the
+      // picture is drawn bigger than the screen and off centre (what the engine's own helper does too).
+      if (canvas.style.width !== "100%" || canvas.style.height !== "100%") fill();
+      const now = performance.now();
+      if (placed && camera) {
+        mixer?.update(Math.min((now - last) / 1000, 0.1));
+        if (room) updateStoryRoom(room, camera);
+      }
+      last = now;
+      if (placed || !camera) return;
+      // The engine has updated the camera for this frame. Wait for the artwork as well, then put
+      // its middle around the reader once; later frames keep the room anchored in real space.
+      if (enterAutomatically) {
+        if (enter(camera, 0, !!room)) {
+          placed = true;
+          reticle.visible = false;
+          onState("placed");
+        }
+        return;
+      }
+      // The ring sits where the middle of the screen meets the floor, aimed with the lens the engine
+      // set this frame (it writes the projection, not its inverse).
+      camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+      ray.setFromCamera(centre, camera);
+      const onFloor = ray.ray.intersectPlane(floor, hit) && hit.distanceTo(camera.position) < 12;
+      reticle.visible = !!onFloor;
+      if (onFloor) {
+        reticle.position.set(hit.x, 0.005, hit.z);
+        if (!seen) onState("ready");
+        seen = true;
+      }
+    },
+    onCameraStatusChange: ({ status }) => {
+      if (status === "failed") onError("The camera couldn't start. Allow camera access for this site in Settings, then try again.");
+    },
+    onException: () => onError("AR stopped working on this phone."),
+  };
+
+  // A tap anywhere (but on a button) stands the box's front at the ring, square to the reader. Taps are
+  // read from pointer events: the engine may cancel the touches a click would be made from.
+  const pinch = pinchToResize(overlay, box);
+  let down: { x: number; y: number } | null = null;
+  const press = (event: PointerEvent) => {
+    down = event.isPrimary ? { x: event.clientX, y: event.clientY } : null;
+  };
+  const place = (event: PointerEvent) => {
+    const tap = down && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 14 && !pinch.pinchedRecently();
+    down = null;
+    if (!tap || placed || !reticle.visible || !camera || (event.target as Element).closest("button, a")) return;
+    const toReader = new THREE.Vector3(camera.position.x - hit.x, 0, camera.position.z - hit.z).normalize();
+    box.rotation.y = Math.atan2(toReader.x, toReader.z);
+    box.position.copy(reticle.position).addScaledVector(toReader, -ROOM.size / 2);
+    box.position.y = 0;
+    box.visible = true;
+    reticle.visible = false;
+    placed = true;
+    onState("placed");
+  };
+  overlay.addEventListener("pointerdown", press);
+  overlay.addEventListener("pointerup", place);
+  const resize = () => fill();
+  window.addEventListener("resize", resize);
+
+  // Real metres, so the 3 m box is 3 m in the room (rather than a size guessed from the phone's height).
+  xr8.XrController.configure({ scale: "absolute" });
+  xr8.addCameraPipelineModules([xr8.GlTextureRenderer.pipelineModule(), xr8.Threejs.pipelineModule(), xr8.XrController.pipelineModule(), storyBox]);
+  xr8.run({ canvas });
+
+  const end = () => {
+    if (ended) return;
+    ended = true;
+    pinch.stop();
+    overlay.removeEventListener("pointerdown", press);
+    overlay.removeEventListener("pointerup", place);
+    window.removeEventListener("resize", resize);
+    xr8.stop();
+    xr8.clearCameraPipelineModules();
+    mixer?.stopAllAction();
+    disposeRoom(box);
+    reticle.geometry.dispose();
+    (reticle.material as THREE.Material).dispose();
+    removeCanvas();
+    onState("ended");
+  };
+  return {
+    end,
+    // Straight into the box, wherever the reader stands: the floor is y = 0 here.
+    stepInside: () => {
+      if (!camera) return;
+      standAround(box, camera, 0);
+      if (placed) return;
+      placed = true;
+      reticle.visible = false;
+      onState("placed");
+    },
+  };
+}
+
+/** Camera-feed canvas sizing shared by story boxes and individual models. */
+export function createEighthWallCanvas(stage: HTMLElement) {
   const canvas = document.createElement("canvas");
   const fullScreen = { width: "100%", height: "100%" };
   Object.assign(canvas.style, { position: "absolute", inset: "0", display: "block", touchAction: "none", ...fullScreen });
@@ -142,129 +294,5 @@ export async function startEighthWallSession(
     fill();
   };
 
-  let placed = false;
-  let mixer: THREE.AnimationMixer | null = null;
-  let last = performance.now();
-  let seen = false;
-  // Until the engine has measured the room (tracking "NORMAL"), distances aren't real metres yet.
-  let measured = false;
-  let started = 0;
-  const reticle = new THREE.Mesh(
-    new THREE.RingGeometry(0.16, 0.22, 48).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: 0xfff1c9, transparent: true, opacity: 0.9 }),
-  );
-  reticle.visible = false;
-  const floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  const ray = new THREE.Raycaster();
-  const centre = new THREE.Vector2(0, 0);
-  const hit = new THREE.Vector3();
-  let camera: THREE.PerspectiveCamera | null = null;
-
-  const storyBox: PipelineModule = {
-    name: "sketchling-story-box",
-    onAttach: sized,
-    onVideoSizeChange: sized,
-    onDeviceOrientationChange: () => requestAnimationFrame(fill),
-    onCanvasSizeChange: fill,
-    onStart: () => {
-      const xr = xr8.Threejs.xrScene();
-      camera = xr.camera;
-      room.visible = false;
-      xr.scene.add(room, reticle);
-      if (clip) {
-        mixer = new THREE.AnimationMixer(room);
-        mixer.clipAction(clip).play();
-      }
-      // The floor is y = 0, the real floor once the room is measured, so the box stands at life size.
-      camera.position.set(0, PHONE_HEIGHT, 0);
-      started = performance.now();
-      xr8.XrController.updateCameraProjectionMatrix({ origin: camera.position, facing: camera.quaternion });
-      onState("finding");
-    },
-    onUpdate: ({ processCpuResult }) => {
-      if (processCpuResult?.reality?.trackingStatus === "NORMAL") measured = true;
-      // The engine's three.js renderer sizes the canvas in pixels; put it back to the full screen, or the
-      // picture is drawn bigger than the screen and off centre (what the engine's own helper does too).
-      if (canvas.style.width !== fullScreen.width || canvas.style.height !== fullScreen.height) fill();
-      const now = performance.now();
-      if (placed) mixer?.update(Math.min((now - last) / 1000, 0.1));
-      last = now;
-      if (placed || !camera || (!measured && now - started < MEASURE_MS)) return;
-      // The ring sits where the middle of the screen meets the floor, aimed with the lens the engine
-      // set this frame (it writes the projection, not its inverse).
-      camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
-      ray.setFromCamera(centre, camera);
-      const onFloor = ray.ray.intersectPlane(floor, hit) && hit.distanceTo(camera.position) < 12;
-      reticle.visible = !!onFloor;
-      if (onFloor) {
-        reticle.position.set(hit.x, 0.005, hit.z);
-        if (!seen) onState("ready");
-        seen = true;
-      }
-    },
-    onCameraStatusChange: ({ status }) => {
-      if (status === "failed") onError("The camera couldn't start. Allow camera access for this site in Settings, then try again.");
-    },
-    onException: () => onError("AR stopped working on this phone."),
-  };
-
-  // A tap anywhere (but on a button) stands the box's front at the ring, square to the reader. Taps are
-  // read from pointer events: the engine may cancel the touches a click would be made from.
-  const pinch = pinchToResize(overlay, room);
-  let down: { x: number; y: number } | null = null;
-  const press = (event: PointerEvent) => {
-    down = event.isPrimary ? { x: event.clientX, y: event.clientY } : null;
-  };
-  const place = (event: PointerEvent) => {
-    const tap = down && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 14 && !pinch.pinchedRecently();
-    down = null;
-    if (!tap || placed || !reticle.visible || !camera || (event.target as Element).closest("button, a")) return;
-    const toReader = new THREE.Vector3(camera.position.x - hit.x, 0, camera.position.z - hit.z).normalize();
-    room.rotation.y = Math.atan2(toReader.x, toReader.z);
-    room.position.copy(reticle.position).addScaledVector(toReader, -ROOM.size / 2);
-    room.position.y = 0;
-    room.visible = true;
-    reticle.visible = false;
-    placed = true;
-    onState("placed");
-  };
-  overlay.addEventListener("pointerdown", press);
-  overlay.addEventListener("pointerup", place);
-  const resize = () => fill();
-  window.addEventListener("resize", resize);
-
-  // Real metres, so the 3 m box is 3 m in the room (rather than a size guessed from the phone's height).
-  xr8.XrController.configure({ scale: "absolute" });
-  xr8.addCameraPipelineModules([xr8.GlTextureRenderer.pipelineModule(), xr8.Threejs.pipelineModule(), xr8.XrController.pipelineModule(), storyBox]);
-  xr8.run({ canvas });
-
-  let ended = false;
-  const end = () => {
-    if (ended) return;
-    ended = true;
-    pinch.stop();
-    overlay.removeEventListener("pointerdown", press);
-    overlay.removeEventListener("pointerup", place);
-    window.removeEventListener("resize", resize);
-    xr8.stop();
-    xr8.clearCameraPipelineModules();
-    mixer?.stopAllAction();
-    disposeRoom(room);
-    reticle.geometry.dispose();
-    (reticle.material as THREE.Material).dispose();
-    canvas.remove();
-    onState("ended");
-  };
-  return {
-    end,
-    // Straight into the box, wherever the reader stands: the floor is y = 0 here.
-    stepInside: () => {
-      if (!camera) return;
-      standAround(room, camera, 0);
-      if (placed) return;
-      placed = true;
-      reticle.visible = false;
-      onState("placed");
-    },
-  };
+  return { canvas, fill, sized, dispose: () => canvas.remove() };
 }

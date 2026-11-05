@@ -1,23 +1,27 @@
 "use client";
 
-import { Globe, Image as ImageIcon, Languages, LoaderCircle, Mic, Orbit, Trash2 } from "lucide-react";
+import { AudioLines, Globe, Image as ImageIcon, Languages, LoaderCircle, Mic, Music, Orbit, Play, Plus, Square, Trash2, Trees, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SubmitButton } from "@/components/ui/client-bits";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { Switch } from "@/components/ui/switch";
 import { runAction } from "@/lib/action-client";
 import { CONTENT_META } from "@/lib/content";
+import { playPageSound, type PageSound } from "@/lib/page-sound";
+import { SOUND_LIMIT, type PageSoundRow, type SoundKind } from "@/lib/sound-layers";
 import { composeStoryPage, type StoryPage } from "@/lib/story-page";
 import { TEXT_POSITIONS, type TextPosition } from "@/lib/story-text";
 import { uploadFile } from "@/lib/upload-client";
 import type { PageTranslations } from "@/lib/page-translations";
 import { languageName } from "@/lib/stories";
 import { cn } from "@/lib/utils";
+import type { ScanAction } from "@/lib/scan-actions";
 import { WORLD_EFFECT_HINT, WORLD_EFFECT_LABEL, WORLD_EFFECTS, worldEffectOf, type WorldEffect } from "@/lib/world-effects";
-import { savePageTranslation, setPageNarration, setPageWorld, setPageWorldEffect, updateTarget } from "@/server/actions/books";
+import { addPageSound, deletePageSound, savePageTranslation, setPageNarration, setPageWorld, setPageWorldEffect, updatePageSound, updateTarget } from "@/server/actions/books";
 
 export type EditorTarget = {
   id: string;
@@ -27,6 +31,9 @@ export type EditorTarget = {
   width: number;
   height: number;
   narrationUrl: string | null;
+  /** Scene sounds and the reading soundtrack, in Studio order. */
+  sounds: PageSoundRow[];
+  note: string | null;
   textPosition: TextPosition;
   /** The book's page height / width, for the preview. */
   pageAspect: number;
@@ -35,13 +42,226 @@ export type EditorTarget = {
   translations: PageTranslations;
   worldUrl: string | null;
   worldEffect: WorldEffect;
+  scanAction: ScanAction;
+  /** Compiled as an AR target, so the printed page can be scanned. */
+  ar: boolean;
   bookId: string;
 };
 
 const AUDIO_ACCEPT = CONTENT_META.AUDIO.accept;
 
-/** A recording of this page read aloud. The reader plays it with "Read to me" and turns the page when it ends. */
-export function NarrationCard({ target }: { target: EditorTarget }) {
+const PLAYS_IN: Record<ScanAction, string> = {
+  ar: "They play while the printed page is in view of the scanner (MindAR).",
+  eighthwall: "They play once the 8th Wall model stands in the room.",
+  world: "They play once the reader is inside the story box.",
+  panorama: "They play in the 360° view, a little quieter while the voice reads.",
+  quicklook: "Apple's AR Quick Look can't play a page's sounds: choose another experience to hear them.",
+};
+
+/**
+ * Everything this page says and plays, in one place: the voice that reads it aloud, the soundtrack
+ * readers can turn on while reading, and up to four sounds that play together on their own in its
+ * experience (a brook, birds, an owl…).
+ */
+export function PageSoundsCard({ target }: { target: EditorTarget }) {
+  const [sounds, setSounds] = useState(target.sounds);
+  const saving = useRef(new Map<string, number>());
+
+  /** Changes show at once; saving waits for a pause, so dragging the volume doesn't save every step. */
+  function change(id: string, patch: Partial<PageSoundRow>) {
+    const sound = { ...sounds.find((item) => item.id === id)!, ...patch };
+    setSounds((list) => list.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+    window.clearTimeout(saving.current.get(id));
+    saving.current.set(id, window.setTimeout(() => {
+      void runAction(updatePageSound(id, { name: sound.name.trim() || "Sound", volume: sound.volume, loop: sound.loop, delay: sound.delay }));
+    }, 500));
+  }
+
+  async function remove(id: string) {
+    window.clearTimeout(saving.current.get(id));
+    const result = await runAction(deletePageSound(id));
+    if (result?.ok) setSounds((list) => list.filter((sound) => sound.id !== id));
+  }
+
+  const section = (kind: SoundKind) => ({
+    targetId: target.id,
+    kind,
+    sounds: sounds.filter((sound) => sound.kind === kind),
+    onAdded: (sound: PageSoundRow) => setSounds((list) => [...list, sound]),
+    onChange: change,
+    onRemove: remove,
+  });
+
+  return (
+    <Card className="p-5">
+      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-ink-500 uppercase">
+        <AudioLines className="size-3.5" /> Sounds
+      </div>
+
+      <section className="mt-3">
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold text-ink-900"><Mic className="size-4 text-ink-400" /> Voice</h3>
+        <p className="mt-1 mb-2.5 text-xs leading-relaxed text-ink-500">
+          This page read aloud. <b>Auto read</b> plays it in the reader, and the 360° view plays it on arrival.
+        </p>
+        <VoiceRow target={target} />
+      </section>
+
+      <SoundSection
+        {...section("reading")}
+        icon={Music}
+        title="Soundtrack while reading"
+        hint={<>Music or nature that loops softly in the reader when the reader turns on <b>Soundtrack</b>, quieter while the voice reads. It keeps playing on the next pages until a page sets its own, so setting it on the first page covers the whole book.</>}
+      />
+      <SoundSection
+        {...section("scene")}
+        icon={Trees}
+        title="Sounds in the experience"
+        warn={target.scanAction === "quicklook"}
+        hint={<>Nature, animals, music: they start by themselves and mix together. {PLAYS_IN[target.scanAction]}</>}
+      />
+    </Card>
+  );
+}
+
+function SoundSection({ targetId, kind, sounds, icon: Icon, title, hint, warn, onAdded, onChange, onRemove }: {
+  targetId: string;
+  kind: SoundKind;
+  sounds: PageSoundRow[];
+  icon: LucideIcon;
+  title: string;
+  hint: ReactNode;
+  warn?: boolean;
+  onAdded: (sound: PageSoundRow) => void;
+  onChange: (id: string, patch: Partial<PageSoundRow>) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [progress, setProgress] = useState<number | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const preview = useRef<PageSound[]>([]);
+  const limit = SOUND_LIMIT[kind];
+
+  const stopPreview = useCallback(() => {
+    preview.current.forEach((sound) => sound.stop());
+    preview.current = [];
+    setPreviewing(false);
+  }, []);
+  useEffect(() => stopPreview, [stopPreview]);
+
+  async function add(file: File) {
+    setProgress(0);
+    try {
+      const uploaded = await uploadFile(file, "audio", file.name, setProgress);
+      const result = await runAction(addPageSound(targetId, { name: file.name, url: uploaded.url, kind }));
+      if (result?.ok && result.data) onAdded(result.data);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setProgress(null);
+    }
+  }
+
+  function togglePreview() {
+    if (previewing) return stopPreview();
+    preview.current = sounds.map((sound) => playPageSound(sound));
+    setPreviewing(true);
+  }
+
+  return (
+    <section className="mt-5 border-t border-ink-100 pt-4">
+      <h3 className="flex items-center justify-between gap-2 text-sm font-semibold text-ink-900">
+        <span className="flex items-center gap-1.5"><Icon className="size-4 text-ink-400" /> {title}</span>
+        <span className="text-xs font-medium text-ink-500 tabular-nums">{sounds.length}/{limit}</span>
+      </h3>
+      <p className={cn("mt-1 mb-3 text-xs leading-relaxed", warn ? "font-medium text-amber-700" : "text-ink-500")}>{hint}</p>
+      <div className="flex flex-col gap-2.5">
+        {sounds.map((sound) => (
+          <SoundRow
+            key={sound.id}
+            sound={sound}
+            onChange={(patch) => { stopPreview(); onChange(sound.id, patch); }}
+            onRemove={() => { stopPreview(); onRemove(sound.id); }}
+          />
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" disabled={progress !== null || sounds.length >= limit} onClick={() => input.current?.click()}>
+          {progress !== null ? <LoaderCircle className="animate-spin" /> : <Plus />}
+          {progress !== null ? `Uploading ${Math.round(progress)}%` : sounds.length >= limit ? `${limit} is the most` : kind === "reading" ? "Add soundtrack" : "Add a sound"}
+        </Button>
+        {sounds.length > 0 && (
+          <Button variant={previewing ? "primary" : "outline"} size="sm" onClick={togglePreview}>
+            {previewing ? <Square /> : <Play />} {previewing ? "Stop" : sounds.length > 1 ? "Preview the mix" : "Preview"}
+          </Button>
+        )}
+      </div>
+      <input
+        ref={input}
+        type="file"
+        accept={AUDIO_ACCEPT}
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) add(file);
+          event.target.value = "";
+        }}
+      />
+    </section>
+  );
+}
+
+function SoundRow({ sound, onChange, onRemove }: { sound: PageSoundRow; onChange: (patch: Partial<PageSoundRow>) => void; onRemove: () => void }) {
+  const percent = Math.round(sound.volume * 100);
+  return (
+    <div className="rounded-2xl border border-ink-200/70 bg-ink-50/40 p-3">
+      <div className="flex items-center gap-2">
+        <Input value={sound.name} onChange={(event) => onChange({ name: event.target.value })} maxLength={60} aria-label="Sound name" className="h-9 flex-1" />
+        <Button variant="danger-ghost" size="sm" onClick={onRemove} aria-label={`Remove ${sound.name}`}>
+          <Trash2 />
+        </Button>
+      </div>
+      <audio src={sound.url} controls preload="none" className="mt-2 h-9 w-full" />
+      <div className="mt-2.5 grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-2.5 text-xs text-ink-600">
+        <span>Volume</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={percent}
+          onChange={(event) => onChange({ volume: Number(event.target.value) / 100 })}
+          aria-label={`${sound.name} volume`}
+          className="w-full accent-brand-500"
+        />
+        <span className="w-9 text-right tabular-nums">{percent}%</span>
+        <span>Starts after</span>
+        <span className="flex items-center gap-1.5">
+          <Input
+            type="number"
+            min={0}
+            max={120}
+            step={0.5}
+            value={sound.delay}
+            onChange={(event) => onChange({ delay: Math.max(0, Math.min(120, Number(event.target.value) || 0)) })}
+            aria-label={`${sound.name} starts after, in seconds`}
+            className="h-8 w-20"
+          />
+          seconds
+        </span>
+        <span />
+        <span>Repeat</span>
+        <span className="flex items-center gap-2">
+          <Switch checked={sound.loop} onCheckedChange={(loop) => onChange({ loop })} aria-label={`Repeat ${sound.name}`} />
+          {sound.loop ? "Loops for as long as the page is open" : "Plays once"}
+        </span>
+        <span />
+      </div>
+    </div>
+  );
+}
+
+/** The page read aloud: one recording, played by the reader and the 360° view. */
+function VoiceRow({ target }: { target: EditorTarget }) {
   const [url, setUrl] = useState(target.narrationUrl);
   const [progress, setProgress] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -60,13 +280,10 @@ export function NarrationCard({ target }: { target: EditorTarget }) {
   }
 
   return (
-    <Card className="p-5">
-      <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-ink-500 uppercase">
-        <Mic className="size-3.5" /> Voice narration
-      </div>
+    <>
       {url ? (
-        <div className="flex flex-col gap-3">
-          <audio src={url} controls preload="none" className="w-full" />
+        <div className="flex flex-col gap-2.5">
+          <audio src={url} controls preload="none" className="h-9 w-full" />
           <div className="flex gap-2">
             <Button variant="outline" size="sm" disabled={progress !== null} onClick={() => input.current?.click()}>
               {progress !== null ? <LoaderCircle className="animate-spin" /> : <Mic />}
@@ -85,15 +302,10 @@ export function NarrationCard({ target }: { target: EditorTarget }) {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          <p className="text-xs leading-relaxed text-ink-500">
-            Record this page read aloud (MP3, M4A, OGG or WAV). Readers tap <b>Read to me</b> and each page plays its own voice, then turns.
-          </p>
-          <Button variant="outline" size="sm" disabled={progress !== null} onClick={() => input.current?.click()} className="self-start">
-            {progress !== null ? <LoaderCircle className="animate-spin" /> : <Mic />}
-            {progress !== null ? `Uploading ${Math.round(progress)}%` : "Add voice"}
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" disabled={progress !== null} onClick={() => input.current?.click()}>
+          {progress !== null ? <LoaderCircle className="animate-spin" /> : <Mic />}
+          {progress !== null ? `Uploading ${Math.round(progress)}%` : "Add the voice (MP3, M4A, OGG or WAV)"}
+        </Button>
       )}
       <input
         ref={input}
@@ -106,7 +318,7 @@ export function NarrationCard({ target }: { target: EditorTarget }) {
           event.target.value = "";
         }}
       />
-    </Card>
+    </>
   );
 }
 
@@ -192,6 +404,12 @@ export function PageDetails({ target }: { target: EditorTarget }) {
             placeholder={"Lou can go\nlike the rain.\nLou can go…\n\n*Plip plop!*"}
           />
         </Field>
+        <Field
+          label="Note under the page"
+          hint="On a laptop the story sits on the page, so the space underneath holds this instead: a comment, an explanation, a question to talk about. Leave it empty for nothing."
+        >
+          <Textarea name="note" defaultValue={target.note ?? ""} maxLength={600} className="min-h-16" placeholder="Did you know? A tortoise can live for over 100 years." />
+        </Field>
         <Field label="Text on the page" hint="Where the words sit in the phone reader and in print.">
           <Select name="textPosition" value={position} onChange={(event) => setPosition(event.target.value as TextPosition)}>
             {(Object.keys(TEXT_POSITIONS) as TextPosition[]).map((key) => (
@@ -229,6 +447,7 @@ export function TranslationsCard({ target }: { target: EditorTarget }) {
   const [saved, setSaved] = useState(target.translations);
   const [title, setTitle] = useState(saved.fr?.title ?? "");
   const [story, setStory] = useState(saved.fr?.story ?? "");
+  const [note, setNote] = useState(saved.fr?.note ?? "");
   const [pending, setPending] = useState(false);
   const rtl = lang === "ar";
 
@@ -236,16 +455,17 @@ export function TranslationsCard({ target }: { target: EditorTarget }) {
     setLang(next);
     setTitle(saved[next]?.title ?? "");
     setStory(saved[next]?.story ?? "");
+    setNote(saved[next]?.note ?? "");
   }
 
   async function save() {
     setPending(true);
-    const result = await runAction(savePageTranslation(target.id, { locale: lang, title, story }));
+    const result = await runAction(savePageTranslation(target.id, { locale: lang, title, story, note }));
     setPending(false);
     if (!result?.ok) return;
     setSaved((all) => {
       const next = { ...all };
-      if (title.trim()) next[lang] = { ...all[lang], title: title.trim(), story: story.trim() || undefined };
+      if (title.trim()) next[lang] = { ...all[lang], title: title.trim(), story: story.trim() || undefined, note: note.trim() || undefined };
       else delete next[lang];
       return next;
     });
@@ -281,6 +501,9 @@ export function TranslationsCard({ target }: { target: EditorTarget }) {
         <Field label="Story text" hint="Same rules as the original: short lines, *sound words* between stars. Leave the title empty to remove this language.">
           <Textarea value={story} onChange={(e) => setStory(e.target.value)} dir={rtl ? "rtl" : "ltr"} lang={lang} maxLength={1000} className="min-h-24" />
         </Field>
+        <Field label="Note under the page">
+          <Textarea value={note} onChange={(e) => setNote(e.target.value)} dir={rtl ? "rtl" : "ltr"} lang={lang} maxLength={600} className="min-h-14" />
+        </Field>
         <Button variant="outline" size="sm" disabled={pending} onClick={save}>
           {pending && <LoaderCircle className="animate-spin" />} Save {languageName(lang)}
         </Button>
@@ -289,10 +512,11 @@ export function TranslationsCard({ target }: { target: EditorTarget }) {
   );
 }
 
-/** A 360° panorama readers step into from this page: the story world around them. */
+/** Artwork shared by the tracked story box and the explicitly selected 360° view. */
 export function WorldCard({ target }: { target: EditorTarget }) {
   const [url, setUrl] = useState(target.worldUrl);
   const [effect, setEffect] = useState(target.worldEffect);
+  const scanAction = target.scanAction;
   const [progress, setProgress] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
@@ -312,8 +536,12 @@ export function WorldCard({ target }: { target: EditorTarget }) {
   return (
     <Card className="p-5">
       <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-ink-500 uppercase">
-        <Orbit className="size-3.5" /> Story world (360°)
+        <Orbit className="size-3.5" /> Story world artwork
       </div>
+      <p className="mb-4 text-xs leading-relaxed text-ink-500">
+        Choose the page experience at the top of the editor. Step Inside or 360° opens only that experience;
+        saved 3D models and AR Quick Look stay hidden until you choose AR content.
+      </p>
       {url ? (
         <div className="flex flex-col gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -335,9 +563,9 @@ export function WorldCard({ target }: { target: EditorTarget }) {
             </Select>
           </Field>
           <div className="flex flex-wrap gap-2">
-            <Link href={`/world/${target.bookId}/${target.id}`} target="_blank" className={buttonClasses("secondary", "sm")}>
-              <Globe /> Step inside
-            </Link>
+            {(scanAction === "world" || scanAction === "panorama") && <Link href={`/world/${target.bookId}/${target.id}`} target="_blank" className={buttonClasses("secondary", "sm")}>
+              <Globe /> Preview {scanAction === "world" ? "Step Inside" : "360° view"}
+            </Link>}
             <Button variant="outline" size="sm" disabled={progress !== null} onClick={() => input.current?.click()}>
               {progress !== null ? <LoaderCircle className="animate-spin" /> : <ImageIcon />}
               {progress !== null ? `Uploading ${Math.round(progress)}%` : "Replace"}
@@ -357,8 +585,8 @@ export function WorldCard({ target }: { target: EditorTarget }) {
       ) : (
         <div className="flex flex-col gap-3">
           <p className="text-xs leading-relaxed text-ink-500">
-            A 360° panorama (a 2:1 &ldquo;equirectangular&rdquo; image, e.g. 4096×2048) of the place this page happens in. From the scanner or
-            the reader, children step inside it and look around by turning their phone, as if they were in the story.
+            Add a 2:1 panorama (e.g. 4096×2048) of the place this page happens in. Use it for a tracked Step Inside story box,
+            or explicitly choose a 360° view at the top of the editor.
           </p>
           <Button variant="outline" size="sm" disabled={progress !== null} onClick={() => input.current?.click()} className="self-start">
             {progress !== null ? <LoaderCircle className="animate-spin" /> : <Orbit />}

@@ -192,7 +192,7 @@ export class ARSession {
   }
 
   private handleUpdate(data: MindARUpdate) {
-    if (data.type !== "updateMatrix") return;
+    if (this.disposed || data.type !== "updateMatrix") return;
     const { targetIndex, worldMatrix } = data as { targetIndex: number; worldMatrix: number[] | null };
     for (const anchor of this.anchors) {
       if (anchor.targetIndex !== targetIndex) continue;

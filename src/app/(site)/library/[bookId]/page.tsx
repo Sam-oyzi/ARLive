@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BookOpen, Camera, Download, FileText, Heart, Printer, ScanLine, Sparkles } from "lucide-react";
+import { ArrowLeft, BookOpen, Box, Camera, Download, FileText, Heart, Printer, ScanLine, Sparkles } from "lucide-react";
 import { BookCover, BookGrid } from "@/components/library/book-card";
 import { RatingSummary } from "@/components/library/stars";
 import { Thumb } from "@/components/thumb";
@@ -14,6 +14,8 @@ import { bookCardSelect, compactNumber, libraryOrderBy, toBookCard } from "@/lib
 import { SubjectIcon } from "@/lib/subject-icons";
 import { plural } from "@/lib/utils";
 import { AccessPanel, LikeButton, RatingInput } from "./book-actions";
+import { opensModel, isPlaceableModel, worldExperienceOf } from "@/lib/scan-actions";
+import { readerHref, withReturnTo } from "@/lib/reader-navigation";
 
 export async function generateMetadata({ params }: { params: Promise<{ bookId: string }> }): Promise<Metadata> {
   const { bookId } = await params;
@@ -28,7 +30,7 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
   // only exist for the readers they were shared with.
   const row = await db.book.findFirst({
     where: { id: bookId, OR: [libraryBooksWhere, readableWhere(user)] },
-    select: { ...bookCardSelect, format: true, ownerId: true, subjectId: true, targets: { ...bookCardSelect.targets, select: { ...bookCardSelect.targets.select, name: true } } },
+    select: { ...bookCardSelect, format: true, ownerId: true, subjectId: true, targets: { ...bookCardSelect.targets, select: { ...bookCardSelect.targets.select, name: true, scanAction: true, worldUrl: true, contents: { select: { type: true, url: true, text: true } } } } },
   });
   if (!row) notFound();
   const book = toBookCard(row);
@@ -54,6 +56,8 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
   ]);
   const [like, rating] = mine;
   const arPages = row.targets.filter((t) => t.ar).length;
+  const modelPage = row.targets.find((target) => opensModel(target.scanAction) && target.contents.some(isPlaceableModel));
+  const hasDirectExperience = !!modelPage || row.targets.some((target) => worldExperienceOf(target.scanAction, target.worldUrl));
 
   return (
     <div className="mx-auto max-w-6xl px-4 pt-6 pb-20 sm:px-6">
@@ -95,9 +99,14 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
                 <BookOpen /> Read now
               </ButtonLink>
             )}
+            {modelPage && (
+              <ButtonLink href={withReturnTo(`/place/${book.id}/${modelPage.id}`, `/library/${book.id}`)} size="lg" variant="secondary">
+                <Box /> Place a model
+              </ButtonLink>
+            )}
             {book.ar && (
-              <ButtonLink href={`/scan/${book.id}`} size="lg" variant="secondary">
-                <Camera /> Scan in AR
+              <ButtonLink href={withReturnTo(`/scan/${book.id}`, `/library/${book.id}`)} size="lg" variant="outline">
+                <Camera /> Scan printed book
               </ButtonLink>
             )}
             {book.pages > 0 && (
@@ -130,8 +139,8 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
             <div className="mt-6 flex max-w-2xl gap-3 rounded-[20px] bg-ink-950 p-4 text-sm text-white/80">
               <Printer aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-amber-300" />
               <p>
-                <span className="font-semibold text-white">Make it pop out in 3D.</span> Download and print the book (or open it on another screen),
-                then tap <span className="font-semibold text-white">Scan in AR</span> on a phone and point it at a page marked AR.
+                {hasDirectExperience ? <><span className="font-semibold text-white">Reading on your phone?</span> Open a page and tap Place model, Step Inside, or Look around to open its experience directly. </> : null}
+                <span className="font-semibold text-white">Using a printed book?</span> Tap <span className="font-semibold text-white">Scan printed book</span> and point your phone at a page marked AR.
                 {" "}{bookFormat(row.format).label} pages.
               </p>
             </div>
@@ -145,12 +154,12 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
           <h2 className="font-display text-2xl font-bold text-ink-900">Inside the book</h2>
           <div className="-mx-4 mt-5 flex gap-3 overflow-x-auto px-4 pb-3 scrollbar-none sm:mx-0 sm:px-0">
             {row.targets.slice(0, 12).map((page, i) => (
-              <Link key={page.id} href={`/read/${book.id}`} className="group w-28 shrink-0 sm:w-32">
+              <Link key={page.id} href={readerHref(book.id, page.id)} className="group w-28 shrink-0 sm:w-32">
                 <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-white shadow-soft ring-1 ring-[#eadfca]">
                   <Thumb src={page.imageUrl} width={128} height={171} className="size-full object-cover transition group-hover:scale-105" />
-                  {page.ar && (
+                  {(page.ar || opensModel(page.scanAction) || worldExperienceOf(page.scanAction, page.worldUrl)) && (
                     <span className="absolute right-1.5 bottom-1.5 flex items-center gap-0.5 rounded-full bg-ink-950/75 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                      <ScanLine aria-hidden="true" className="size-2.5" /> AR
+                      {opensModel(page.scanAction) ? <><Box aria-hidden="true" className="size-2.5" /> Place model</> : <><ScanLine aria-hidden="true" className="size-2.5" /> {worldExperienceOf(page.scanAction, page.worldUrl) ? "Explore" : "Scan"}</>}
                     </span>
                   )}
                 </div>

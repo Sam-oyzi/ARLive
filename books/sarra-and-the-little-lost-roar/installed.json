@@ -1,0 +1,28 @@
+{
+  "id": "cmw413bil0001q68164u1b98u",
+  "title": "Sarra and the Little Lost Roar",
+  "published": true,
+  "pages": 21,
+  "arPages": 7,
+  "worldPages": [
+    {
+      "id": "cmw413biq0007q681ce3kffji",
+      "title": "The little lost roar"
+    },
+    {
+      "id": "cmw413biw000lq6812739vkul",
+      "title": "Owl knows a little secret"
+    },
+    {
+      "id": "cmw413bj40019q6819ygxi29y",
+      "title": "A roar that says I am here"
+    },
+    {
+      "id": "cmw413bj6001fq681ky9ol5m2",
+      "title": "The gift of listening"
+    }
+  ],
+  "studio": "http://localhost:3000/admin/books/cmw413bil0001q68164u1b98u",
+  "reader": "http://localhost:3000/read/cmw413bil0001q68164u1b98u",
+  "print": "http://localhost:3000/print/cmw413bil0001q68164u1b98u"
+}

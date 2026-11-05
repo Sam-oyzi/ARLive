@@ -94,12 +94,14 @@ async function main() {
   }
 
   if (example) {
-    // A 360° story world to step into from the sea pages (one story page, one AR page), where it
-    // rains: Lou goes round the water cycle in the room.
+    // A 360° story world to step into from the two sea pages, where it rains: Lou goes round the water
+    // cycle in the room.
     await db.target.updateMany({
       where: { bookId: example.id, name: { in: ["Lou in the sea", "Meet H₂O"] }, worldUrl: null },
       data: { worldUrl: "/book-art/water-drop/world-sea.jpg", worldEffect: "rain" },
     });
+    // Scanning either sea page takes the child straight into its world; the other AR pages show their models.
+    await db.target.updateMany({ where: { bookId: example.id, name: { in: ["Lou in the sea", "Meet H₂O"] }, scanAction: "ar" }, data: { scanAction: "world" } });
   }
 
   await seedFamily(example?.id);

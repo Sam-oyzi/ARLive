@@ -1,11 +1,10 @@
-// Walk into the story: a WebXR AR session (Chrome on Android with ARCore) that finds the floor, shows a
-// ring where the story box will stand, and on a tap stands it there, its front at the ring, with its
-// rain or snow playing.
+// A WebXR story room: enter around the first tracked camera pose, or place its front on the floor
+// manually when explicitly requested.
 // The phone's tracking then follows the reader around in real space, in and out of the room.
 import * as THREE from "three";
 import type { WorldEffect } from "@/lib/world-effects";
-import { pinchToResize, standAround, type RoomSession } from "./room-controls";
-import { disposeRoom, loadStoryRoom, ROOM } from "./story-room";
+import { automaticRoomEntry, pinchToResize, standAround, type RoomOptions, type RoomSession } from "./room-controls";
+import { disposeRoom, loadStoryRoom, ROOM, updateStoryRoom } from "./story-room";
 
 export type RoomState = "starting" | "finding" | "ready" | "placed" | "ended";
 
@@ -19,12 +18,12 @@ export async function canPlaceRoom(): Promise<boolean> {
 }
 
 /** Starts the session. `overlay` is shown over the camera, and a pinch on it resizes the placed box. */
-export async function startRoomSession(worldUrl: string, effect: WorldEffect, overlay: HTMLElement, onState: (state: RoomState) => void): Promise<RoomSession> {
+export async function startRoomSession(worldUrl: string, effect: WorldEffect, overlay: HTMLElement, onState: (state: RoomState) => void, { enterAutomatically = false }: RoomOptions = {}): Promise<RoomSession> {
   if (!navigator.xr) throw new Error("WebXR isn't available in this browser.");
   onState("starting");
   const session = await navigator.xr.requestSession("immersive-ar", {
-    requiredFeatures: ["hit-test"],
-    optionalFeatures: ["dom-overlay"],
+    requiredFeatures: enterAutomatically ? [] : ["hit-test"],
+    optionalFeatures: enterAutomatically ? ["dom-overlay", "hit-test"] : ["dom-overlay"],
     domOverlay: { root: overlay },
   });
 
@@ -58,9 +57,10 @@ export async function startRoomSession(worldUrl: string, effect: WorldEffect, ov
   scene.add(reticle);
 
   const viewer = await session.requestReferenceSpace("viewer");
-  const hits = await session.requestHitTestSource?.({ space: viewer });
-  if (!hits) throw new Error("This phone can't find the floor.");
+  const hits = await session.requestHitTestSource?.({ space: viewer })?.catch(() => undefined);
+  if (!hits && !enterAutomatically) throw new Error("This phone can't find the floor.");
 
+  const enter = automaticRoomEntry(room, enterAutomatically);
   let placed = false;
   let floorY: number | null = null;
   const pinch = pinchToResize(overlay, room);
@@ -78,23 +78,40 @@ export async function startRoomSession(worldUrl: string, effect: WorldEffect, ov
     room.visible = true;
     reticle.visible = false;
     placed = true;
-    hits.cancel();
+    hits?.cancel();
     onState("placed");
   });
 
   onState("finding");
   let seen = false;
   renderer.setAnimationLoop((time, frame) => {
-    if (placed) mixer?.update(Math.min((time - last) / 1000, 0.1));
+    if (placed) {
+      mixer?.update(Math.min((time - last) / 1000, 0.1));
+      updateStoryRoom(room, renderer.xr.getCamera());
+    }
     last = time;
     if (frame && !placed) {
-      const pose = frame.getHitTestResults(hits)[0]?.getPose(renderer.xr.getReferenceSpace()!);
-      reticle.visible = !!pose;
-      if (pose) {
-        reticle.matrix.fromArray(pose.transform.matrix);
-        floorY = pose.transform.position.y;
-        if (!seen) onState("ready");
-        seen = true;
+      const reference = renderer.xr.getReferenceSpace()!;
+      const pose = hits ? frame.getHitTestResults(hits)[0]?.getPose(reference) : undefined;
+      // A valid tracked view is enough to enter. Use the measured floor when available; otherwise
+      // stand the room at normal eye height instead of making the child aim at the floor first.
+      if (enterAutomatically && frame.getViewerPose(reference)) {
+        const trackedCamera = renderer.xr.getCamera();
+        trackedCamera.getWorldPosition(eye);
+        floorY = pose?.transform.position.y ?? eye.y - ROOM.eye;
+        enter(trackedCamera, floorY);
+        placed = true;
+        reticle.visible = false;
+        hits?.cancel();
+        onState("placed");
+      } else if (!enterAutomatically) {
+        reticle.visible = !!pose;
+        if (pose) {
+          reticle.matrix.fromArray(pose.transform.matrix);
+          floorY = pose.transform.position.y;
+          if (!seen) onState("ready");
+          seen = true;
+        }
       }
     }
     renderer.render(scene, camera);
@@ -121,7 +138,7 @@ export async function startRoomSession(worldUrl: string, effect: WorldEffect, ov
       if (placed) return;
       placed = true;
       reticle.visible = false;
-      hits.cancel();
+      hits?.cancel();
       onState("placed");
     },
   };

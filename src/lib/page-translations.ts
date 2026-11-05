@@ -11,6 +11,8 @@ const locale = z.string().max(35).refine((value) => {
 export const pageTranslationsSchema = z.record(locale, z.object({
   title: z.string().trim().min(1).max(120),
   story: z.string().trim().max(1000).optional(),
+  /** Under the page in the laptop reader (Target.note in this language). */
+  note: z.string().trim().max(600).optional(),
   imageUrl: z.string().regex(/^\/(?:book-art|files\/(?:targets|images|covers))\/(?:[\w-]+\/)*[\w-]+\.(?:jpe?g|png|webp)$/i).optional(),
 }));
 
