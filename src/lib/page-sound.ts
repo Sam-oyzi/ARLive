@@ -89,9 +89,34 @@ function loadSound(ctx: AudioContext, url: string): Promise<AudioBuffer> {
   return buffer;
 }
 
-export type PageSound = { setMuted(muted: boolean): void; setDucked(ducked: boolean): void; stop(): void };
+export type StopMode = "fade" | "immediate";
+export type PageSound = { setMuted(muted: boolean): void; setDucked(ducked: boolean): void; stop(mode?: StopMode): void };
 
 const SILENT: PageSound = { setMuted() {}, setDucked() {}, stop() {} };
+const grouped = new Map<string, Set<PageSound>>();
+
+function registerSound(group: string, sound: PageSound) {
+  if (!group) return;
+  let sounds = grouped.get(group);
+  if (!sounds) {
+    sounds = new Set<PageSound>();
+    grouped.set(group, sounds);
+  }
+  sounds.add(sound);
+}
+
+function unregisterSound(group: string, sound: PageSound) {
+  if (!group) return;
+  const sounds = grouped.get(group);
+  if (!sounds) return;
+  sounds.delete(sound);
+  if (sounds.size === 0) grouped.delete(group);
+}
+
+/** Lets one part of the app hand sound straight over to another. */
+export function stopSoundGroup(group: string, mode: StopMode = "immediate") {
+  grouped.get(group)?.forEach((sound) => sound.stop(mode));
+}
 
 /**
  * Starts a sound after its delay, fading it in, and loops it (or plays it once) until stop(). A missing
@@ -109,6 +134,7 @@ export function playPageSound({ url, volume, loop, delay }: SoundLayer, { muted 
   let loaded = false;
   let stopped = false;
   let timer = 0;
+  let finishTimer = 0;
 
   const fadeTo = (level: number, seconds: number) => {
     const now = ctx.currentTime;
@@ -160,6 +186,19 @@ export function playPageSound({ url, volume, loop, delay }: SoundLayer, { muted 
     })
     .catch(() => {});
 
+  const finish = () => {
+    window.clearTimeout(finishTimer);
+    for (const copy of copies) {
+      try {
+        copy.stop();
+      } catch {
+        // not started yet
+      }
+    }
+    copies.clear();
+    output.disconnect();
+  };
+
   return {
     setMuted(value) {
       state.muted = value;
@@ -169,22 +208,16 @@ export function playPageSound({ url, volume, loop, delay }: SoundLayer, { muted 
       state.ducked = value;
       if (loaded && !stopped) fadeTo(soundLevel(volume, state), 0.6);
     },
-    stop() {
+    stop(mode = "fade") {
       if (stopped) return;
       stopped = true;
       window.clearInterval(timer);
+      if (mode === "immediate") {
+        finish();
+        return;
+      }
       fadeTo(0, 0.4);
-      window.setTimeout(() => {
-        for (const copy of copies) {
-          try {
-            copy.stop();
-          } catch {
-            // not started yet
-          }
-        }
-        copies.clear();
-        output.disconnect();
-      }, 450);
+      finishTimer = window.setTimeout(finish, 450);
     },
   };
 }
@@ -193,7 +226,7 @@ export function playPageSound({ url, volume, loop, delay }: SoundLayer, { muted 
  * Plays a page's sounds while they're set. When the set changes, only the changed ones fade out or in:
  * a soundtrack that carries on to the next page keeps playing where it was.
  */
-export function usePageSounds(layers: SoundLayer[] | null | undefined, { muted = false, ducked = false }: { muted?: boolean; ducked?: boolean } = {}) {
+export function usePageSounds(layers: SoundLayer[] | null | undefined, { muted = false, ducked = false, group = "" }: { muted?: boolean; ducked?: boolean; group?: string } = {}) {
   const playing = useRef(new Map<string, PageSound>());
   const latest = useRef({ muted, ducked });
   latest.current = { muted, ducked };
@@ -205,6 +238,7 @@ export function usePageSounds(layers: SoundLayer[] | null | undefined, { muted =
     for (const [id, sound] of playing.current) {
       if (wanted.has(id)) continue;
       sound.stop();
+      unregisterSound(group, sound);
       playing.current.delete(id);
     }
     for (const [id, layer] of wanted) {
@@ -212,15 +246,19 @@ export function usePageSounds(layers: SoundLayer[] | null | undefined, { muted =
       const sound = playPageSound(layer, { muted: latest.current.muted });
       sound.setDucked(latest.current.ducked);
       playing.current.set(id, sound);
+      registerSound(group, sound);
     }
-  }, [key]);
+  }, [group, key]);
   useEffect(() => {
     const sounds = playing.current;
     return () => {
-      sounds.forEach((sound) => sound.stop());
+      sounds.forEach((sound) => {
+        sound.stop();
+        unregisterSound(group, sound);
+      });
       sounds.clear();
     };
-  }, []);
+  }, [group]);
   useEffect(() => playing.current.forEach((sound) => sound.setMuted(muted)), [muted]);
   useEffect(() => playing.current.forEach((sound) => sound.setDucked(ducked)), [ducked]);
 }

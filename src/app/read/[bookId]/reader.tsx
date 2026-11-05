@@ -34,7 +34,7 @@ import { nativeLanguageName, readerWords } from "@/lib/reader-words";
 import { composeStoryPageCached, freeCorner, whenIdle, type StoryPage } from "@/lib/story-page";
 import { plainStory, type TextPosition } from "@/lib/story-text";
 import { isReadingSpeed, READING_SPEED_LABEL, readingSeconds, type ReadingSpeed } from "@/lib/reading-time";
-import { usePageSounds } from "@/lib/page-sound";
+import { stopSoundGroup, usePageSounds } from "@/lib/page-sound";
 import { soundtrackFor, type SoundLayer } from "@/lib/sound-layers";
 import { readerHref, withReturnTo } from "@/lib/reader-navigation";
 import { requestStoryMotion } from "@/lib/story-motion";
@@ -79,6 +79,7 @@ const PAD = "-m-2.5 p-2.5";
 const NEARBY = 2;
 // Controls fade out on their own this long after they appear.
 const CHROME_MS = 3200;
+const READER_SOUND_GROUP = "reader";
 
 /** A language in its own words ("Français", "العربية"); "" is the book as written, in English. */
 function languageLabel(lang: string) {
@@ -425,7 +426,7 @@ export function Reader({
   // its own keeps the one before it, so one set on the first page plays through the book.
   const hasSoundtrack = pages.some((page) => page.soundtrack.length > 0);
   const soundtrack = useMemo(() => soundtrackFor(pages, visible), [pages, visible]);
-  usePageSounds(music && hasSoundtrack ? soundtrack : null, { ducked: voicePlaying });
+  usePageSounds(music && hasSoundtrack ? soundtrack : null, { ducked: voicePlaying, group: READER_SOUND_GROUP });
   // On a phone the words are on the page once it's drawn; until then (or with no words) the caption shows them.
   const wordsOnPage = (backCover || shown.every((p) => composed[p.id] || !p.story || p.textPosition === "off" || (p === readingPages[0] && p.textPosition === "auto")));
   const position = backCover ? pages.length + 1 : (visible[0] ?? 0) + 1;
@@ -436,6 +437,22 @@ export function Reader({
     const href = readerHref(book.id, currentPageId, locale);
     if (`${window.location.pathname}${window.location.search}` !== href) window.history.replaceState(window.history.state, "", href);
   }, [book.id, currentPageId, locale]);
+
+
+  const handoffToExperience = useCallback(() => {
+    readingRef.current = false;
+    setReading(false);
+    setCountdown(null);
+    window.clearTimeout(turnTimer.current);
+    const el = audio.current;
+    if (el) {
+      el.pause();
+      el.onended = null;
+      el.currentTime = 0;
+    }
+    setVoicePlaying(false);
+    stopSoundGroup(READER_SOUND_GROUP);
+  }, []);
 
 
   const header = (
@@ -623,19 +640,19 @@ export function Reader({
               const experience = worldExperienceOf(page.scanAction, page.worldUrl);
               const returnTo = readerHref(book.id, page.id, locale);
               const badge = opensModel(page.scanAction) && page.hasModel ? (
-                <Link href={withReturnTo(`/place/${book.id}/${page.id}`, returnTo)} onClick={() => { if (page.scanAction === "eighthwall") void requestStoryMotion(); }} className={PAD} title="Place this model in your room. No printed book needed.">
+                <Link href={withReturnTo(`/place/${book.id}/${page.id}`, returnTo)} onClick={() => { handoffToExperience(); if (page.scanAction === "eighthwall") void requestStoryMotion(); }} className={PAD} title="Place this model in your room. No printed book needed.">
                   <span className="flex items-center gap-1.5 rounded-full bg-sky-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-md">
                     <Box aria-hidden="true" className="size-3.5" /> <bdi lang={locale || undefined}>{say.placeModel}</bdi>
                   </span>
                 </Link>
               ) : experience ? (
-                <Link href={withReturnTo(`/world/${book.id}/${page.id}`, returnTo)} onClick={() => { void requestStoryMotion(); }} className={PAD}>
+                <Link href={withReturnTo(`/world/${book.id}/${page.id}`, returnTo)} onClick={() => { handoffToExperience(); void requestStoryMotion(); }} className={PAD}>
                   <span className="flex items-center gap-1.5 rounded-full bg-sky-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-md">
                     <Orbit aria-hidden="true" className="size-3.5" /> <bdi lang={locale || undefined}>{experience === "box" ? say.stepInside : say.lookAround}</bdi>
                   </span>
                 </Link>
               ) : page.scanAction === "ar" && ar && book.canScan ? (
-                <Link href={withReturnTo(`/scan/${book.id}`, returnTo)} className={PAD} title="Point your camera at this page in the printed book">
+                <Link href={withReturnTo(`/scan/${book.id}`, returnTo)} onClick={handoffToExperience} className={PAD} title="Point your camera at this page in the printed book">
                   <span className="flex items-center gap-1.5 rounded-full bg-ink-950/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
                     <ScanLine aria-hidden="true" className="size-3.5" /> <bdi lang={locale || undefined}>{say.scanPrintedBook}</bdi>
                   </span>
