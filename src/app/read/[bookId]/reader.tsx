@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   AudioLines,
@@ -37,7 +38,9 @@ import { plainStory, type TextPosition } from "@/lib/story-text";
 import { isReadingSpeed, READING_SPEED_LABEL, readingSeconds, type ReadingSpeed } from "@/lib/reading-time";
 import { stopSoundGroup, usePageSounds } from "@/lib/page-sound";
 import { soundtrackFor, type SoundLayer } from "@/lib/sound-layers";
-import { readerHref, withReturnTo } from "@/lib/reader-navigation";
+import { readerHref, readerPageIndex, withReturnTo } from "@/lib/reader-navigation";
+import { nearbyReaderPages, visibleReaderPages } from "@/lib/reader-pages";
+import { loadPageImage } from "@/lib/page-images";
 import { requestStoryMotion } from "@/lib/story-motion";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { cn } from "@/lib/utils";
@@ -203,8 +206,8 @@ export function Reader({
   pages,
   editable,
   backHref,
-  initialPage = 0,
-  initialLanguage = "",
+  initialPage: requestedInitialPage = 0,
+  initialLanguage: requestedInitialLanguage = "",
 }: {
   book: {
     id: string;
@@ -223,8 +226,12 @@ export function Reader({
   editable: boolean;
   backHref: string;
 }) {
+  // A cached route may still carry its original server props. The return URL owns reader position.
+  const searchParams = useSearchParams();
+  const [initialPage] = useState(() => searchParams ? readerPageIndex(pages.map((page) => page.id), searchParams.get("page")) : requestedInitialPage);
+  const [initialLanguage] = useState(() => searchParams ? searchParams.get("lang") ?? "" : requestedInitialLanguage);
   const flipbook = useRef<FlipBookHandle>(null);
-  const [visible, setVisible] = useState<number[]>(initialPage < pages.length ? [initialPage] : []);
+  const [visible, setVisible] = useState<number[]>(() => visibleReaderPages(initialPage, pages.length));
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
   const [focusedPage, setFocusedPage] = useState(initialPage);
@@ -271,20 +278,28 @@ export function Reader({
   // Like a picture book, the story is part of the page on a phone: drawn into the picture so it turns
   // with it. Laptops keep the caption under the spread.
   const [composed, setComposed] = useState<Record<string, StoryPage>>({});
+  const [artworkAttempt, setArtworkAttempt] = useState(0);
+  const turning = useRef(false);
+  const onTurnChange = useCallback((value: boolean) => { turning.current = value; }, []);
   // Laptops too: the words are part of the page, so the space under the book is free for notes.
-  const here = visible[0] ?? 0;
   useEffect(() => {
     let alive = true;
+    const beforeDraw = async () => {
+      while (turning.current) await new Promise((resolve) => window.setTimeout(resolve, 32));
+    };
     (async () => {
       // The open page first, then the pages either side so the next turn is ready. Only those:
       // drawing a page is heavy work for a phone, so the others wait until the reader gets near them.
-      const order = readingPages.map((_, i) => i).filter((i) => Math.abs(i - here) <= NEARBY).sort((a, b) => Math.abs(a - here) - Math.abs(b - here));
+      const order = nearbyReaderPages(visible, readingPages.length, NEARBY);
       for (const [n, i] of order.entries()) {
-        // The open page right away; the others in the browser's quiet moments, never during a turn.
-        if (n > 0) await whenIdle();
+        // Both pages of an open spread are urgent. Neighbours wait for a quiet frame.
+        if (n >= visible.length) await whenIdle();
         if (!alive) return;
         const page = readingPages[i]!;
-        const drawn = await composeStoryPageCached({ imageUrl: page.imageUrl, story: page.story, position: page.textPosition, aspect, lang: page.lang, cover: i === 0, blocks: page.blocks }).catch(() => null);
+        const drawn = await composeStoryPageCached({ imageUrl: page.imageUrl, story: page.story, position: page.textPosition, aspect, lang: page.lang, cover: i === 0, blocks: page.blocks, beforeDraw }).catch(() => null);
+        if (!alive) return;
+        if (drawn) await loadPageImage(drawn.url).catch(() => {});
+        await beforeDraw().catch(() => {});
         if (!alive) return;
         if (drawn) setComposed((m) => (m[page.id]?.url === drawn.url ? m : { ...m, [page.id]: drawn }));
       }
@@ -292,14 +307,26 @@ export function Reader({
     return () => {
       alive = false;
     };
-  }, [single, readingPages, aspect, here]);
+  }, [readingPages, aspect, visible, artworkAttempt]);
   // Another language means other words on every page: back to the bare pictures until they're drawn.
-  useEffect(() => () => setComposed({}), [single, readingPages, aspect]);
+  useEffect(() => () => setComposed({}), [readingPages, aspect]);
 
   const flipPages: FlipPage[] = useMemo(
     () => readingPages.map((p) => ({ id: p.id, imageUrl: composed[p.id]?.url ?? p.imageUrl, title: p.title, ar: p.ar })),
     [readingPages, composed],
   );
+  const artwork = useMemo(() => visible.length ? visible.map((i) => readingPages[i]!.imageUrl) : [book.backCoverImageUrl], [visible, readingPages, book.backCoverImageUrl]);
+  const [loadedArtwork, setLoadedArtwork] = useState<Record<string, boolean>>({});
+  const [artworkError, setArtworkError] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setArtworkError(false);
+    for (const url of artwork.filter(Boolean)) loadPageImage(url).then(() => {
+      if (alive) setLoadedArtwork((loaded) => loaded[url] ? loaded : { ...loaded, [url]: true });
+    }).catch(() => { if (alive) setArtworkError(true); });
+    return () => { alive = false; };
+  }, [artwork, artworkAttempt]);
+  const openingArtwork = artwork.some((url) => url && !loadedArtwork[url]);
 
   // ---------- auto read ----------
   // The pages turn by themselves, with the same curl as a finger: after the page's voice when it has
@@ -412,7 +439,7 @@ export function Reader({
 
   const firstSpread = useRef(true);
   const onSpreadChange = useCallback((indexes: number[]) => {
-    setVisible(indexes);
+    setVisible((current) => current.length === indexes.length && current.every((page, i) => page === indexes[i]) ? current : indexes);
     setFocusedPage((current) => indexes.includes(current) ? current : (indexes[0] ?? pages.length));
     if (readingRef.current) readPages(indexes);
     // Turning a page puts the controls away, like a book app.
@@ -625,6 +652,13 @@ export function Reader({
 
       {/* the book */}
       <div className={cn("relative min-h-0 flex-1", single && "safe-top")}>
+        {openingArtwork && (
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 flex justify-center" role="status">
+            <div className="rounded-full bg-[#faf2e4]/95 px-5 py-3 text-sm text-[#58432f] shadow-sm">
+              {artworkError ? <button className="pointer-events-auto font-semibold underline" onClick={() => setArtworkAttempt((attempt) => attempt + 1)}>{say.retryPages}</button> : say.loadingPages}
+            </div>
+          </div>
+        )}
         {pages.length === 0 ? (
           <div className="grid size-full place-items-center font-serif text-xl text-ink-500 italic">This book has no pages yet.</div>
         ) : (
@@ -638,6 +672,7 @@ export function Reader({
             single={single}
             onTap={() => showChrome(!chrome)}
             onSpreadChange={onSpreadChange}
+            onTurnChange={onTurnChange}
             className="absolute inset-0"
             renderOverlay={(_, index, side) => {
               const page = pages[index]!;

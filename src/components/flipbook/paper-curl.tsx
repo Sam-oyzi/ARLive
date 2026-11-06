@@ -4,6 +4,7 @@ export type PaperPull = { edgeY: number; offsetY: number };
 
 type Vertex = { x: number; y: number; z: number; u: number; v: number; shade: number; edgeX: number; edgeY: number };
 type Triangle = { a: Vertex; b: Vertex; c: Vertex; depth: number; facing: number };
+type PaperTexture = HTMLCanvasElement;
 
 // Mesh resolution of the curling sheet; phones get a lighter one (each triangle is a clipped drawImage).
 const DETAIL = { high: { columns: 24, rows: 14, pixels: 2 }, low: { columns: 14, rows: 8, pixels: 1.25 } };
@@ -64,8 +65,8 @@ function drawPaper(
   progress: number,
   pull: PaperPull,
   stitchOpacity: number,
-  front?: HTMLImageElement,
-  back?: HTMLImageElement,
+  front?: PaperTexture,
+  back?: PaperTexture,
   backFade = 0,
   detail: keyof typeof DETAIL = "high",
 ) {
@@ -179,7 +180,7 @@ function drawPaper(
     context.closePath();
     context.clip();
     context.transform(xx, xy, yx, yy, a.x - xx * ax - yx * a.v, a.y - xy * ax - yy * a.v);
-    if (image?.complete && image.naturalWidth) {
+    if (image) {
       context.drawImage(image, 0, 0, width, height);
       // The page's own picture showing through the back of the sheet, like thin paper.
       if (!frontFacing && backFade > 0) {
@@ -244,6 +245,36 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
   detail?: keyof typeof DETAIL;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const textures = useRef<{ front?: PaperTexture; back?: PaperTexture }>({});
+
+  useLayoutEffect(() => {
+    // Rasterize a vector back cover once, rather than hundreds of times for every frame's mesh.
+    const scale = Math.min(window.devicePixelRatio || 1, DETAIL[detail].pixels);
+    const rasterize = (image?: HTMLImageElement): PaperTexture | undefined => {
+      if (!image?.complete || !image.naturalWidth) return;
+      const texture = document.createElement("canvas");
+      texture.width = Math.max(1, Math.ceil(width * scale));
+      texture.height = Math.max(1, Math.ceil(height * scale));
+      const context = texture.getContext("2d");
+      if (!context) return;
+      context.drawImage(image, 0, 0, texture.width, texture.height);
+      return texture;
+    };
+    const prepare = () => {
+      for (const texture of new Set(Object.values(textures.current))) if (texture) texture.width = texture.height = 0;
+      const frontTexture = rasterize(front);
+      textures.current = { front: frontTexture, back: back === front ? frontTexture : rasterize(back) };
+    };
+    prepare();
+    front?.addEventListener("load", prepare);
+    back?.addEventListener("load", prepare);
+    return () => {
+      front?.removeEventListener("load", prepare);
+      back?.removeEventListener("load", prepare);
+      for (const texture of new Set(Object.values(textures.current))) if (texture) texture.width = texture.height = 0;
+      textures.current = {};
+    };
+  }, [front, back, width, height, detail]);
 
   useLayoutEffect(() => {
     const element = canvas.current;
@@ -259,7 +290,7 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
       if (!context) return;
       context.setTransform(scale, 0, 0, scale, 0, 0);
       context.clearRect(0, 0, width * 3, height * 2);
-      drawPaper(context, width, height, direction, progress, pull, stitchOpacity, front, back, backFade, detail);
+      drawPaper(context, width, height, direction, progress, pull, stitchOpacity, textures.current.front, textures.current.back, backFade, detail);
     }
     paint();
     front?.addEventListener("load", paint);

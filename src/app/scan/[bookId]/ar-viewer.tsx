@@ -58,6 +58,7 @@ type Props = {
   book: { id: string; title: string; mindUrl: string; coverUrl: string | null; subject: { name: string; color: string; icon: string } };
   targets: ViewerTarget[];
   backHref: string;
+  scanHref: string;
   previewTargetId?: string;
 };
 
@@ -75,7 +76,7 @@ const STAGE_TEXT: Record<ARStage, string> = {
 
 type Loaded = { anchor: ARAnchor; handles: ContentHandle[]; motions: MotionPlayer[] };
 
-export function ARViewer({ book, targets, backHref, previewTargetId }: Props) {
+export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<ARSession | null>(null);
   const loadedRef = useRef(new Map<string, Loaded>());
@@ -579,7 +580,7 @@ export function ARViewer({ book, targets, backHref, previewTargetId }: Props) {
               )}
             </div>
             {/* No usable camera here (typical on laptops): hand over to a phone. */}
-            {error.code !== "targets" && <PhoneQR path={`/scan/${book.id}`} dark size={120} className="mt-6 w-full text-left" />}
+            {error.code !== "targets" && <PhoneQR path={scanHref} dark size={120} className="mt-6 w-full text-left" />}
           </div>
         </div>
       )}
@@ -642,7 +643,7 @@ export function ARViewer({ book, targets, backHref, previewTargetId }: Props) {
               narrationUrl: world.narrationUrl,
               sounds: world.sounds,
             }}
-            backHref={`/scan/${book.id}`}
+            backHref={scanHref}
             experience={worldExperienceOf(world.scanAction, world.worldUrl)!}
             onExit={() => {
               // Back to scanning, from this tap (the camera may only start from one on iPhone).

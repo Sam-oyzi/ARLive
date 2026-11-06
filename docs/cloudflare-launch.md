@@ -25,6 +25,12 @@ The Worker uses native D1 and R2 bindings. It does not expose a SQL proxy or req
 keys. `/files` checks book and school access before serving private objects, including range
 requests for video and MindAR files. Models are optimized in the browser before upload.
 
+Reader images use private browser caching with ETags. Every conditional read still checks book
+access before returning 304, so refreshing does not download unchanged images again and revoked
+access cannot reuse a successful server response. The reader preloads its open spread and a small
+neighbourhood, sharing decoded images with the text compositor. Scanner and phone QR links retain
+their reader page, language or school-card anchor in a validated `returnTo` parameter.
+
 ## Deploy updates
 
 Use Node 24.22 or later within the supported engines range in package.json.

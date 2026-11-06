@@ -6,15 +6,16 @@ export function readerHref(bookId: string, pageId?: string | null, language = ""
   return `/read/${encodeURIComponent(bookId)}${query.size ? `?${query}` : ""}`;
 }
 
-/** A return link can only lead to this book's reader, library page, or Studio. */
+/** A return link stays in this book or a known school/subject entry point. */
 export function bookReturnHref(bookId: string, candidate: unknown, fallback: string): string {
   if (typeof candidate !== "string" || !candidate.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\")) return fallback;
   try {
     const url = new URL(candidate, "https://reader.invalid");
     const id = encodeURIComponent(bookId);
     const editor = url.pathname.startsWith(`/admin/books/${id}/targets/`) && /^[a-zA-Z0-9_-]+$/.test(url.pathname.slice(`/admin/books/${id}/targets/`.length));
-    if (url.origin !== "https://reader.invalid" || (!editor && ![`/read/${id}`, `/library/${id}`, `/admin/books/${id}`].includes(url.pathname))) return fallback;
-    if (url.pathname !== `/read/${id}`) return url.pathname;
+    const channel = ["/school", "/school/catalog", "/learn"].includes(url.pathname) || /^\/learn\/[a-zA-Z0-9_-]+$/.test(url.pathname);
+    if (url.origin !== "https://reader.invalid" || (!editor && !channel && ![`/read/${id}`, `/library/${id}`, `/admin/books/${id}`].includes(url.pathname))) return fallback;
+    if (url.pathname !== `/read/${id}`) return `${url.pathname}${url.search}${url.hash}`;
     return readerHref(bookId, url.searchParams.get("page"), url.searchParams.get("lang") ?? "");
   } catch {
     return fallback;

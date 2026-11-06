@@ -9,6 +9,7 @@ import { readableBooksWhere } from "@/lib/books";
 import { db } from "@/lib/db";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { plural } from "@/lib/utils";
+import { withReturnTo } from "@/lib/reader-navigation";
 
 export default async function SubjectPage({ params }: { params: Promise<{ subject: string }> }) {
   const user = await requireUser(["STUDENT"]);
@@ -64,7 +65,7 @@ export default async function SubjectPage({ params }: { params: Promise<{ subjec
           const arCount = book.targets.filter((target) => target.ar).length;
           const canScan = !!book.mindUrl && arCount > 0;
           return (
-          <article key={book.id} className="overflow-hidden rounded-[26px] border border-ink-200/70 bg-white shadow-soft">
+          <article key={book.id} id={`book-${book.id}`} className="overflow-hidden rounded-[26px] border border-ink-200/70 bg-white shadow-soft">
             <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center">
               <div className="flex flex-1 gap-4">
                 <div
@@ -99,8 +100,8 @@ export default async function SubjectPage({ params }: { params: Promise<{ subjec
                   <BookOpen className="size-4" /> Read the book
                 </ButtonLink>
                 {canScan && <>
-                  <ButtonLink href={`/scan/${book.id}`} variant="outline" size="lg"><ScanLine /> Start scanning</ButtonLink>
-                  <PhoneQRDisclosure path={`/scan/${book.id}`} size={64} className="hidden rounded-xl border border-ink-200/70 bg-ink-50 px-3 py-2 text-xs text-ink-600 lg:block" />
+                  <ButtonLink href={withReturnTo(`/scan/${book.id}`, `/learn/${subject.slug}#book-${book.id}`)} variant="outline" size="lg"><ScanLine /> Start scanning</ButtonLink>
+                  <PhoneQRDisclosure path={withReturnTo(`/scan/${book.id}`, `/learn/${subject.slug}#book-${book.id}`)} size={64} className="hidden rounded-xl border border-ink-200/70 bg-ink-50 px-3 py-2 text-xs text-ink-600 lg:block" />
                 </>}
               </div>
             </div>

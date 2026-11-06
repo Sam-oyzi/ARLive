@@ -5,6 +5,7 @@
 // The result is a new image, so the words turn (and curl) with the page. Browser only.
 import { emptyCells, emptyRects, joinUnits, parseStory, shrinkMask, storyUnits, STORY_SOUND_COLORS, type TextPosition } from "./story-text";
 import { storyFontFamily, storyLines, type StoryBlock, type StoryRun } from "./story-layout";
+import { loadPageImage } from "./page-images";
 
 const INK = "#2b2118";
 const PAPER = "#fbf6ea";
@@ -40,23 +41,6 @@ function storyFonts(): Promise<Fonts> {
   return fonts;
 }
 
-const images = new Map<string, Promise<HTMLImageElement>>();
-function loadImage(url: string): Promise<HTMLImageElement> {
-  let image = images.get(url);
-  if (!image) {
-    image = new Promise((resolve, reject) => {
-      const img = new Image();
-      // Decoded, not just loaded: Safari can otherwise draw nothing while it decodes the same picture
-      // for the page underneath.
-      img.onload = () => img.decode().catch(() => {}).then(() => resolve(img));
-      img.onerror = () => reject(new Error(`Couldn't load ${url}`));
-      img.src = url;
-    });
-    images.set(url, image);
-    image.catch(() => images.delete(url));
-  }
-  return image;
-}
 
 /** True when nothing at all was drawn on the canvas. */
 function isBlank(source: HTMLCanvasElement): boolean {
@@ -271,6 +255,7 @@ export async function composeStoryPage({
   cover = false,
   debug = false,
   blocks,
+  beforeDraw,
 }: {
   imageUrl: string;
   story: string | null;
@@ -283,9 +268,12 @@ export async function composeStoryPage({
   cover?: boolean;
   debug?: boolean;
   blocks?: StoryBlock[];
+  /** The reader waits for an active page turn before starting canvas work. */
+  beforeDraw?: () => Promise<void>;
 }): Promise<StoryPage | null> {
   if (blocks !== undefined ? !blocks.some((block) => block.text.trim()) : position === "off" || (cover && position === "auto") || !story?.trim()) return null;
-  const [img, f] = await Promise.all([loadImage(imageUrl), storyFonts()]);
+  const [img, f] = await Promise.all([loadPageImage(imageUrl), storyFonts()]);
+  await beforeDraw?.();
   const W = Math.round(requestedWidth ?? Math.min(img.naturalWidth, 1200));
   const H = Math.round(W * aspect);
 
@@ -315,6 +303,7 @@ export async function composeStoryPage({
     const family = (font: StoryBlock["font"]) => storyFontFamily(font, (property) => css.getPropertyValue(property).trim());
     await Promise.all(blocks.flatMap((block) => [block, ...(block.runs ?? [])].map((run) =>
       document.fonts.load(`${(run.bold ?? block.bold) ? 700 : 500} 40px ${family(run.font ?? block.font)}`, run.text).catch(() => []))));
+    await beforeDraw?.();
     context.drawImage(picture, 0, 0);
     const words: WordBox[] = [];
     for (const block of blocks) {

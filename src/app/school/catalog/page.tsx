@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { plural } from "@/lib/utils";
+import { withReturnTo } from "@/lib/reader-navigation";
 import { RequestButton } from "./request-button";
 
 export const metadata = { title: "Book catalog" };
@@ -54,7 +55,7 @@ export default async function CatalogPage() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {subject.books.map((book) => (
-                  <div key={book.id} className="flex gap-4 rounded-3xl border border-ink-200/70 bg-white p-4 shadow-soft">
+                  <div key={book.id} id={`book-${book.id}`} className="flex gap-4 rounded-3xl border border-ink-200/70 bg-white p-4 shadow-soft">
                     <div className="grid h-24 w-[72px] shrink-0 place-items-center overflow-hidden rounded-xl text-white shadow-soft" style={{ background: subject.color }}>
                       {book.coverUrl ? (
                         <Thumb src={book.coverUrl} width={72} height={96} className="size-full object-cover" />
@@ -73,7 +74,7 @@ export default async function CatalogPage() {
                             <span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
                               <CircleCheck className="size-4" /> Enabled
                             </span>
-                            <Link href={`/scan/${book.id}`} className="text-sm font-semibold text-brand-600 hover:underline">
+                            <Link href={withReturnTo(`/scan/${book.id}`, `/school/catalog#book-${book.id}`)} className="text-sm font-semibold text-brand-600 hover:underline">
                               Preview
                             </Link>
                           </>

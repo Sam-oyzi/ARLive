@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { extensionOf, MIME_TYPES, openUpload, uploadKey } from "@/lib/storage";
 import { canReadUpload } from "@/lib/upload-access";
+import { uploadEtag, matchesEtag } from "@/lib/media-cache";
 
 // Serves uploaded files with HTTP range support (required for video playback on iOS Safari).
 // Filenames are random and never reused, so responses are cached as immutable.
@@ -14,15 +15,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const upload = await openUpload(segments);
   if (!upload) return new Response("Not found", { status: 404 });
   const { size } = upload;
+  const etag = uploadEtag(key, size);
 
   const headers = new Headers({
     "Content-Type": MIME_TYPES[extensionOf(key)] ?? "application/octet-stream",
     "Accept-Ranges": "bytes",
-    "Cache-Control": protectedStorage ? "private, no-store" : "public, max-age=31536000, immutable",
+    "Cache-Control": protectedStorage ? "private, no-cache" : "public, max-age=31536000, immutable",
+    "ETag": etag,
     "X-Content-Type-Options": "nosniff",
     // Uploaded SVGs must never run script if someone opens the file URL directly.
     "Content-Security-Policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:",
   });
+  // This check comes after book access and object existence, including on cached reads.
+  if (matchesEtag(request.headers.get("if-none-match"), etag)) return new Response(null, { status: 304, headers });
 
   const range = request.headers.get("range");
   const match = range?.match(/^bytes=(\d*)-(\d*)$/);

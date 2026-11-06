@@ -10,6 +10,7 @@ import { bookFormat } from "@/lib/book-format";
 import { arTargets, canPublish, compileState, visibilityOf } from "@/lib/books";
 import type { ContentType } from "@/lib/content";
 import { db } from "@/lib/db";
+import { withReturnTo } from "@/lib/reader-navigation";
 import { scanActionOf, worldExperienceOf, isPlaceableModel } from "@/lib/scan-actions";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { cn, plural, timeAgo } from "@/lib/utils";
@@ -115,7 +116,7 @@ export default async function BookStudioPage({ params }: { params: Promise<{ id:
             </>
           )}
           {book.mindUrl && (
-            <ButtonLink href={`/scan/${book.id}`} target="_blank" variant="secondary">
+            <ButtonLink href={withReturnTo(`/scan/${book.id}`, `/admin/books/${book.id}`)} target="_blank" variant="secondary">
               <ScanLine /> Test in AR
             </ButtonLink>
           )}

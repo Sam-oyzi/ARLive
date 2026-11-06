@@ -9,7 +9,7 @@ import { plainStory } from "@/lib/story-text";
 import { scanActionOf, opensModel } from "@/lib/scan-actions";
 import { worldEffectOf } from "@/lib/world-effects";
 import { ARViewer } from "./ar-viewer";
-import { bookReturnHref } from "@/lib/reader-navigation";
+import { bookReturnHref, withReturnTo } from "@/lib/reader-navigation";
 
 export const metadata: Metadata = { title: "Scan" };
 export const viewport: Viewport = { themeColor: "#000000", maximumScale: 1, userScalable: false };
@@ -69,6 +69,7 @@ export default async function ScanPage({ params, searchParams }: { params: Promi
         contents: t.contents as ContentData[],
       }))}
       backHref={backHref}
+      scanHref={withReturnTo(scanPath, backHref)}
       // Admins can review the selected engine without having to hold up a printed proof.
       previewTargetId={previewTarget?.id}
     />

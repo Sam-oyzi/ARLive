@@ -82,7 +82,7 @@ export default async function TargetEditorPage({ params }: { params: Promise<{ i
             )}
           </div>
           {target.book.mindUrl && (
-            <ButtonLink href={`/scan/${id}`} target="_blank" variant="secondary">
+            <ButtonLink href={withReturnTo(`/scan/${id}`, `/admin/books/${id}/targets/${targetId}`)} target="_blank" variant="secondary">
               <ScanLine /> Test in AR
             </ButtonLink>
           )}

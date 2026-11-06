@@ -7,6 +7,7 @@ import { playableBooksWhere, readableBooksWhere } from "@/lib/books";
 import { db } from "@/lib/db";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { plural } from "@/lib/utils";
+import { withReturnTo } from "@/lib/reader-navigation";
 
 export const metadata = { title: "My subjects" };
 
@@ -108,7 +109,7 @@ export default async function LearnHome() {
           <h2 className="mt-10 mb-4 font-display text-xl font-bold text-ink-900">Recently explored</h2>
           <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-none">
             {recentPages.map((s) => (
-              <Link key={s.id} href={`/scan/${s.book.id}`} className="w-32 shrink-0">
+              <Link key={s.id} id={`scan-${s.id}`} href={withReturnTo(`/scan/${s.book.id}`, `/learn#scan-${s.id}`)} className="w-32 shrink-0">
                 <div className="aspect-[3/4] overflow-hidden rounded-2xl bg-ink-100 shadow-soft">
                   <Thumb src={s.target.imageUrl} width={128} height={171} className="size-full object-cover" />
                 </div>

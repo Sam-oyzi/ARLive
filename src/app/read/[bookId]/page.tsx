@@ -9,7 +9,8 @@ import { pageTranslationsSchema } from "@/lib/page-translations";
 import { textPositionOf } from "@/lib/story-text";
 import { readStoryLayouts } from "@/lib/story-layout";
 import { scanActionOf, isPlaceableModel } from "@/lib/scan-actions";
-import { readerPageIndex } from "@/lib/reader-navigation";
+import { readerHref, readerPageIndex } from "@/lib/reader-navigation";
+import { visibleReaderPages } from "@/lib/reader-pages";
 import { Reader } from "./reader";
 
 export async function generateMetadata({ params }: { params: Promise<{ bookId: string }> }): Promise<Metadata> {
@@ -23,7 +24,7 @@ export default async function ReadPage({ params, searchParams }: { params: Promi
   const user = await getCurrentUser();
   const { bookId } = await params;
   const { page, lang } = await searchParams;
-  await requireReadableBook(user, bookId, `/read/${bookId}`);
+  await requireReadableBook(user, bookId, readerHref(bookId, page, lang));
 
   const book = await db.book.findUnique({
     where: { id: bookId },
@@ -47,11 +48,19 @@ export default async function ReadPage({ params, searchParams }: { params: Promi
     : user?.role === "STUDENT" && !book.ownerId ? `/learn/${book.subject.slug}`
     : book.ownerId ? "/account" : `/library/${book.id}`;
   const state = compileState(book, book.targets);
+  const initialPage = readerPageIndex(book.targets.map((target) => target.id), page);
+  const initialImages = visibleReaderPages(initialPage, book.targets.length).map((index) => {
+    const target = book.targets[index]!;
+    return pageTranslationsSchema.safeParse(target.translations).data?.[lang ?? ""]?.imageUrl ?? target.imageUrl;
+  });
+  if (initialPage === book.targets.length) initialImages.push(backCoverFor(book));
 
   return (
+    <>
+    {initialImages.map((image) => <link key={image} rel="preload" as="image" href={image} fetchPriority="high" />)}
     <Reader
       key={`${book.id}:${page ?? "cover"}:${lang ?? "en"}`}
-      initialPage={readerPageIndex(book.targets.map((target) => target.id), page)}
+      initialPage={initialPage}
       initialLanguage={lang}
       book={{
         id: book.id,
@@ -73,5 +82,6 @@ export default async function ReadPage({ params, searchParams }: { params: Promi
       editable={editable}
       backHref={backHref}
     />
+    </>
   );
 }

@@ -10,8 +10,11 @@
 // curls away to the left to reveal the next one, and the previous page curls back in over it.
 // Swipe, tap the outer thirds to turn, or tap the middle (onTap) to show the reader's controls.
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { completesPageTurn, PAGE_PULL_PX } from "./page-turn";
+import { completesPageTurn, pageTurnSpring, PAGE_PULL_PX } from "./page-turn";
 import { PAPER_EDGE, PAPER_THICKNESS, STITCH_HIGHLIGHT, STITCH_POSITIONS, STITCH_THREAD, PaperCurl, type PaperPull } from "./paper-curl";
+
+import { pageImage } from "@/lib/page-images";
+import { nearbyReaderPages, visibleReaderPages } from "@/lib/reader-pages";
 
 export type FlipPage = { id: string; imageUrl: string; title: string; ar: boolean };
 
@@ -113,13 +116,14 @@ export const FlipBook = forwardRef<
     /** Extra UI drawn on top of a resting page (badges, toggles). */
     renderOverlay?: (page: FlipPage, index: number, side: "left" | "right") => ReactNode;
     onSpreadChange?: (pages: number[]) => void;
+    onTurnChange?: (turning: boolean) => void;
     /** One page at a time instead of two-page spreads. */
     single?: boolean;
     /** Single mode: a tap in the middle of the screen. */
     onTap?: () => void;
     className?: string;
   }
->(function FlipBook({ pages, backCoverImageUrl, aspect, initialPage = 0, magnifier, renderOverlay, onSpreadChange, single = false, onTap, className }, ref) {
+>(function FlipBook({ pages, backCoverImageUrl, aspect, initialPage = 0, magnifier, renderOverlay, onSpreadChange, onTurnChange, single = false, onTap, className }, ref) {
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [spread, setSpread] = useState(() => spreadOf(initialPage));
@@ -132,6 +136,16 @@ export const FlipBook = forwardRef<
   const drag = useRef<Drag | null>(null);
   const images = useRef(new Map<string, HTMLImageElement>());
   const reducedMotion = useRef(false);
+  const turning = useRef(false);
+  const turnListener = useRef(onTurnChange);
+  turnListener.current = onTurnChange;
+  const updateTurn = useCallback((next: Turn | null) => {
+    if (turning.current !== !!next) {
+      turning.current = !!next;
+      turnListener.current?.(!!next);
+    }
+    setTurn(next);
+  }, []);
 
   const n = pages.length;
   const hasBackCover = n > 0 && (!!backCoverImageUrl || (n > 1 && n % 2 === 1));
@@ -154,11 +168,11 @@ export const FlipBook = forwardRef<
     singleRef.current = single;
     cancelAnimationFrame(animation.current);
     drag.current = null;
-    setTurn(null);
+    updateTurn(null);
     if (single && asked.current !== null && spreadOf(asked.current) === spread) setIndex(asked.current);
     else if (single) setIndex(hasBackCover && spread === spreads - 1 ? singleCount - 1 : Math.max(0, 2 * spread - 1));
     else setSpread(Math.min(spreads - 1, spreadOf(index)));
-  }, [single, spread, spreads, index, hasBackCover, singleCount]);
+  }, [single, spread, spreads, index, hasBackCover, singleCount, updateTurn]);
 
   // Fit two pages side by side inside the container.
   useLayoutEffect(() => {
@@ -173,33 +187,33 @@ export const FlipBook = forwardRef<
 
   useEffect(() => {
     reducedMotion.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // Preload every page so turns never flash an empty sheet.
-    const urls = new Set(pages.map((page) => page.imageUrl).filter(Boolean));
-    if (backCoverImageUrl) urls.add(backCoverImageUrl);
-    for (const url of images.current.keys()) {
-      if (!urls.has(url)) images.current.delete(url);
-    }
+    // Give the open spread the bandwidth first. Reuse its decoded images for text and curls.
+    const open = visibleReaderPages(single ? index : Math.max(0, 2 * spread - 1), n, single);
+    const nearby = nearbyReaderPages(open.length ? open : n ? [n - 1] : [], n);
+    const urls = new Set(nearby.map((i) => pages[i]!.imageUrl).filter(Boolean));
+    const nearBack = single ? index >= n - 2 : spread >= spreads - 3;
+    if (backCoverImageUrl && nearBack) urls.add(backCoverImageUrl);
+    for (const url of images.current.keys()) if (!urls.has(url)) images.current.delete(url);
     for (const url of urls) {
-      if (images.current.has(url)) continue;
-      const img = new Image();
-      img.src = url;
-      // Decode now, not on the first frame of a turn.
-      img.decode?.().catch(() => {});
-      images.current.set(url, img);
+      const important = open.some((i) => pages[i]!.imageUrl === url) || url === backCoverImageUrl;
+      images.current.set(url, pageImage(url, important ? "high" : "low").image);
     }
-  }, [pages, backCoverImageUrl]);
+  }, [pages, backCoverImageUrl, single, index, spread, n, spreads]);
 
   useEffect(() => {
     if (single) onSpreadChange?.(index < n ? [index] : []);
     else onSpreadChange?.([2 * spread - 1, 2 * spread].filter((i) => i >= 0 && i < n));
   }, [single, index, spread, n, onSpreadChange]);
 
-  useEffect(() => () => cancelAnimationFrame(animation.current), []);
+  useEffect(() => () => {
+    cancelAnimationFrame(animation.current);
+    turnListener.current?.(false);
+  }, []);
 
   const animateTo = useCallback((dir: 1 | -1, from: number, to: 0 | 1, pull?: PaperPull) => {
     cancelAnimationFrame(animation.current);
     const finish = () => {
-      setTurn(null);
+      updateTurn(null);
       if (to !== 1) return;
       asked.current = null;
       if (singleRef.current) setIndex((i) => i + dir);
@@ -209,32 +223,19 @@ export const FlipBook = forwardRef<
       finish();
       return;
     }
-    // Every page, including both covers, shares the same spring and settling threshold.
-    const stiffness = to === 1 ? 170 : 150;
-    const damping = to === 1 ? 26 : 24;
-    let position = from;
-    let velocity = 0;
-    let previousTime = performance.now();
-    setTurn({ dir, p: from, pull });
+    const start = performance.now();
+    updateTurn({ dir, p: from, pull });
     const step = (now: number) => {
-      // Real elapsed time in small fixed steps: the turn takes as long on a slow phone as on a fast one.
-      let elapsed = Math.min(0.1, Math.max(0, (now - previousTime) / 1000));
-      previousTime = now;
-      while (elapsed > 0) {
-        const dt = Math.min(elapsed, 1 / 120);
-        velocity += (-stiffness * (position - to) - damping * velocity) * dt;
-        position += velocity * dt;
-        elapsed -= dt;
-      }
-      if (Math.abs(position - to) < 0.002 && Math.abs(velocity) < 0.02) {
-        finish();
-      } else {
-        setTurn({ dir, p: Math.max(0, Math.min(1, position)), pull });
+      // Sampling wall time avoids stretching a turn when a phone drops a costly frame.
+      const { position, finished } = pageTurnSpring(from, to, now - start);
+      if (finished) finish();
+      else {
+        updateTurn({ dir, p: position, pull });
         animation.current = requestAnimationFrame(step);
       }
     };
     animation.current = requestAnimationFrame(step);
-  }, []);
+  }, [updateTurn]);
 
   const canTurn = useCallback(
     (dir: 1 | -1) => (single ? index + dir >= 0 && index + dir < singleCount : spread + dir >= 0 && spread + dir < spreads),
@@ -256,13 +257,14 @@ export const FlipBook = forwardRef<
     if (reducedMotion.current) return animateTo(1, 0, 1);
     cancelAnimationFrame(animation.current);
     const start = performance.now();
+    updateTurn({ dir: 1, p: 0, pull: { edgeY: HAND_GRIP, offsetY: 0 } });
     const step = (now: number) => {
       const t = Math.min(1, (now - start) / HAND_PULL_MS);
       const eased = easeInOut(t);
       // Lifted slightly as it is drawn across, as a real pull does.
       const pull = { edgeY: HAND_GRIP, offsetY: -0.05 * pageHeight.current * eased };
       if (t < 1) {
-        setTurn({ dir: 1, p: HAND_PULL * eased, pull });
+        updateTurn({ dir: 1, p: HAND_PULL * eased, pull });
         animation.current = requestAnimationFrame(step);
       } else {
         // Letting go: exactly what releasing a drag does.
@@ -270,7 +272,7 @@ export const FlipBook = forwardRef<
       }
     };
     animation.current = requestAnimationFrame(step);
-  }, [turn, canTurn, animateTo]);
+  }, [turn, canTurn, animateTo, updateTurn]);
 
   useImperativeHandle(
     ref,
@@ -282,12 +284,12 @@ export const FlipBook = forwardRef<
         asked.current = null;
         cancelAnimationFrame(animation.current);
         drag.current = null;
-        setTurn(null);
+        updateTurn(null);
         if (singleRef.current) setIndex(Math.max(0, Math.min(singleCount - 1, target)));
         else setSpread(Math.max(0, Math.min(spreads - 1, spreadOf(target))));
       },
     }),
-    [flip, turnByHand, spreads, singleCount],
+    [flip, turnByHand, spreads, singleCount, updateTurn],
   );
 
   useEffect(() => {
@@ -356,7 +358,7 @@ export const FlipBook = forwardRef<
     const p = Math.min(1, Math.max(0, dx / (pageW * 2 * 0.62), lift));
     const offsetY = Math.max(-pageH * 0.5, Math.min(pageH * 0.5, dy));
     d.turn = { dir: d.dir, p, pull: { edgeY: d.edgeY, offsetY } };
-    setTurn(d.turn);
+    updateTurn(d.turn);
   }
 
   function onPointerUp(e: React.PointerEvent) {
@@ -479,7 +481,7 @@ export const FlipBook = forwardRef<
     }
     const offsetY = Math.max(-pageH * 0.5, Math.min(pageH * 0.5, e.clientY - d.startY));
     d.turn = { dir: d.dir, p: Math.min(1, Math.max(0, (-dx * d.dir) / (pageW * 0.9))), pull: { edgeY: d.edgeY, offsetY } };
-    setTurn(d.turn);
+    updateTurn(d.turn);
   }
 
   function singleUp(e: React.PointerEvent) {
