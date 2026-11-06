@@ -226,6 +226,8 @@ model Target {
   name        String
   description String?
   translations Json?
+  /// Manual story typography keyed by language. Missing entries use automatic layout.
+  storyLayouts Json?
   imageUrl    String
   width       Int
   height      Int

@@ -189,9 +189,9 @@ export async function startEighthWallSession(
       reticle.visible = !!onFloor;
       if (onFloor) {
         reticle.position.set(hit.x, 0.005, hit.z);
-        if (!seen) onState("ready");
-        seen = true;
       }
+      if (!!onFloor !== seen) onState(onFloor ? "ready" : "finding");
+      seen = !!onFloor;
     },
     onCameraStatusChange: ({ status }) => {
       if (status === "failed") onError("The camera couldn't start. Allow camera access for this site in Settings, then try again.");
@@ -206,10 +206,8 @@ export async function startEighthWallSession(
   const press = (event: PointerEvent) => {
     down = event.isPrimary ? { x: event.clientX, y: event.clientY } : null;
   };
-  const place = (event: PointerEvent) => {
-    const tap = down && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 14 && !pinch.pinchedRecently();
-    down = null;
-    if (!tap || placed || !reticle.visible || !camera || (event.target as Element).closest("button, a")) return;
+  const placeAtMarker = () => {
+    if (placed || !reticle.visible || !camera) return;
     const toReader = new THREE.Vector3(camera.position.x - hit.x, 0, camera.position.z - hit.z).normalize();
     box.rotation.y = Math.atan2(toReader.x, toReader.z);
     box.position.copy(reticle.position).addScaledVector(toReader, -ROOM.size / 2);
@@ -218,6 +216,11 @@ export async function startEighthWallSession(
     reticle.visible = false;
     placed = true;
     onState("placed");
+  };
+  const place = (event: PointerEvent) => {
+    const tap = down && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 14 && !pinch.pinchedRecently();
+    down = null;
+    if (tap && !(event.target as Element).closest("button, a")) placeAtMarker();
   };
   overlay.addEventListener("pointerdown", press);
   overlay.addEventListener("pointerup", place);
@@ -247,6 +250,7 @@ export async function startEighthWallSession(
   };
   return {
     end,
+    placeAtMarker,
     // Straight into the box, wherever the reader stands: the floor is y = 0 here.
     stepInside: () => {
       if (!camera) return;

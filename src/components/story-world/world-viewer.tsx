@@ -129,9 +129,9 @@ export function WorldViewer({
           setRoomError(message);
           setRoomState(null);
           session.current?.end();
-        }, { enterAutomatically: true });
+        });
       } else {
-        session.current = await startRoomSession(world.url, world.effect, overlay.current!, onState, { enterAutomatically: true });
+        session.current = await startRoomSession(world.url, world.effect, overlay.current!, onState);
       }
       if (!mounted.current || cameraFailed.current) session.current?.end();
     } catch (error) {
@@ -391,9 +391,11 @@ export function WorldViewer({
             <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 px-6 pb-6 safe-bottom">
               <span className={cn("flex items-center gap-2 rounded-full px-4 py-2.5 text-center text-sm font-semibold", glass)}>
                 {roomState === "starting" && <><LoaderCircle className="size-4 animate-spin" /> Starting the camera…</>}
-                {(roomState === "finding" || roomState === "ready") && <><Hand className="size-4" /> Opening the story around you…</>}
+                {roomState === "finding" && <><Hand className="size-4" /> Point your phone at the floor to find the ring</>}
+                {roomState === "ready" && <><Hand className="size-4" /> Aim the ring where you want to enter</>}
                 {roomState === "placed" && <><Hand className="size-4 shrink-0" /> You’re inside. Look around with your phone</>}
               </span>
+              {roomState === "ready" && <button type="button" onClick={() => session.current?.placeAtMarker()} className="pointer-events-auto rounded-full bg-white px-5 py-3 text-sm font-bold text-ink-950 shadow-lift">Step in here</button>}
               {placeWith === "eighthwall" && <EighthWallCredit className="pointer-events-auto max-w-xs text-white/60 [text-shadow:0_1px_2px_rgb(0_0_0/0.6)]" />}
             </div>
           </>

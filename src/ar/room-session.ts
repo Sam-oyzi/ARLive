@@ -66,7 +66,7 @@ export async function startRoomSession(worldUrl: string, effect: WorldEffect, ov
   const pinch = pinchToResize(overlay, room);
   const at = new THREE.Vector3();
   const eye = new THREE.Vector3();
-  session.addEventListener("select", () => {
+  const placeAtMarker = () => {
     if (placed || !reticle.visible) return;
     at.setFromMatrixPosition(reticle.matrix);
     renderer.xr.getCamera().getWorldPosition(eye);
@@ -80,7 +80,8 @@ export async function startRoomSession(worldUrl: string, effect: WorldEffect, ov
     placed = true;
     hits?.cancel();
     onState("placed");
-  });
+  };
+  session.addEventListener("select", placeAtMarker);
 
   onState("finding");
   let seen = false;
@@ -92,7 +93,9 @@ export async function startRoomSession(worldUrl: string, effect: WorldEffect, ov
     last = time;
     if (frame && !placed) {
       const reference = renderer.xr.getReferenceSpace()!;
-      const pose = hits ? frame.getHitTestResults(hits)[0]?.getPose(reference) : undefined;
+      const pose = hits ? frame.getHitTestResults(hits)
+        .map((result) => result.getPose(reference))
+        .find((candidate) => candidate && (enterAutomatically || candidate.transform.matrix[5]! > 0.9)) : undefined;
       // A valid tracked view is enough to enter. Use the measured floor when available; otherwise
       // stand the room at normal eye height instead of making the child aim at the floor first.
       if (enterAutomatically && frame.getViewerPose(reference)) {
@@ -109,9 +112,9 @@ export async function startRoomSession(worldUrl: string, effect: WorldEffect, ov
         if (pose) {
           reticle.matrix.fromArray(pose.transform.matrix);
           floorY = pose.transform.position.y;
-          if (!seen) onState("ready");
-          seen = true;
         }
+        if (!!pose !== seen) onState(pose ? "ready" : "finding");
+        seen = !!pose;
       }
     }
     renderer.render(scene, camera);
@@ -131,6 +134,7 @@ export async function startRoomSession(worldUrl: string, effect: WorldEffect, ov
 
   return {
     end: () => void session.end().catch(() => {}),
+    placeAtMarker,
     // Straight into the box, wherever the reader stands, once the floor has been found.
     stepInside: () => {
       if (floorY === null) return;

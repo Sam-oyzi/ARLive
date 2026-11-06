@@ -30,6 +30,7 @@ import { Dropdown, DropdownContent, DropdownTrigger } from "@/components/ui/drop
 import { Thumb } from "@/components/thumb";
 import { worldExperienceOf, opensModel, type ScanAction } from "@/lib/scan-actions";
 import type { PageTranslations } from "@/lib/page-translations";
+import { storyBlockText, type StoryBlock } from "@/lib/story-layout";
 import { nativeLanguageName, readerWords } from "@/lib/reader-words";
 import { composeStoryPageCached, freeCorner, whenIdle, type StoryPage } from "@/lib/story-page";
 import { plainStory, type TextPosition } from "@/lib/story-text";
@@ -57,6 +58,7 @@ type ReaderPage = {
   hasModel: boolean;
   textPosition: TextPosition;
   translations?: PageTranslations;
+  storyLayouts?: Record<string, StoryBlock[]>;
 };
 
 // A cream desk with soft watercolour washes, so the book reads like paper on a table.
@@ -255,9 +257,13 @@ export function Reader({
   const languages = useMemo(() => [...new Set(pages.flatMap((page) => Object.keys(page.translations ?? {})))].sort(), [pages]);
   const readingPages = useMemo(() => pages.map((page) => {
     const translation = page.translations?.[locale];
-    return translation
+    const version = translation
       ? { ...page, imageUrl: translation.imageUrl ?? page.imageUrl, title: translation.title, story: translation.story ?? null, note: translation.note ?? null, lang: locale }
       : { ...page, lang: "en" };
+    const blocks = page.storyLayouts?.[translation ? locale : "original"];
+    const story = storyBlockText(blocks, version.story);
+    const narrationUrl = plainStory(story ?? "") === plainStory(version.story ?? "") ? version.narrationUrl : null;
+    return { ...version, blocks, story, narrationUrl };
   }), [pages, locale]);
 
   // ---------- words on the page (phones) ----------
@@ -277,7 +283,7 @@ export function Reader({
         if (n > 0) await whenIdle();
         if (!alive) return;
         const page = readingPages[i]!;
-        const drawn = await composeStoryPageCached({ imageUrl: page.imageUrl, story: page.story, position: page.textPosition, aspect, lang: page.lang, cover: i === 0 }).catch(() => null);
+        const drawn = await composeStoryPageCached({ imageUrl: page.imageUrl, story: page.story, position: page.textPosition, aspect, lang: page.lang, cover: i === 0, blocks: page.blocks }).catch(() => null);
         if (!alive) return;
         if (drawn) setComposed((m) => (m[page.id]?.url === drawn.url ? m : { ...m, [page.id]: drawn }));
       }
@@ -298,7 +304,7 @@ export function Reader({
   // The pages turn by themselves, with the same curl as a finger: after the page's voice when it has
   // one (and the voice is on), otherwise after the time a child takes to read it. Voices are recorded
   // in the book's original language only.
-  const narrated = locale === "" && pages.some((p) => p.narrationUrl);
+  const narrated = locale === "" && readingPages.some((p) => p.narrationUrl);
   const [reading, setReading] = useState(false);
   const readingRef = useRef(false);
   const [voice, setVoice] = useState(true);
@@ -353,7 +359,7 @@ export function Reader({
     if (indexes.length === 0) return stopReading(); // the back cover
     const { voice: speaking, speed: pace, locale: language } = settings.current;
     const story = (i: number) => plainStory(readingPages[i]?.story ?? "");
-    const voiced = speaking && language === "" ? indexes.filter((i) => pages[i]?.narrationUrl) : [];
+    const voiced = speaking && language === "" ? indexes.filter((i) => readingPages[i]?.narrationUrl) : [];
     const silent = indexes.filter((i) => !voiced.includes(i));
     const turnAfter = (seconds: number) => {
       setCountdown({ key: Date.now(), seconds });
@@ -365,7 +371,7 @@ export function Reader({
     const playNext = () => {
       if (!readingRef.current) return;
       if (next < voiced.length) {
-        el.src = pages[voiced[next++]!]!.narrationUrl!;
+        el.src = readingPages[voiced[next++]!]!.narrationUrl!;
         // If the phone refuses to play it, the child reads it instead.
         el.play().catch(() => turnAfter(readingSeconds(indexes.map(story), pace)));
         return;
@@ -374,7 +380,7 @@ export function Reader({
     };
     el.onended = playNext;
     playNext();
-  }, [pages, readingPages, stopReading]);
+  }, [readingPages, stopReading]);
 
   function toggleReading() {
     if (readingRef.current) return stopReading();
@@ -432,6 +438,7 @@ export function Reader({
   const position = backCover ? pages.length + 1 : (visible[0] ?? 0) + 1;
   // What the reader writes on the page itself follows the book's language.
   const say = readerWords(locale || "en");
+  const printHref = `/print/${book.id}${locale ? `?lang=${encodeURIComponent(locale)}` : ""}`;
   const currentPageId = backCover ? "back-cover" : pages[focusedPage]?.id;
   useEffect(() => {
     const href = readerHref(book.id, currentPageId, locale);
@@ -535,13 +542,13 @@ export function Reader({
             <Link href={`/admin/books/${book.id}`} className={cn(chip, "hidden text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60 sm:flex")}>
               <Settings2 className="size-4" /> Studio
             </Link>
-            <Link href={`/print/${book.id}`} className={cn(chip, "bg-ink-900 text-white hover:bg-ink-800")}>
+            <Link href={printHref} className={cn(chip, "bg-ink-900 text-white hover:bg-ink-800")}>
               <Printer className="size-4" /> <span className={cn(single && "sr-only")}>Print</span>
             </Link>
           </>
         )}
         {!editable && pages.length > 0 && !single && (
-          <Link href={`/print/${book.id}`} className={cn(chip, "text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60")} title="Download or print this book">
+          <Link href={printHref} className={cn(chip, "text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60")} title="Download or print this book">
             <Download className="size-4" /> Download
           </Link>
         )}

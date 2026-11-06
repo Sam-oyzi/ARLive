@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { ArrowLeft, Printer, ScanLine } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { composeStoryPage, freeCorner, type StoryPage } from "@/lib/story-page";
+import { readerHref } from "@/lib/reader-navigation";
 import type { TextPosition } from "@/lib/story-text";
+import type { StoryBlock } from "@/lib/story-layout";
 import { cn } from "@/lib/utils";
 import { recordDownload } from "@/server/actions/library";
+import { PrintGuide } from "./print-guide";
 
-type PrintPage = { id: string; imageUrl: string; title: string; ar: boolean; experience: "box" | "panorama" | null; story: string | null; textPosition: TextPosition };
+type PrintPage = { id: string; imageUrl: string; title: string; ar: boolean; experience: "box" | "panorama" | null; story: string | null; lang: string; textPosition: TextPosition; blocks?: StoryBlock[] };
 
 // Pixels per millimetre for the pages with words drawn in: about 240 dpi, crisp in print.
 const PRINT_PX_PER_MM = 240 / 25.4;
@@ -18,12 +21,16 @@ const PRINT_PX_PER_MM = 240 / 25.4;
 /** One sheet per page at the book's real size; the browser's "Save as PDF" turns it into a print file. */
 export function PrintBook({
   book,
+  language,
+  guideQrUrl,
   format,
   pages,
   backCover,
   countDownload,
 }: {
   book: { id: string; title: string };
+  language: string;
+  guideQrUrl: string;
   /** The last sheet: the back cover art with a QR code that opens the book on a phone. */
   backCover: { imageUrl: string; qrUrl: string; ar: boolean };
   countDownload: boolean;
@@ -57,6 +64,8 @@ export function PrintBook({
           ? await composeStoryPage({
               imageUrl: page.imageUrl,
               story: page.story,
+              lang: page.lang,
+              blocks: page.blocks,
               position: page.textPosition,
               aspect: format.heightMm / format.widthMm,
               width: format.widthMm * PRINT_PX_PER_MM,
@@ -96,7 +105,7 @@ export function PrintBook({
 
       <header className="sticky top-0 z-10 border-b border-ink-200/70 bg-white/90 backdrop-blur print:hidden">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-4 px-6 py-3">
-          <Link href={`/read/${book.id}`} className="grid size-9 place-items-center rounded-xl border border-ink-200 text-ink-600 hover:text-ink-900" aria-label="Back to the book">
+          <Link href={readerHref(book.id, null, language)} className="grid size-9 place-items-center rounded-xl border border-ink-200 text-ink-600 hover:text-ink-900" aria-label="Back to the book">
             <ArrowLeft className="size-4" />
           </Link>
           <div className="min-w-0">
@@ -138,13 +147,14 @@ export function PrintBook({
 
       <main className="flex flex-col items-center gap-8 py-10 print:block print:gap-0 print:p-0">
         {pages.map((page, i) => {
-          // Page 1 is a right-hand page; badges sit in the outer bottom corner.
-          const recto = i % 2 === 0;
+          // The print-only instructions after the front cover shift the physical page sides.
+          const recto = i === 0 || i % 2 === 1;
           return (
+            <Fragment key={page.id}>
             <section
-              key={page.id}
               className="sheet relative overflow-hidden bg-white shadow-lift"
               style={{ width: w, height: h }}
+              lang={page.lang}
               aria-label={`Page ${i + 1}: ${page.title}`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -170,6 +180,8 @@ export function PrintBook({
                 </div>
               )}
             </section>
+            {i === 0 && <PrintGuide language={language} title={book.title} width={w} height={h} qrUrl={guideQrUrl} ar={backCover.ar} />}
+            </Fragment>
           );
         })}
         <section className="sheet relative overflow-hidden bg-white shadow-lift" style={{ width: w, height: h }} aria-label="Back cover">

@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { soundLayers } from "@/lib/sound-layers";
 import { pageTranslationsSchema } from "@/lib/page-translations";
 import { textPositionOf } from "@/lib/story-text";
+import { readStoryLayouts } from "@/lib/story-layout";
 import { scanActionOf, isPlaceableModel } from "@/lib/scan-actions";
 import { readerPageIndex } from "@/lib/reader-navigation";
 import { Reader } from "./reader";
@@ -67,6 +68,7 @@ export default async function ReadPage({ params, searchParams }: { params: Promi
         id: t.id, imageUrl: t.imageUrl, title: t.name, story: t.description, ar: t.ar, narrationUrl: t.narrationUrl, soundtrack: soundLayers(t.sounds), note: t.note, worldUrl: t.worldUrl,
         scanAction: scanActionOf(t.scanAction), hasModel: t.contents.some(isPlaceableModel), textPosition: textPositionOf(t.textPosition),
         translations: pageTranslationsSchema.safeParse(t.translations).data,
+        storyLayouts: readStoryLayouts(t.storyLayouts),
       }))}
       editable={editable}
       backHref={backHref}

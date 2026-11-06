@@ -3,7 +3,7 @@
 import * as THREE from "three";
 
 /** A running AR session: end it, or put the box round the reader. */
-export type RoomSession = { end: () => void; stepInside: () => void };
+export type RoomSession = { end: () => void; stepInside: () => void; placeAtMarker: () => void };
 
 /** Page actions put the reader inside immediately; explicit box placement can still be manual. */
 export type RoomOptions = { enterAutomatically?: boolean };

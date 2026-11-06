@@ -18,7 +18,9 @@ export default async function ScanPage({ params, searchParams }: { params: Promi
   const user = await getCurrentUser();
   const { bookId } = await params;
   const { preview, returnTo } = await searchParams;
-  await requireReadableBook(user, bookId, `/scan/${bookId}`);
+  const scanPath = `/scan/${bookId}`;
+  const readerReturn = bookReturnHref(bookId, returnTo, "");
+  await requireReadableBook(user, bookId, readerReturn ? `${scanPath}?returnTo=${encodeURIComponent(readerReturn)}` : scanPath);
 
   const book = await db.book.findUnique({
     where: { id: bookId },
@@ -33,7 +35,7 @@ export default async function ScanPage({ params, searchParams }: { params: Promi
   });
   if (!book) notFound();
   // A QR code from before the AR pages were compiled: read the book instead.
-  if (!book.mindUrl) redirect(`/read/${bookId}`);
+  if (!book.mindUrl) redirect(readerReturn || `/read/${bookId}`);
 
   const defaultBackHref =
     user?.role === "SUPER_ADMIN" ? `/admin/books/${book.id}`

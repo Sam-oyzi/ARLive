@@ -4,6 +4,7 @@
 // the picture is made a little smaller and the words get their own paper above (or below) it.
 // The result is a new image, so the words turn (and curl) with the page. Browser only.
 import { emptyCells, emptyRects, joinUnits, parseStory, shrinkMask, storyUnits, type TextPosition } from "./story-text";
+import { storyFontFamily, type StoryBlock } from "./story-layout";
 
 const INK = "#2b2118";
 const PAPER = "#fbf6ea";
@@ -128,8 +129,8 @@ type Text = { rows: Row[]; height: number; width: number; size: number };
 // Text widths by font and text: layouts are tried many times while fitting, with the same words.
 const widths = new Map<string, number>();
 
-function layout(context: CanvasRenderingContext2D, story: string, size: number, maxWidth: number, f: Fonts): Text {
-  const bodyFont = `500 ${size}px ${f.story}`;
+function layout(context: CanvasRenderingContext2D, story: string, size: number, maxWidth: number, f: Fonts, weight = 500): Text {
+  const bodyFont = `${weight} ${size}px ${f.story}`;
   const soundSize = size * 1.75;
   const soundFont = `700 ${soundSize}px ${f.sound}`;
   const measure = (text: string, sound: boolean) => {
@@ -184,7 +185,7 @@ function layout(context: CanvasRenderingContext2D, story: string, size: number, 
 
 const stepsIn = (row: Row) => row.tokens.length > 0 && row.tokens.every((t) => t.sound);
 
-function drawText(context: CanvasRenderingContext2D, text: Text, left: number, top: number, rtl: boolean, f: Fonts, paper: string, outline = false) {
+function drawText(context: CanvasRenderingContext2D, text: Text, left: number, top: number, rtl: boolean, f: Fonts, paper: string, outline = false, style?: StoryBlock, blockWidth = text.width) {
   const { size } = text;
   context.textBaseline = "alphabetic";
   context.direction = rtl ? "rtl" : "ltr";
@@ -196,7 +197,10 @@ function drawText(context: CanvasRenderingContext2D, text: Text, left: number, t
     if (!row.tokens.length) continue;
     // Lines start on the same edge, like a typeset poem; rows of sound words step in and out.
     const step = stepsIn(row) && soundRows++ % 2 ? size * 0.6 : 0;
-    let x = rtl ? left + text.width - row.width - step : left + step;
+    const align = style?.align ?? "start";
+    const offset = align === "center" ? (blockWidth - row.width) / 2
+      : (align === "start" ? rtl : !rtl) ? blockWidth - row.width : 0;
+    let x = left + offset + (rtl ? -step : step);
     const baseline = y - (row.sound ? size * 0.25 : size * 0.38);
     // Right-to-left rows are drawn from their right edge.
     for (const token of rtl ? [...row.tokens].reverse() : row.tokens) {
@@ -214,7 +218,7 @@ function drawText(context: CanvasRenderingContext2D, text: Text, left: number, t
         context.fillText(token.text, 0, 0);
         context.restore();
       } else {
-        context.font = `500 ${size}px ${f.story}`;
+        context.font = `${style?.bold ? 700 : 500} ${size}px ${f.story}`;
         context.textAlign = "left";
         if (outline) {
           context.save();
@@ -224,7 +228,7 @@ function drawText(context: CanvasRenderingContext2D, text: Text, left: number, t
           context.strokeText(token.text, x, baseline);
           context.restore();
         }
-        context.fillStyle = INK;
+        context.fillStyle = style?.color ?? INK;
         context.fillText(token.text, x, baseline);
       }
       x += token.width;
@@ -240,7 +244,7 @@ export type WordBox = { left: number; right: number; top: number; bottom: number
 export type StoryPage = {
   url: string;
   /** "space": the words fit in empty paper; "room": the words are outlined over the full-page artwork. */
-  mode: "space" | "room";
+  mode: "space" | "room" | "manual";
   /** Where the words are, so badges drawn over the page can avoid them. */
   words: WordBox[];
 };
@@ -259,6 +263,7 @@ export async function composeStoryPage({
   width: requestedWidth,
   cover = false,
   debug = false,
+  blocks,
 }: {
   imageUrl: string;
   story: string | null;
@@ -270,8 +275,9 @@ export async function composeStoryPage({
   /** Covers carry their title in the art, so they only get words when a position is chosen. */
   cover?: boolean;
   debug?: boolean;
+  blocks?: StoryBlock[];
 }): Promise<StoryPage | null> {
-  if (position === "off" || (cover && position === "auto") || !story?.trim()) return null;
+  if (blocks !== undefined ? !blocks.some((block) => block.text.trim()) : position === "off" || (cover && position === "auto") || !story?.trim()) return null;
   const [img, f] = await Promise.all([loadImage(imageUrl), storyFonts()]);
   const W = Math.round(requestedWidth ?? Math.min(img.naturalWidth, 1200));
   const H = Math.round(W * aspect);
@@ -297,6 +303,26 @@ export async function composeStoryPage({
   canvas.height = H;
   const context = canvas.getContext("2d")!;
   const rtl = RTL_LANGUAGES.has(lang.split("-")[0]!.toLowerCase());
+  if (blocks) {
+    const css = getComputedStyle(document.documentElement);
+    const families = blocks.map((block) => storyFontFamily(block.font, (property) => css.getPropertyValue(property).trim()));
+    await Promise.all(blocks.map((block, index) => document.fonts.load(`${block.bold ? 700 : 500} 40px ${families[index]}`, block.text).catch(() => [])));
+    context.drawImage(picture, 0, 0);
+    const words: WordBox[] = [];
+    for (const [index, block] of blocks.entries()) {
+      if (!block.text.trim()) continue;
+      const left = W * block.x / 100;
+      const top = H * block.y / 100;
+      const width = W * block.width / 100;
+      const size = W * block.size / 100;
+      const blockFonts = { ...f, story: families[index]! };
+      const text = layout(context, block.text, size, width, blockFonts, block.bold ? 700 : 500);
+      drawText(context, text, left, top, rtl, blockFonts, PAPER, false, block, width);
+      words.push({ left: left / W, right: Math.min(1, (left + width) / W), top: top / H, bottom: Math.min(1, (top + text.height) / H) });
+    }
+    return finish(canvas, picture, "manual", words);
+  }
+  if (!story || position === "off") return null;
   // Size relative to the page so the reader and print agree at different render resolutions.
   const bodySize = W * 0.036;
 
@@ -450,7 +476,7 @@ const drawn = new Map<string, Promise<StoryPage | null>>();
 
 /** composeStoryPage, remembered: callers must not revoke the URLs it returns. */
 export function composeStoryPageCached(options: Parameters<typeof composeStoryPage>[0]): Promise<StoryPage | null> {
-  const key = JSON.stringify([options.imageUrl, options.story, options.position, options.aspect, options.lang, options.width, options.cover]);
+  const key = JSON.stringify([options.imageUrl, options.story, options.position, options.aspect, options.lang, options.width, options.cover, options.blocks]);
   let page = drawn.get(key);
   if (!page) {
     page = composeStoryPage(options);

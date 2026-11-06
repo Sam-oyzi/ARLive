@@ -143,6 +143,8 @@ export const FlipBook = forwardRef<
   // Single mode always ends on the back cover when there is one.
   const singleCount = n + Number(n > 0 && !!backCoverImageUrl);
   const singlePage = (i: number) => (i < n ? page(i) : i === n && singleCount > n ? backCover : null);
+  const atLastPage = single ? singleCount > n && index === n - 1 : hasBackCover && spread === spreads - 2;
+  const atBackCover = single ? singleCount > n && index === n : hasBackCover && spread === spreads - 1;
 
   // The page that was asked for, until the reader turns one: a phone first lays the book out as a
   // spread, and switching to one page must open this page, not the spread's left one.
@@ -209,6 +211,25 @@ export const FlipBook = forwardRef<
       finish();
       return;
     }
+    const turnsBackCover = dir === 1 ? atLastPage : atBackCover;
+    if (turnsBackCover && to === 1) {
+      // Opening and closing the back cover share the same short settling motion.
+      const start = performance.now();
+      const duration = Math.max(60, 300 * (1 - from));
+      setTurn({ dir, p: from, pull });
+      const turnCover = (now: number) => {
+        const progress = Math.min(1, (now - start) / duration);
+        if (progress >= 1) {
+          finish();
+          return;
+        }
+        const eased = 1 - (1 - progress) ** 2;
+        setTurn({ dir, p: from + (1 - from) * eased, pull });
+        animation.current = requestAnimationFrame(turnCover);
+      };
+      animation.current = requestAnimationFrame(turnCover);
+      return;
+    }
     // Use the reference sketchbook's spring for both completed and cancelled turns.
     const stiffness = to === 1 ? 170 : 150;
     const damping = to === 1 ? 26 : 24;
@@ -234,7 +255,7 @@ export const FlipBook = forwardRef<
       }
     };
     animation.current = requestAnimationFrame(step);
-  }, []);
+  }, [atLastPage, atBackCover]);
 
   const canTurn = useCallback(
     (dir: 1 | -1) => (single ? index + dir >= 0 && index + dir < singleCount : spread + dir >= 0 && spread + dir < spreads),
@@ -253,7 +274,7 @@ export const FlipBook = forwardRef<
   const pageHeight = useRef(0);
   const turnByHand = useCallback(() => {
     if (turn || drag.current || !canTurn(1)) return;
-    if (reducedMotion.current) return animateTo(1, 0, 1);
+    if (reducedMotion.current || atLastPage) return animateTo(1, 0, 1);
     cancelAnimationFrame(animation.current);
     const start = performance.now();
     const step = (now: number) => {
@@ -270,7 +291,7 @@ export const FlipBook = forwardRef<
       }
     };
     animation.current = requestAnimationFrame(step);
-  }, [turn, canTurn, animateTo]);
+  }, [turn, canTurn, animateTo, atLastPage]);
 
   useImperativeHandle(
     ref,
