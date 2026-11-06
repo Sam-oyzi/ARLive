@@ -13,6 +13,7 @@ export function Thumb({
   height,
   className,
   style,
+  fetchPriority,
 }: {
   src: string;
   alt?: string;
@@ -22,8 +23,9 @@ export function Thumb({
   height: number;
   className?: string;
   style?: CSSProperties;
+  fetchPriority?: "high" | "low" | "auto";
 }) {
   // Only uploads are allowed through the optimiser (next.config.ts), and SVG art is already small.
   const optimizable = src.startsWith("/files/") && !src.endsWith(".svg");
-  return <Image src={src} alt={alt} title={title} width={width} height={height} className={className} style={style} unoptimized={!optimizable} />;
+  return <Image src={src} alt={alt} title={title} width={width} height={height} className={className} style={style} fetchPriority={fetchPriority} unoptimized={!optimizable} />;
 }

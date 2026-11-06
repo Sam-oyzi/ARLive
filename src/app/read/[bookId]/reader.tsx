@@ -327,6 +327,13 @@ export function Reader({
     return () => { alive = false; };
   }, [artwork, artworkAttempt]);
   const openingArtwork = artwork.some((url) => url && !loadedArtwork[url]);
+  const [thumbnailsReady, setThumbnailsReady] = useState(false);
+  useEffect(() => {
+    if (openingArtwork || thumbnailsReady) return;
+    let alive = true;
+    const timer = window.setTimeout(() => { void whenIdle().then(() => { if (alive) setThumbnailsReady(true); }); }, 150);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [openingArtwork, thumbnailsReady]);
 
   // ---------- auto read ----------
   // The pages turn by themselves, with the same curl as a finger: after the page's voice when it has
@@ -611,7 +618,9 @@ export function Reader({
             )}
             style={{ aspectRatio: `1 / ${aspect}` }}
           >
-            <Thumb src={readingPages[i]?.imageUrl ?? p.imageUrl} width={32} height={Math.round(32 * aspect)} className="size-full object-cover" />
+            {thumbnailsReady
+              ? <Thumb src={readingPages[i]?.imageUrl ?? p.imageUrl} width={32} height={Math.round(32 * aspect)} fetchPriority="low" className="size-full object-cover" />
+              : <span className="grid size-full place-items-center bg-[#f1e9da] text-[10px] text-[#8a7358]">{i + 1}</span>}
             {isAr(p) && <span className="absolute right-0.5 bottom-0.5 size-2 rounded-full ring-1 ring-white" style={{ background: book.subject.color }} />}
           </button>
         ))}
