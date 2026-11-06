@@ -17,7 +17,7 @@ export async function requestAccess(bookId: string, message?: string): Promise<A
       await db.accessRequest.create({ data: { schoolId: admin.schoolId, bookId, message: message?.slice(0, 500) } });
     }
     refreshAll();
-    return { ok: true, message: "Request sent to ARLive" };
+    return { ok: true, message: "Request sent to PageWakes" };
   } catch (error) {
     return failure(error);
   }

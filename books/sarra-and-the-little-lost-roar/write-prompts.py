@@ -1,0 +1,24 @@
+from pathlib import Path
+import json
+root=Path(__file__).parent
+studio=Path('docs/chatgpt/arlive-book-studio-instructions.md').read_text()
+style=next(line[2:] for line in studio.splitlines() if line.startswith('> A hand-painted travel-sketchbook spread:'))
+cover=next(line[2:] for line in studio.splitlines() if line.startswith('> The front cover of the same hand-painted sketchbook:'))
+characters='Sarra has warm medium-brown skin, a dark brown curly bob, mustard pinafore over a cream long-sleeved shirt and teal boots. The honey-gold lion cub has a small round russet mane, teal neck scarf and kind dark eyes. Keep their reference proportions, clothes and colors. A small rabbit stays below a standing child’s knee; the tortoise shell stays below the cub’s chest; elephant calf is larger than the child at equal depth. Use a coherent medium-wide view and explain size differences only through perspective.'
+scenes=[
+'Left: Sarra listens toward a rustling garden hedge. Right: a tiny shy cub squeaks beside gnarled oak roots and ferns. Garden gate opens into woodland.',
+'Left: elephant trumpets, leaves ruffle, Sarra and cub puzzled below. Right: Sarra, cub and SMALL rabbit listen to a beetle on a log. Rabbit’s head is smaller than cub’s head.',
+'Left: a small blue/gold songbird sings on a low twig, Sarra and cub listen. Right: cub tries to squeak; Sarra kindly offers her hand. Same woodland path.',
+'Left: tawny owl on a low gnarled tree speaks gently to Sarra and cub. Right: they part reeds toward a shallow brook and glimpse a small tortoise far ahead.',
+'Left: cub feels small, Sarra kneels kindly by him beside reeds. Right: they follow tiny footprints along the SAME brook toward a small voice. Keep the stream direction and framing consistent.',
+'Left: SMALL tortoise waits on a mossy stream bank with Sarra and cub. Right: elephant supports a fallen branch footbridge, rabbit tucks twigs, owl watches. Tortoise is smaller than cub, not giant.',
+'Left: tortoise pauses with one foot on the completed low bridge, Sarra and cub watch; elephant supports the other end. Right: Sarra encourages cub to stand beside his friend at the same bridge. No success or roar yet.',
+'Left: Sarra encourages cub as tortoise takes a wobbly step on the branch bridge in background. Right: cub roars joyfully on a low rock, tortoise safely across, all friends celebrate. Warm light.',
+'Left: tortoise safely on moss gives thanks, friends lean in to listen. Right: Sarra and cub share a quiet grateful moment on a low log at the SAME creek. Garden gate faintly visible down path, same scale.',
+'Left: sunset goodbye at garden gate, girl’s hand and cub’s paw touching, owl and rabbit behind. Right: Sarra in bed wears ONLY cream sleep shirt; removed mustard pinafore is draped at foot of bed, teal boots beside it; she listens to bird at window, hand on heart. Small lion doodle without any words in sketchbook.'
+]
+text=['# Illustration prompts — Sarra and the Little Lost Roar','\nBuilt-in image tool; cover + ten spreads = 21 pages. Generated assets are saved beside this file. The prompts below reproduce the final art direction, including continuity corrections. Use the cover and spread-01 as references.','\n## Cover · save as cover.png\n','```',cover,characters,'Sarra crouches and listens to the shy cub beside a forest stream; owl, rabbit, elephant calf and tortoise around them. Large elegant black hand-lettered serif title: "Sarra and the Little Lost Roar". No other words.','```']
+for i,scene in enumerate(scenes,1):
+ text += [f'\n## Spread {i:02} · save as spread-{i:02}.png\n','```',style,characters,'Match the paper, palette, ink weight and lighting of the previous pictures in this chat exactly.',scene,'Both upper 30–33% page bands are plain cream paper for app typesetting. Artwork in lower two-thirds; distinct detailed asymmetric ink on AR subjects. Nothing important in gutter. No words, captions, labels, symbols or date. Same landscape 3:2 bounds.','```']
+text += ['\n## French cover · save as cover-fr.png\n','```','Edit only the English title to "Sarra et le petit rugissement", in three centered black serif ink lines. Preserve all other art, characters and portrait composition.','```','\n## Required review\n','Inspect every half-spread against pages.json in reading order. Correct animal proportions, wardrobe, story timing and accidental zoom jumps. Recompile final AR art after any correction. See continuity.md.']
+(root/'prompts.md').write_text('\n'.join(text)+'\n')

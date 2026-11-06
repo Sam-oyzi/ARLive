@@ -11,8 +11,8 @@ import { PRESET_LABEL, PRESETS, type Motion, type Pose, type Preset } from "@/li
 import { cn } from "@/lib/utils";
 
 const AXIS_COLOR: Record<string, string> = { X: "text-rose-500", Y: "text-emerald-500", Z: "text-blue-500" };
-const LABEL_COLORS = ["#ffffff", "#161624", "#5b5bf6", "#10b981", "#f59e0b", "#ef4444"];
-const TEXT3D_COLORS = ["#5b5bf6", "#8b5cf6", "#ec4899", "#ef4444", "#f59e0b", "#10b981", "#0ea5e9", "#f4f4f8", "#161624"];
+const LABEL_COLORS = ["#ffffff", "#1e1a16", "#f26a1a", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444"];
+const TEXT3D_COLORS = ["#f26a1a", "#ffd23f", "#ef4444", "#f43f5e", "#10b981", "#84cc16", "#0ea5e9", "#3b82f6", "#fbf9f6", "#1e1a16"];
 
 export function NumberInput({
   value,

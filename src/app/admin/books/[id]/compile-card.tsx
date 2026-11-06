@@ -62,7 +62,8 @@ export function CompileCard({
 
   const running = progress !== null;
   return (
-    <Card className="overflow-hidden">
+    // An anchor, so "Needs recompile" links and notices can open the page right here.
+    <Card id="compile" className="scroll-mt-24 overflow-hidden">
       <div className="relative overflow-hidden bg-ink-950 px-6 py-5 text-white">
         <div className="absolute -top-10 -right-10 size-40 rounded-full bg-brand-500/40 blur-3xl" />
         <div className="relative flex items-center justify-between gap-3">

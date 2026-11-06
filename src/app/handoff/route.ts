@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { urlOnRequestHost } from "@/lib/request-url";
 import type { Role } from "@/lib/roles";
-import { SESSION_COOKIE, SESSION_MAX_AGE, signSession, verifyHandoff } from "@/lib/session";
+import { isRevoked, SESSION_COOKIE, SESSION_MAX_AGE, signSession, verifyHandoff } from "@/lib/session";
 
 // Landing point of the "continue on your phone" QR code: signs the phone in, then opens the page.
 export async function GET(request: NextRequest) {
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   if (!handoff) return NextResponse.redirect(urlOnRequestHost("/login", request));
 
   const user = await db.user.findUnique({ where: { id: handoff.uid }, include: { school: true } });
-  if (!user?.active || (user.school && !user.school.active && user.role !== "SUPER_ADMIN")) {
+  if (!user?.active || isRevoked(handoff.issuedAt, user.passwordChangedAt) || (user.school && !user.school.active && user.role !== "SUPER_ADMIN")) {
     return NextResponse.redirect(urlOnRequestHost("/login", request));
   }
 

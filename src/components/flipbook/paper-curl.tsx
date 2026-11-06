@@ -4,10 +4,10 @@ export type PaperPull = { edgeY: number; offsetY: number };
 
 type Vertex = { x: number; y: number; z: number; u: number; v: number; shade: number; edgeX: number; edgeY: number };
 type Triangle = { a: Vertex; b: Vertex; c: Vertex; depth: number; facing: number };
-type Artwork = { image: HTMLImageElement; surface: HTMLCanvasElement; width: number; height: number; pixelRatio: number };
+type PaperTexture = HTMLCanvasElement;
 
-const COLUMNS = 24;
-const ROWS = 14;
+// Mesh resolution of the curling sheet; phones get a lighter one (each triangle is a clipped drawImage).
+const DETAIL = { high: { columns: 24, rows: 14, pixels: 2 }, low: { columns: 14, rows: 8, pixels: 1.25 } };
 const PAPER = "#fbf8f1";
 export const PAPER_THICKNESS = 2.2;
 export const PAPER_EDGE = "#d5c8ad";
@@ -57,28 +57,6 @@ function foldDistance(travel: number, radius: number) {
   return (low + high) / 2;
 }
 
-function prepareArtwork(image: HTMLImageElement | undefined, width: number, height: number, pixelRatio: number, cached?: Artwork): Artwork | undefined {
-  if (!image?.complete || !image.naturalWidth || !image.naturalHeight) return;
-  if (cached?.image === image && cached.width === width && cached.height === height && cached.pixelRatio === pixelRatio) return cached;
-
-  // Bake the paper and artwork together. Painting them separately through each
-  // antialiased triangle clip leaves paper-colored lines along the mesh edges.
-  const surface = document.createElement("canvas");
-  surface.width = Math.ceil(width * pixelRatio);
-  surface.height = Math.ceil(height * pixelRatio);
-  const context = surface.getContext("2d", { alpha: false });
-  if (!context) return;
-  context.scale(surface.width / width, surface.height / height);
-  context.fillStyle = PAPER;
-  context.fillRect(0, 0, width, height);
-
-  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
-  const w = image.naturalWidth * scale;
-  const h = image.naturalHeight * scale;
-  context.drawImage(image, (width - w) / 2, (height - h) / 2, w, h);
-  return { image, surface, width, height, pixelRatio };
-}
-
 function drawPaper(
   context: CanvasRenderingContext2D,
   width: number,
@@ -87,9 +65,12 @@ function drawPaper(
   progress: number,
   pull: PaperPull,
   stitchOpacity: number,
-  front?: HTMLCanvasElement,
-  back?: HTMLCanvasElement,
+  front?: PaperTexture,
+  back?: PaperTexture,
+  backFade = 0,
+  detail: keyof typeof DETAIL = "high",
 ) {
+  const { columns: COLUMNS, rows: ROWS } = DETAIL[detail];
   const spine = width * 1.5;
   const top = height * 0.5;
   const perspective = Math.max(2000, width * 7);
@@ -173,7 +154,7 @@ function drawPaper(
       stitchesPainted = true;
     }
     const frontFacing = facing > 0;
-    const artwork = frontFacing ? front : back;
+    const image = frontFacing ? front : back;
     const flipTexture = frontFacing !== (direction === 1);
     const ax = flipTexture ? width - a.u : a.u;
     const bx = flipTexture ? width - b.u : b.u;
@@ -199,8 +180,15 @@ function drawPaper(
     context.closePath();
     context.clip();
     context.transform(xx, xy, yx, yy, a.x - xx * ax - yx * a.v, a.y - xy * ax - yy * a.v);
-    if (artwork) {
-      context.drawImage(artwork, 0, 0, width, height);
+    if (image) {
+      context.drawImage(image, 0, 0, width, height);
+      // The page's own picture showing through the back of the sheet, like thin paper.
+      if (!frontFacing && backFade > 0) {
+        context.fillStyle = PAPER;
+        context.globalAlpha = backFade;
+        context.fillRect(0, 0, width, height);
+        context.globalAlpha = 1;
+      }
     } else {
       context.fillStyle = PAPER;
       context.fillRect(0, 0, width, height);
@@ -241,7 +229,7 @@ function drawPaper(
   if (!stitchesPainted) drawStitches(context, spine, top, height, stitchOpacity);
 }
 
-export function PaperCurl({ width, height, direction, progress, pull, stitchOpacity, front, back }: {
+export function PaperCurl({ width, height, direction, progress, pull, stitchOpacity, front, back, backFade, spineLeft = width, detail = "high" }: {
   width: number;
   height: number;
   direction: 1 | -1;
@@ -250,15 +238,49 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
   stitchOpacity: number;
   front?: HTMLImageElement;
   back?: HTMLImageElement;
+  /** 0–1: how much paper covers the back image (a single page shows its own picture, faded, on the back). */
+  backFade?: number;
+  /** Where the spine sits, from the left of the positioned parent: the middle of a spread, or a single page's left edge. */
+  spineLeft?: number;
+  detail?: keyof typeof DETAIL;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const artwork = useRef<{ front?: Artwork; back?: Artwork }>({});
+  const textures = useRef<{ front?: PaperTexture; back?: PaperTexture }>({});
+
+  useLayoutEffect(() => {
+    // Rasterize a vector back cover once, rather than hundreds of times for every frame's mesh.
+    const scale = Math.min(window.devicePixelRatio || 1, DETAIL[detail].pixels);
+    const rasterize = (image?: HTMLImageElement): PaperTexture | undefined => {
+      if (!image?.complete || !image.naturalWidth) return;
+      const texture = document.createElement("canvas");
+      texture.width = Math.max(1, Math.ceil(width * scale));
+      texture.height = Math.max(1, Math.ceil(height * scale));
+      const context = texture.getContext("2d");
+      if (!context) return;
+      context.drawImage(image, 0, 0, texture.width, texture.height);
+      return texture;
+    };
+    const prepare = () => {
+      for (const texture of new Set(Object.values(textures.current))) if (texture) texture.width = texture.height = 0;
+      const frontTexture = rasterize(front);
+      textures.current = { front: frontTexture, back: back === front ? frontTexture : rasterize(back) };
+    };
+    prepare();
+    front?.addEventListener("load", prepare);
+    back?.addEventListener("load", prepare);
+    return () => {
+      front?.removeEventListener("load", prepare);
+      back?.removeEventListener("load", prepare);
+      for (const texture of new Set(Object.values(textures.current))) if (texture) texture.width = texture.height = 0;
+      textures.current = {};
+    };
+  }, [front, back, width, height, detail]);
 
   useLayoutEffect(() => {
     const element = canvas.current;
     const context = element?.getContext("2d");
     if (!element || !context) return;
-    const scale = Math.min(window.devicePixelRatio, 2);
+    const scale = Math.min(window.devicePixelRatio, DETAIL[detail].pixels);
     const pixelWidth = Math.ceil(width * 3 * scale);
     const pixelHeight = Math.ceil(height * 2 * scale);
     if (element.width !== pixelWidth) element.width = pixelWidth;
@@ -266,12 +288,9 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
 
     function paint() {
       if (!context) return;
-      const cache = artwork.current;
-      cache.front = prepareArtwork(front, width, height, scale, cache.front);
-      cache.back = prepareArtwork(back, width, height, scale, cache.back);
       context.setTransform(scale, 0, 0, scale, 0, 0);
       context.clearRect(0, 0, width * 3, height * 2);
-      drawPaper(context, width, height, direction, progress, pull, stitchOpacity, cache.front?.surface, cache.back?.surface);
+      drawPaper(context, width, height, direction, progress, pull, stitchOpacity, textures.current.front, textures.current.back, backFade, detail);
     }
     paint();
     front?.addEventListener("load", paint);
@@ -280,7 +299,7 @@ export function PaperCurl({ width, height, direction, progress, pull, stitchOpac
       front?.removeEventListener("load", paint);
       back?.removeEventListener("load", paint);
     };
-  }, [width, height, direction, progress, pull, stitchOpacity, front, back]);
+  }, [width, height, direction, progress, pull, stitchOpacity, front, back, backFade, detail]);
 
-  return <canvas ref={canvas} aria-hidden="true" className="pointer-events-none absolute" style={{ left: -width / 2, top: -height / 2, width: width * 3, height: height * 2 }} />;
+  return <canvas ref={canvas} aria-hidden="true" className="pointer-events-none absolute" style={{ left: spineLeft - width * 1.5, top: -height / 2, width: width * 3, height: height * 2 }} />;
 }

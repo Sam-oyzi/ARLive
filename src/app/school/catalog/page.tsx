@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { CircleCheck, Library } from "lucide-react";
 import { EmptyState, PageHeader } from "@/components/ui/misc";
+import { Thumb } from "@/components/thumb";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { plural } from "@/lib/utils";
+import { withReturnTo } from "@/lib/reader-navigation";
 import { RequestButton } from "./request-button";
 
 export const metadata = { title: "Book catalog" };
@@ -34,7 +36,7 @@ export default async function CatalogPage() {
     <>
       <PageHeader
         title="Book catalog"
-        description="Browse Sketchling’s storybooks and request the ones you’d like to share with your classes."
+        description="Browse PageWakes’s storybooks and request the ones you’d like to share with your classes."
       />
       {withBooks.length === 0 ? (
         <EmptyState icon={Library} title="The catalog is empty" description="New books will appear here as soon as they're published." />
@@ -53,11 +55,10 @@ export default async function CatalogPage() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {subject.books.map((book) => (
-                  <div key={book.id} className="flex gap-4 rounded-3xl border border-ink-200/70 bg-white p-4 shadow-soft">
+                  <div key={book.id} id={`book-${book.id}`} className="flex gap-4 rounded-3xl border border-ink-200/70 bg-white p-4 shadow-soft">
                     <div className="grid h-24 w-[72px] shrink-0 place-items-center overflow-hidden rounded-xl text-white shadow-soft" style={{ background: subject.color }}>
                       {book.coverUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={book.coverUrl} alt="" className="size-full object-cover" />
+                        <Thumb src={book.coverUrl} width={72} height={96} className="size-full object-cover" />
                       ) : (
                         <SubjectIcon icon={subject.icon} className="size-7" />
                       )}
@@ -73,7 +74,7 @@ export default async function CatalogPage() {
                             <span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
                               <CircleCheck className="size-4" /> Enabled
                             </span>
-                            <Link href={`/scan/${book.id}`} className="text-sm font-semibold text-brand-600 hover:underline">
+                            <Link href={withReturnTo(`/scan/${book.id}`, `/school/catalog#book-${book.id}`)} className="text-sm font-semibold text-brand-600 hover:underline">
                               Preview
                             </Link>
                           </>

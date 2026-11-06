@@ -5,12 +5,16 @@ import { ROLE_LABEL } from "@/lib/roles";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser(["SUPER_ADMIN"]);
-  const pending = await db.accessRequest.count({ where: { status: "PENDING" } });
+  const [pending, stories, readers] = await Promise.all([
+    db.accessRequest.count({ where: { status: "PENDING" } }),
+    db.storyRequest.count({ where: { status: "NEW" } }),
+    db.bookReader.count({ where: { status: "PENDING" } }),
+  ]);
   return (
     <DashboardShell
       area="admin"
       user={{ name: user.name, username: user.username, roleLabel: ROLE_LABEL.SUPER_ADMIN }}
-      badges={{ requests: pending }}
+      badges={{ requests: pending, stories, readers }}
     >
       {children}
     </DashboardShell>

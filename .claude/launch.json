@@ -11,6 +11,18 @@
       "port": 3000
     },
     {
+      "name": "arlive-prod",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "start",
+        "--",
+        "-p",
+        "3100"
+      ],
+      "port": 3100
+    },
+    {
       "name": "arlive-phone",
       "runtimeExecutable": "npm",
       "runtimeArgs": [

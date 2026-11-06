@@ -14,7 +14,7 @@ const schoolSchema = z.object({
   city: z.string().max(80).optional(),
   country: z.string().max(80).optional(),
   contactEmail: z.email("Enter a valid email").optional(),
-  color: hexColor.default("#5b5bf6"),
+  color: hexColor.default("#f26a1a"),
   maxStudents: optionalInt,
   logoUrl: z.string().startsWith("/files/").optional(),
 });

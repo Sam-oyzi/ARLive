@@ -44,7 +44,7 @@ import { cn } from "@/lib/utils";
 import { addContent, deleteContent, duplicateContent, replaceContentFile, saveContents } from "@/server/actions/books";
 import type { ContextTarget, TransformMode } from "./editor-canvas";
 import { Inspector } from "./inspector";
-import { PageDetails, TargetImageCard, type EditorTarget } from "./page-cards";
+import { PageDetails, PageSoundsCard, TargetImageCard, TranslationsCard, WorldCard, type EditorTarget } from "./page-cards";
 import { SceneMenu, type SceneMenuAction } from "./scene-menu";
 import { Timeline } from "./timeline";
 
@@ -648,6 +648,9 @@ export function TargetEditor({ target, initialContents }: { target: EditorTarget
 
         <TargetImageCard target={target} progress={targetProgress} onReplace={() => pickFile({ mode: "target" }, TARGET_IMAGE_ACCEPT)} />
         <PageDetails target={target} />
+        <TranslationsCard target={target} />
+        <PageSoundsCard target={target} />
+        <WorldCard target={target} />
       </div>
 
       <Confirm

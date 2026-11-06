@@ -1,6 +1,5 @@
-// Local disk storage under ./storage/uploads, served by src/app/files/[...path]/route.ts.
+// Local uploads. The Cloudflare build selects cloudflare/storage.ts for private R2.
 // Every upload gets a fresh id, so URLs are immutable and safe to cache forever.
-// To move to S3/R2, keep these signatures and swap the implementation.
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
@@ -10,36 +9,16 @@ import { randomUUID } from "node:crypto";
 
 export const UPLOAD_ROOT = path.join(process.cwd(), "storage", "uploads");
 
-export const UPLOAD_KINDS = {
-  targets: { exts: ["jpg", "jpeg", "png", "webp"], maxMB: 15 },
-  covers: { exts: ["jpg", "jpeg", "png", "webp"], maxMB: 10 },
-  logos: { exts: ["jpg", "jpeg", "png", "webp", "svg"], maxMB: 5 },
-  // Uploads are optimised on arrival (src/lib/glb-optimize.ts), so large AI-generated files are fine.
-  models: { exts: ["glb"], maxMB: 250 },
-  videos: { exts: ["mp4", "webm", "mov"], maxMB: 200 },
-  images: { exts: ["jpg", "jpeg", "png", "webp", "gif"], maxMB: 15 },
-  audio: { exts: ["mp3", "m4a", "ogg", "wav"], maxMB: 50 },
-  mind: { exts: ["mind"], maxMB: 100 },
-} as const;
+import { UPLOAD_KINDS, type UploadKind, extensionOf, UploadError, uploadKey, MIME_TYPES } from "./upload-rules";
+export * from "./upload-rules";
 
-export type UploadKind = keyof typeof UPLOAD_KINDS;
-
-export function isUploadKind(kind: string): kind is UploadKind {
-  return Object.prototype.hasOwnProperty.call(UPLOAD_KINDS, kind);
-}
-
-export class UploadError extends Error {}
-
-export function extensionOf(filename: string): string {
-  return path.extname(filename).slice(1).toLowerCase();
-}
-
-/** Stream a request body to disk, enforcing the kind's extension and size rules. */
-export async function saveUpload(
+/** Validate and prepare the file before giving its immutable URL to the caller. */
+export async function saveUpload<T extends object = Record<string, never>>(
   kind: UploadKind,
   filename: string,
   body: ReadableStream<Uint8Array>,
-): Promise<{ url: string; size: number }> {
+  prepare?: (file: string) => Promise<T>,
+) {
   const rule = UPLOAD_KINDS[kind];
   const ext = extensionOf(filename);
   if (!(rule.exts as readonly string[]).includes(ext)) {
@@ -50,7 +29,7 @@ export async function saveUpload(
   await fsp.mkdir(dir, { recursive: true });
 
   const name = `${randomUUID().replaceAll("-", "")}.${ext}`;
-  const finalPath = path.join(dir, name);
+  const finalPath = path.join(/* turbopackIgnore: true */ dir, name);
   const tempPath = `${finalPath}.part`;
   let size = 0;
   const limiter = new Transform({
@@ -64,42 +43,38 @@ export async function saveUpload(
   try {
     await pipeline(Readable.fromWeb(body as import("node:stream/web").ReadableStream), limiter, fs.createWriteStream(tempPath));
     if (size === 0) throw new UploadError("The file is empty.");
+    const metadata = await prepare?.(tempPath);
+    const preparedSize = (await fsp.stat(tempPath)).size;
     await fsp.rename(tempPath, finalPath);
-  } catch (error) {
+    return { metadata, url: `/files/${kind}/${name}`, size: preparedSize };
+  } finally {
     await fsp.rm(tempPath, { force: true });
-    throw error;
   }
-  return { url: `/files/${kind}/${name}`, size };
 }
 
 /** Map a /files/... URL (or its path segments) to an absolute path, refusing traversal. */
 export function resolveUploadPath(segments: string[]): string | null {
-  if (segments.length !== 2) return null;
-  const [kind, name] = segments;
-  if (!isUploadKind(kind!) || !/^[a-z0-9]+\.[a-z0-9]+$/i.test(name!)) return null;
-  return path.join(UPLOAD_ROOT, kind!, name!);
+  const key = uploadKey(segments);
+  return key && path.join(UPLOAD_ROOT, key);
+}
+
+export async function openUpload(segments: string[]) {
+  const key = uploadKey(segments);
+  if (!key) return null;
+  const file = path.join(UPLOAD_ROOT, key);
+  const stat = await fsp.stat(file).catch(() => null);
+  if (!stat?.isFile()) return null;
+  return {
+    size: stat.size,
+    async read(range?: { start: number; end: number }): Promise<ReadableStream<Uint8Array>> {
+      return Readable.toWeb(fs.createReadStream(file, range)) as ReadableStream<Uint8Array>;
+    },
+  };
 }
 
 export async function deleteUpload(url: string | null | undefined) {
   if (!url?.startsWith("/files/")) return;
-  const file = resolveUploadPath(url.slice("/files/".length).split("/"));
-  if (file) await fsp.rm(file, { force: true }).catch(() => {});
+  const key = uploadKey(url.slice("/files/".length).split("/"));
+  if (!key) return;
+  await fsp.rm(path.join(UPLOAD_ROOT, key), { force: true }).catch(() => {});
 }
-
-export const MIME_TYPES: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  webp: "image/webp",
-  gif: "image/gif",
-  svg: "image/svg+xml",
-  glb: "model/gltf-binary",
-  mp4: "video/mp4",
-  webm: "video/webm",
-  mov: "video/quicktime",
-  mp3: "audio/mpeg",
-  m4a: "audio/mp4",
-  ogg: "audio/ogg",
-  wav: "audio/wav",
-  mind: "application/octet-stream",
-};

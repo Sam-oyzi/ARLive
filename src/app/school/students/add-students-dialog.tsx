@@ -41,7 +41,7 @@ function AddStudentsBody({ schoolName, close }: { schoolName: string; close: () 
     if (!win) return;
     const slips = created
       .map(
-        (s) => `<div class="slip"><b>${escapeHtml(s.name)}</b><div>${escapeHtml(schoolName)} · Sketchling</div>
+        (s) => `<div class="slip"><b>${escapeHtml(s.name)}</b><div>${escapeHtml(schoolName)} · PageWakes</div>
         <div>Username: <code>${escapeHtml(s.username)}</code></div><div>Password: <code>${escapeHtml(s.password)}</code></div>
         <div class="url">${window.location.origin}/login</div></div>`,
       )

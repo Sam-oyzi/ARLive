@@ -2,7 +2,7 @@
 
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { X } from "lucide-react";
-import type { ReactNode } from "react";
+import type { KeyboardEventHandler, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export const Dialog = DialogPrimitive.Root;
@@ -15,17 +15,20 @@ export function DialogContent({
   children,
   className,
   wide,
+  onKeyDown,
 }: {
   title: ReactNode;
   description?: ReactNode;
   children: ReactNode;
   className?: string;
   wide?: boolean;
+  onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
 }) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-950/40 backdrop-blur-[2px]" />
       <DialogPrimitive.Content
+        onKeyDown={onKeyDown}
         className={cn(
           "fixed inset-x-3 bottom-3 z-50 max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-3xl bg-white p-6 shadow-lift outline-none data-[state=open]:animate-fade-up sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2 sm:-translate-y-1/2",
           wide ? "sm:max-w-2xl" : "sm:max-w-lg",

@@ -1,0 +1,84 @@
+{
+  "book": {
+    "title": "Sarra and the Little Lost Roar",
+    "description": "An original watercolor listening adventure made for Sarra. A little lion has lost his roar; a friend who listens helps him find his courage. English and French.",
+    "gradeLevel": "Ages 4–7",
+    "format": "SKETCH",
+    "subjectSlug": "animals"
+  },
+  "arPages": [
+    {
+      "page": 3,
+      "world": "world-forest.jpg",
+      "scanAction": "world",
+      "effect": "none",
+      "purpose": "Meet the cub in the sunlit listening woodland."
+    },
+    {
+      "page": 6,
+      "model": "bird.glb",
+      "scanAction": "ar",
+      "purpose": "An original little songbird flutters its wings over the printed page."
+    },
+    {
+      "page": 8,
+      "world": "world-owl.jpg",
+      "scanAction": "panorama",
+      "effect": "none",
+      "purpose": "Look up to find Owl on a low branch, then turn toward the sound of the brook."
+    },
+    {
+      "page": 9,
+      "world": "world-brook.jpg",
+      "scanAction": "panorama",
+      "effect": "none",
+      "purpose": "Look around the reeds and shallow brook before the friends find the source of the voice."
+    },
+    {
+      "page": 12,
+      "model": "tortoise.glb",
+      "scanAction": "ar",
+      "purpose": "A small original animated tortoise takes gentle brave steps."
+    },
+    {
+      "page": 15,
+      "model": "lion.glb",
+      "scanAction": "ar",
+      "purpose": "The original cub breathes calmly as he chooses to help his friend."
+    },
+    {
+      "page": 17,
+      "world": "world-bridge.jpg",
+      "scanAction": "panorama",
+      "effect": "none",
+      "purpose": "See the small tortoise on the fallen branch and look down at the stream crossing."
+    },
+    {
+      "page": 19,
+      "world": "world-river.jpg",
+      "scanAction": "panorama",
+      "effect": "none",
+      "purpose": "Return to the same brook at golden hour, with the cub on the bank and the crossing nearby."
+    }
+  ],
+  "typography": {
+    "story": "Gelasio 500, existing app book typography",
+    "sounds": "Fredoka 700, existing app colored sound words",
+    "position": "top",
+    "quietBand": "Upper 27–33% of each half-page",
+    "note": "Story text stays editable and is typeset by the app, never baked into spread artwork."
+  },
+  "assumptions": [
+    "Child’s supplied first name: Sarra.",
+    "Age not supplied: written for approximately 4–7.",
+    "Language not supplied: English with full French reading option.",
+    "Physical appearance is a fictional illustration, not a claimed likeness."
+  ],
+  "worlds": {
+    "world-forest.jpg": "A child’s-eye view along the woodland path with the cub ahead.",
+    "world-owl.jpg": "A low branch just above eye level holds Owl, with the brook to the right.",
+    "world-brook.jpg": "A bend in the shallow brook, edged with reeds and rounded stones.",
+    "world-bridge.jpg": "A fallen branch spans the same brook, with the tortoise near the middle.",
+    "world-river.jpg": "Golden light over the crossing and the cub by the water."
+  }
+}

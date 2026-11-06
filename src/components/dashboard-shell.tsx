@@ -6,21 +6,26 @@ import { Dialog as Sheet } from "radix-ui";
 import {
   BookOpen,
   ChartColumn,
+  ExternalLink,
   ChevronDown,
   ChevronRight,
   Inbox,
+  KeyRound,
   Library,
   LayoutDashboard,
   LogOut,
   Menu,
   School,
   Shapes,
+  Sparkles,
+  UserCheck,
   Users,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Logo } from "@/components/brand";
+import { ChangePasswordDialog } from "@/components/change-password-dialog";
 import { Dropdown, DropdownContent, DropdownItem, DropdownLabel, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
 import { Avatar } from "@/components/ui/misc";
 import { logout } from "@/server/actions/auth";
@@ -34,21 +39,23 @@ const NAV: Record<"admin" | "school", { title: string; items: NavItem[] }[]> = {
       title: "Overview",
       items: [
         { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
-        { href: "/admin/requests", label: "Requests", icon: Inbox, badgeKey: "requests" },
+        { href: "/admin/stories", label: "Story requests", icon: Sparkles, badgeKey: "stories" },
       ],
     },
     {
-      title: "Content",
+      title: "Studio",
       items: [
-        { href: "/admin/subjects", label: "Subjects", icon: Shapes },
-        { href: "/admin/books", label: "Books & targets", icon: BookOpen },
+        { href: "/admin/books", label: "Books & AR pages", icon: BookOpen },
+        { href: "/admin/subjects", label: "Categories", icon: Shapes },
       ],
     },
     {
-      title: "Customers",
+      title: "People",
       items: [
-        { href: "/admin/schools", label: "Schools", icon: School },
         { href: "/admin/users", label: "Users", icon: Users },
+        { href: "/admin/readers", label: "Reader access", icon: UserCheck, badgeKey: "readers" },
+        { href: "/admin/schools", label: "Schools", icon: School },
+        { href: "/admin/requests", label: "School access", icon: Inbox, badgeKey: "requests" },
       ],
     },
   ],
@@ -95,7 +102,7 @@ function Nav({ area, badges, onNavigate }: { area: "admin" | "school"; badges: R
                     <item.icon className={cn("size-[18px]", active ? "text-brand-500" : "text-ink-400 group-hover:text-ink-600")} />
                     <span className="flex-1">{item.label}</span>
                     {badge ? (
-                      <span className="grid h-5 min-w-5 place-items-center rounded-full bg-brand-500 px-1.5 text-[11px] font-bold text-white">
+                      <span className="grid h-5 min-w-5 place-items-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white">
                         {badge}
                       </span>
                     ) : null}
@@ -111,25 +118,33 @@ function Nav({ area, badges, onNavigate }: { area: "admin" | "school"; badges: R
 }
 
 function UserMenu({ user, context }: { user: ShellUser; context?: ReactNode }) {
+  const [changingPassword, setChangingPassword] = useState(false);
+
   return (
-    <Dropdown>
-      <DropdownTrigger className="flex w-full items-center gap-3 rounded-2xl border border-ink-200/70 bg-white p-2 text-left shadow-soft transition hover:border-ink-300">
-        <Avatar name={user.name} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-ink-900">{user.name}</span>
-          <span className="block truncate text-xs text-ink-500">{user.roleLabel}</span>
-        </span>
-        <ChevronDown aria-hidden="true" className="mr-1 size-4 shrink-0 text-ink-500" />
-      </DropdownTrigger>
-      <DropdownContent align="start">
-        <DropdownLabel>{user.username}</DropdownLabel>
-        {context}
-        <DropdownSeparator />
-        <DropdownItem danger onSelect={() => logout()}>
-          <LogOut /> Sign out
-        </DropdownItem>
-      </DropdownContent>
-    </Dropdown>
+    <>
+      <Dropdown>
+        <DropdownTrigger className="flex w-full items-center gap-3 rounded-2xl border border-ink-200/70 bg-white p-2 text-left shadow-soft transition hover:border-ink-300">
+          <Avatar name={user.name} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold text-ink-900">{user.name}</span>
+            <span className="block truncate text-xs text-ink-500">{user.roleLabel}</span>
+          </span>
+          <ChevronDown aria-hidden="true" className="mr-1 size-4 shrink-0 text-ink-500" />
+        </DropdownTrigger>
+        <DropdownContent align="start">
+          <DropdownLabel>{user.username}</DropdownLabel>
+          {context}
+          <DropdownSeparator />
+          <DropdownItem onSelect={() => setChangingPassword(true)}>
+            <KeyRound /> Change password
+          </DropdownItem>
+          <DropdownItem danger onSelect={() => logout()}>
+            <LogOut /> Sign out
+          </DropdownItem>
+        </DropdownContent>
+      </Dropdown>
+      <ChangePasswordDialog open={changingPassword} onOpenChange={setChangingPassword} />
+    </>
   );
 }
 
@@ -152,7 +167,7 @@ export function DashboardShell({
   useEffect(() => setOpen(false), [pathname]);
   const workspace = /^\/admin\/books\/[^/]+\/targets\//.test(pathname);
   const currentSection = NAV[area].flatMap((section) => section.items).find((item) => isActive(item, pathname));
-  const workspaceName = area === "admin" ? "Platform workspace" : "School workspace";
+  const workspaceName = area === "admin" ? "Admin studio" : "School workspace";
 
   const sidebar = (
     <div className="flex h-full flex-col gap-6 px-4 py-5">
@@ -164,6 +179,9 @@ export function DashboardShell({
       <div className="flex-1 overflow-y-auto">
         <Nav area={area} badges={badges} onNavigate={() => setOpen(false)} />
       </div>
+      <Link href="/" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-ink-500 hover:bg-ink-50 hover:text-ink-900">
+        <ExternalLink aria-hidden="true" className="size-4" /> View the library
+      </Link>
       <UserMenu user={user} />
     </div>
   );

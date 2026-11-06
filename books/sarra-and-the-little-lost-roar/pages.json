@@ -1,0 +1,382 @@
+{
+  "pages": [
+    {
+      "file": "cover.png",
+      "title": "Sarra and the Little Lost Roar",
+      "story": "A listening adventure for Sarra.",
+      "textPosition": "off",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Sarra et le petit rugissement",
+          "story": "Une aventure à écouter, pour Sarra.",
+          "imageUrl": "/book-art/sarra-and-the-little-lost-roar/fr-page-01.jpg"
+        },
+        "ar": {
+          "title": "سارة والزئير الصغير الضائع",
+          "story": "مغامرةٌ للإصغاء، إلى سارة."
+        }
+      }
+    },
+    {
+      "file": "spread-01.png",
+      "title": "A sound in the hedge",
+      "story": "Sarra loved the elephant’s trumpet.\nShe loved the owl’s soft call.\nBut under the garden hedge…\n\n*Pip?*",
+      "textPosition": "top",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Un bruit dans la haie",
+          "story": "Sarra aimait les cris d’éléphant.\nElle aimait le chant du hibou.\nMais tout près de la haie…\n\n*Piou ?*"
+        },
+        "ar": {
+          "title": "صوتٌ في السياج",
+          "story": "أحبّت سارة صيحةَ الفيل.\nوأحبّت نداءَ البومة الناعم.\nلكنْ تحت سياجِ الحديقة…\n\n*بِيب؟*"
+        }
+      },
+      "side": "left"
+    },
+    {
+      "file": "spread-01.png",
+      "title": "The little lost roar",
+      "story": "A lion! A very little lion.\n“My roar has gone,” he whispered.\n“Will you help me find it?”\n\nWould you listen too?",
+      "textPosition": "top",
+      "ar": true,
+      "translations": {
+        "fr": {
+          "title": "Le petit rugissement perdu",
+          "story": "Un lion ! Un tout petit lion.\n« Mon rugissement a disparu.\nTu m’aides à le retrouver ? »\n\nEt toi, tu l’écouterais ?"
+        },
+        "ar": {
+          "title": "الزئيرُ الصغير الضائع",
+          "story": "أسد! أسدٌ صغيرٌ جدًّا.\nهمس: «لقد ضاع زئيري.\nهل تساعدينني على إيجاده؟»\n\nوأنتم، هل تُصغون معنا؟"
+        }
+      },
+      "side": "right"
+    },
+    {
+      "file": "spread-02.png",
+      "title": "Louder is not always better",
+      "story": "“Try mine!” said Elephant.\n\n*PAAAR-PAAA!*\n\nThe trees shook. The cub squeaked.\nThat wasn’t his roar.",
+      "textPosition": "top",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Plus fort ne suffit pas",
+          "story": "« Essaie ma voix ! » dit Éléphant.\n\n*POUÊÊÊT !*\n\nLes arbres tremblèrent. Le lion couina.\nCe n’était pas son rugissement."
+        },
+        "ar": {
+          "title": "الأعلى صوتًا ليس الأفضلَ دائمًا",
+          "story": "قال الفيل: «جرّب صوتي!»\n\n*بااااار-باااا!*\n\nاهتزّت الأشجار، وصاح الشبلُ صيحةً رفيعة.\nلم يكن ذلك زئيرَه."
+        }
+      },
+      "side": "left"
+    },
+    {
+      "file": "spread-02.png",
+      "title": "Rabbit listens",
+      "story": "“Shall we try being quiet?”\nRabbit folded one soft ear.\nThey heard a beetle’s tiny feet…\n\nThen something farther away.",
+      "textPosition": "top",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Lapin tend l’oreille",
+          "story": "« Et si on écoutait doucement ? »\nLapin replia sa longue oreille.\nIls entendirent les pas d’un scarabée…\n\nPuis un bruit, plus loin."
+        },
+        "ar": {
+          "title": "الأرنب يُصغي",
+          "story": "«ما رأيكم أن نجرّب الهدوء؟»\nطوى الأرنبُ أذنَه الناعمة.\nفسمعوا خطواتِ خنفساءَ صغيرة…\n\nثم شيئًا أبعدَ بكثير."
+        }
+      },
+      "side": "right"
+    },
+    {
+      "file": "spread-03.png",
+      "title": "A voice borrowed from a bird",
+      "story": "A songbird sang a silver song.\nThe cub tried singing too.\n\n*Pip. Pip. PIP!*\n\nBut something still felt wrong.",
+      "textPosition": "top",
+      "ar": true,
+      "translations": {
+        "fr": {
+          "title": "La chanson de l’oiseau",
+          "story": "Un oiseau chanta sa jolie chanson.\nLe lion essaya lui aussi.\n\n*Piou. Piou. PIOU !*\n\nMais quelque chose n’allait pas."
+        },
+        "ar": {
+          "title": "صوتٌ مُستعارٌ من عصفور",
+          "story": "غرّد عصفورٌ أغنيةً فضّية.\nوحاول الشبلُ أن يغنّي مثله.\n\n*بِيب. بِيب. بِيييب!*\n\nلكنّ شيئًا ما لم يكن على ما يُرام."
+        }
+      },
+      "side": "left"
+    },
+    {
+      "file": "spread-03.png",
+      "title": "A voice of your own",
+      "story": "“That song belongs to Bird,”\nSarra said. “Yours belongs to you.”\nThe cub gave one small smile.\n\nWould you listen too?",
+      "textPosition": "top",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Une voix rien qu’à toi",
+          "story": "« C’est la chanson de l’oiseau.\nTa voix, elle est à toi. »\nLe lion fit un petit sourire.\n\nEt toi, tu l’écouterais ?"
+        },
+        "ar": {
+          "title": "صوتٌ خاصٌّ بك",
+          "story": "قالت سارة: «تلك أغنيةُ العصفور،\nأمّا صوتُك فهو لك وحدك.»\nابتسم الشبلُ ابتسامةً صغيرة.\n\nوأنتم، هل تُصغون معنا؟"
+        }
+      },
+      "side": "right"
+    },
+    {
+      "file": "spread-04.png",
+      "title": "Owl knows a little secret",
+      "story": "“Perhaps your roar isn’t lost,”\nOwl said, soft as feathers.\n“Perhaps it’s feeling small.”\n\nSarra held the little paw.",
+      "textPosition": "top",
+      "ar": true,
+      "translations": {
+        "fr": {
+          "title": "Le petit secret du hibou",
+          "story": "« Ton rugissement n’est peut-être pas perdu,\ndit Hibou tout doucement.\nIl se sent peut-être tout petit. »\n\nSarra prit la petite patte."
+        },
+        "ar": {
+          "title": "البومة تعرف سرًّا صغيرًا",
+          "story": "قالت البومة بصوتٍ ناعمٍ كالريش:\n«ربما لم يضِع زئيرُك،\nربما يشعر فقط بأنه صغير.»\n\nأمسكت سارة بكفِّه الصغيرة."
+        }
+      },
+      "side": "left"
+    },
+    {
+      "file": "spread-04.png",
+      "title": "Listen by the water",
+      "story": "They listened to the leaves.\nThey listened to the brook.\n\n*Plip. Plop. “Help?”*\n\nWho was calling now?",
+      "textPosition": "top",
+      "ar": true,
+      "translations": {
+        "fr": {
+          "title": "Une voix près de l’eau",
+          "story": "Ils écoutèrent les feuilles.\nIls écoutèrent le ruisseau.\n\n*Plip. Plop. « Au secours ? »*\n\nQui appelait, cette fois ?"
+        },
+        "ar": {
+          "title": "إصغاءٌ عند الماء",
+          "story": "أصغَوا إلى الأوراق.\nوأصغَوا إلى الجدول.\n\n*بْليب. بْلوب. «النجدة؟»*\n\nمَن الذي يُنادي الآن؟"
+        }
+      },
+      "side": "right"
+    },
+    {
+      "file": "spread-05.png",
+      "title": "Small, just like me",
+      "story": "“That voice sounds small,” said Lion.\n“Small, just like me.”\n“Then let’s be gentle,” Sarra said.\n\n“Let’s find who needs a friend.”",
+      "textPosition": "top",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Une petite voix, comme moi",
+          "story": "« Cette voix est toute petite.\nPetite, comme moi », dit Lion.\n« Alors, allons tout doucement.\nCherchons qui a besoin d’un ami. »"
+        },
+        "ar": {
+          "title": "صغيرٌ مثلي",
+          "story": "قال الأسد: «هذا الصوتُ يبدو صغيرًا،\nصغيرًا مثلي تمامًا.»\nقالت سارة: «إذن لنمشِ بلطف.\n\nولنبحث عمّن يحتاج إلى صديق.»"
+        }
+      },
+      "side": "left"
+    },
+    {
+      "file": "spread-05.png",
+      "title": "Two friends follow the footprints",
+      "story": "Two friends followed tiny footprints.\nPast a fern. Around a stone.\nThe small voice called once more…\n\nThis time, it wasn’t alone.",
+      "textPosition": "top",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Deux amis suivent les traces",
+          "story": "Deux amis suivirent de petites traces.\nUne fougère. Un caillou.\nLa petite voix appela encore…\n\nMais elle n’était plus seule."
+        },
+        "ar": {
+          "title": "صديقان يتتبّعان الآثار",
+          "story": "تتبّع صديقان آثارَ أقدامٍ صغيرة.\nمرّا بنبتة سرخس، ودارا حول حجر.\nونادى الصوتُ الصغير مرّةً أخرى…\n\nوهذه المرّة، لم يكن وحيدًا."
+        }
+      },
+      "side": "right"
+    },
+    {
+      "file": "spread-06.png",
+      "title": "The other side",
+      "story": "One little tortoise waited.\nThe stepping stones were gone.\n“My home is over there.”\n\nCould small friends do big things?",
+      "textPosition": "top",
+      "ar": true,
+      "translations": {
+        "fr": {
+          "title": "De l’autre côté",
+          "story": "Une petite tortue attendait.\nLes pierres du passage avaient disparu.\n« Ma maison est là-bas… »\n\nLes petits peuvent-ils faire de grandes choses ?"
+        },
+        "ar": {
+          "title": "الضفّة الأخرى",
+          "story": "كانت سلحفاةٌ صغيرةٌ تنتظر.\nفقد اختفت حجارةُ العبور.\n«بيتي هناك، على الضفّة الأخرى.»\n\nهل يستطيع الأصدقاء الصغار أن يفعلوا أشياءَ كبيرة؟"
+        }
+      },
+      "side": "left"
+    },
+    {
+      "file": "spread-06.png",
+      "title": "A bridge made of friends",
+      "story": "Elephant held a fallen branch.\nRabbit tucked the twigs in tight.\nOwl showed the safest way.\n\nBut someone still felt small.",
+      "textPosition": "top",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Un pont fait d’amitié",
+          "story": "Éléphant posa une grande branche.\nLapin coinça les petites brindilles.\nHibou montra le meilleur chemin.\n\nMais quelqu’un se sentait encore petit."
+        },
+        "ar": {
+          "title": "جسرٌ من الأصدقاء",
+          "story": "أمسك الفيلُ غصنًا متساقطًا.\nوثبّت الأرنبُ الأعوادَ جيّدًا.\nودلّتهم البومةُ على أكثر الطرق أمانًا.\n\nلكنّ أحدًا ما ظلّ يشعر بأنه صغير."
+        }
+      },
+      "side": "right"
+    },
+    {
+      "file": "spread-07.png",
+      "title": "One foot, then a pause",
+      "story": "Tortoise tried one careful step.\nThen paused along the way.\n“What if I’m not brave enough?”\n\nThe cub knew that feeling.",
+      "textPosition": "top",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Un pas, puis une pause",
+          "story": "Tortue essaya un premier pas.\nPuis elle hésita encore un peu.\n« Et si je n’étais pas courageuse ? »\n\nLe lion connaissait ce sentiment."
+        },
+        "ar": {
+          "title": "خطوةٌ، ثم وقفة",
+          "story": "جرّبت السلحفاةُ خطوةً حذِرة،\nثم توقّفت في منتصف الطريق.\n«ماذا لو لم أكن شجاعةً بما يكفي؟»\n\nكان الشبلُ يعرف هذا الشعور."
+        }
+      },
+      "side": "left"
+    },
+    {
+      "file": "spread-07.png",
+      "title": "Beside a little friend",
+      "story": "“You needn’t be the biggest,”\nSarra whispered to the cub.\n“Could you stay beside your friend?”\n\nLion stepped a little closer.",
+      "textPosition": "top",
+      "ar": true,
+      "translations": {
+        "fr": {
+          "title": "Tout près de son ami",
+          "story": "« Pas besoin d’être le plus grand,\nsouffla Sarra au petit lion.\nTu peux rester près de ton amie. »\n\nLion fit un pas vers Tortue."
+        },
+        "ar": {
+          "title": "بجانب صديقةٍ صغيرة",
+          "story": "همست سارة للشبل:\n«لا يلزمك أن تكون الأكبر.\nهل تستطيع أن تبقى بجانب صديقتك؟»\n\nفاقترب الأسدُ قليلًا."
+        }
+      },
+      "side": "right"
+    },
+    {
+      "file": "spread-08.png",
+      "title": "One brave little word",
+      "story": "“I can’t roar,” whispered Lion.\n“Just try a little,” Sarra said.\nTortoise took one wobbly step.\n\n“You can do it!” called…",
+      "textPosition": "top",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Un tout petit mot courageux",
+          "story": "« Je ne sais pas rugir… »\n« Essaie doucement », dit Sarra.\nTortue fit un pas hésitant.\n\n« Tu peux y arriver ! » cria…"
+        },
+        "ar": {
+          "title": "كلمةٌ صغيرةٌ شجاعة",
+          "story": "همس الأسد: «لا أستطيع أن أزأر.»\nقالت سارة: «جرّب قليلًا فقط.»\nوخطت السلحفاةُ خطوةً متمايلة.\n\n«تستطيعين فعلها!» نادى…"
+        }
+      },
+      "side": "left"
+    },
+    {
+      "file": "spread-08.png",
+      "title": "A roar that says I am here",
+      "story": "…Lion!\n\n*ROAAR!*\n\nNot a roar to frighten.\nA roar that said, “I’m here!”",
+      "textPosition": "top",
+      "ar": true,
+      "translations": {
+        "fr": {
+          "title": "Un rugissement pour rassurer",
+          "story": "…Lion !\n\n*ROAAAR !*\n\nPas pour faire peur.\nPour dire : « Je suis là ! »"
+        },
+        "ar": {
+          "title": "زئيرٌ يقول: أنا هنا",
+          "story": "…الأسد!\n\n*غرررررر!*\n\nليس زئيرًا ليُخيف،\nبل زئيرًا يقول: «أنا هنا!»"
+        }
+      },
+      "side": "right"
+    },
+    {
+      "file": "spread-09.png",
+      "title": "Across, together",
+      "story": "Four small feet reached the moss.\nTortoise turned and beamed.\n“Your little voice helped me!”\n\nEveryone leaned in to listen.",
+      "textPosition": "top",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "De l’autre côté, ensemble",
+          "story": "Quatre petites pattes touchèrent la mousse.\nTortue se retourna, toute souriante.\n« Ta petite voix m’a aidée ! »\n\nTous s’approchèrent pour l’écouter."
+        },
+        "ar": {
+          "title": "إلى الضفّة الأخرى، معًا",
+          "story": "وصلت أربعُ أقدامٍ صغيرةٍ إلى الطحلب.\nالتفتت السلحفاةُ وابتسمت ابتسامةً مشرقة.\n«صوتُك الصغير ساعدني!»\n\nفاقترب الجميع ليُصغوا."
+        }
+      },
+      "side": "left"
+    },
+    {
+      "file": "spread-09.png",
+      "title": "The gift of listening",
+      "story": "“Was my roar here all along?”\nLion asked. Sarra nodded.\n“Sometimes brave things start quietly.”\n\nWould you listen too?",
+      "textPosition": "top",
+      "ar": true,
+      "translations": {
+        "fr": {
+          "title": "Le cadeau d’écouter",
+          "story": "« Mon rugissement était là depuis toujours ? »\nSarra fit oui de la tête.\n« Le courage commence parfois tout doucement. »\n\nEt toi, tu l’écouterais ?"
+        },
+        "ar": {
+          "title": "هديّةُ الإصغاء",
+          "story": "سأل الأسد: «هل كان زئيري هنا طوالَ الوقت؟»\nفأومأت سارة برأسها.\n«أحيانًا تبدأ الأشياءُ الشجاعة بهدوء.»\n\nوأنتم، هل تُصغون معنا؟"
+        }
+      },
+      "side": "right"
+    },
+    {
+      "file": "spread-10.png",
+      "title": "The quiet way home",
+      "story": "“You found it!” Sarra smiled.\n“You listened,” Lion said.\nThe loud world grew soft again.\n\nHome was just beyond the gate.",
+      "textPosition": "top",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Le retour tout doux",
+          "story": "« Tu l’as retrouvé ! » sourit Sarra.\n« Tu m’as écouté », dit Lion.\nLe grand monde redevint tout doux.\n\nLa maison était derrière le portail."
+        },
+        "ar": {
+          "title": "طريقُ العودة الهادئ",
+          "story": "ابتسمت سارة: «لقد وجدتَه!»\nقال الأسد: «لأنكِ أصغيتِ إليّ.»\nوعاد العالمُ الصاخب هادئًا من جديد.\n\nكان البيتُ خلف البوّابة مباشرة."
+        }
+      },
+      "side": "left"
+    },
+    {
+      "file": "spread-10.png",
+      "title": "Small voices matter",
+      "story": "That night, Sarra listened.\nA breeze. A bird. Her heartbeat.\nEven little voices matter.\n\nWho will you listen to?",
+      "textPosition": "top",
+      "ar": false,
+      "translations": {
+        "fr": {
+          "title": "Les petites voix comptent",
+          "story": "Ce soir-là, Sarra écouta.\nLe vent. Un oiseau. Son cœur.\nMême les petites voix comptent.\n\nEt toi, qui écouteras-tu ?"
+        },
+        "ar": {
+          "title": "الأصواتُ الصغيرة مهمّة",
+          "story": "في تلك الليلة، أصغت سارة.\nنسمةٌ. عصفورٌ. دقّاتُ قلبها.\nحتى الأصواتُ الصغيرة مهمّة.\n\nوأنتم، إلى مَن ستُصغون؟"
+        }
+      },
+      "side": "right"
+    }
+  ]
+}

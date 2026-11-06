@@ -5,6 +5,7 @@ import {
   Brain,
   Bug,
   Calculator,
+  Castle,
   Code,
   Compass,
   Cpu,
@@ -20,6 +21,7 @@ import {
   Magnet,
   Map,
   Microscope,
+  Moon,
   Mountain,
   Music,
   Orbit,
@@ -30,6 +32,8 @@ import {
   Ruler,
   Shapes,
   Sigma,
+  Smile,
+  Sparkles,
   Sprout,
   Telescope,
   TestTube,
@@ -39,6 +43,10 @@ import {
 } from "lucide-react";
 
 export const SUBJECT_ICONS: Record<string, LucideIcon> = {
+  moon: Moon,
+  castle: Castle,
+  sparkles: Sparkles,
+  smile: Smile,
   atom: Atom,
   flask: FlaskConical,
   "test-tube": TestTube,
@@ -78,9 +86,8 @@ export const SUBJECT_ICONS: Record<string, LucideIcon> = {
 };
 
 export const SUBJECT_COLORS = [
-  "#5b5bf6",
-  "#8b5cf6",
-  "#ec4899",
+  "#f26a1a",
+  "#f43f5e",
   "#ef4444",
   "#f97316",
   "#f59e0b",

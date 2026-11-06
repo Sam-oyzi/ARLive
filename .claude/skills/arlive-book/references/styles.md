@@ -50,6 +50,10 @@ measurement scale. No borders. Fill the page edge to edge.
    no large empty areas, no repeating pattern.`
    and make each AR page's composition clearly different from the other AR pages.
 4. **Story pages** can be calmer: more paper, a smaller vignette, room to breathe.
+4b. **Room for the words** (every page but the cover): add
+   `Leave the top third of the page as plain, untouched paper with no drawing and no lettering; place
+   the subject in the lower two-thirds, facing up towards that space.` (swap top/lower for a page
+   whose `textPosition` is `bottom`).
 5. **Cover**: `Book cover: large hand-lettered title "<book title>", a hero illustration of <…>,
    decorative <style-appropriate> ornaments.` Keep it a single page even if the book uses spreads.
 6. **Consistency**: mention recurring elements by the same words on every page (a character's name and

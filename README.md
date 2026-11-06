@@ -1,40 +1,60 @@
-# ARLive
+# PageWakes
 
-Augmented reality for every classroom. Students pick a subject, point their phone at a page of their
-textbook, and the page comes alive with 3D models, animations, video, audio and labels. A platform
-admin builds the AR content and decides which schools get which books; school admins manage their
-students.
+A free library of illustrated stories for kids. Families read the books on a phone or a laptop,
+download them as a PDF to print at home, and scan the pages marked AR with a phone to watch the
+characters pop out in 3D. Parents can also ask for a **custom story** starring their child, built
+around something they want the child to learn or think about (sharing, bedtime, being brave…).
 
 Built on [MindAR](https://hiukim.github.io/mind-ar-js-doc/) image tracking. Runs in the browser, so
 nobody installs an app.
 
 ## Features
 
-**Platform admin (`/admin`)**
-- Subjects (matières) with icons and colours
-- Books: upload page images as targets, then compile them into a MindAR `.mind` file in the browser
+**Library (public, `/`, `/library`, `/library/:bookId`)**
+- Home page with featured, most-loved, top-rated and new books, and browsing by category
+- Search, category filters and sorting (most popular, top rated, newest)
+- Each book shows its star rating, downloads and likes; signed-in readers rate (1–5 stars) and like
+- Read online (`/read/:bookId`), download / print (`/print/:bookId`) and scan AR pages
+  (`/scan/:bookId`). Each book is readable by **everyone**, **any account**, or **approved emails only**;
+  readers of a locked book ask for access from its page
+- Reader: two-page spreads on a laptop; on a phone one full-screen page at a time with a page-curl
+  turn (drag to peel a corner, tap the edges to turn, tap the middle for the controls), and
+  **Read to me** when pages have a recorded voice
+- The printed back cover carries a QR code that opens the book's AR scanner on a phone (set `SITE_URL`)
+- Picture-book pages: on a phone and in print, each page's story is drawn onto the picture in the
+  calmest part of the art (or where the admin puts it). Each line of the story is a line on the page,
+  and `*Buzz buzz*` makes a big, colourful sound word. How to write books in this style:
+  [.claude/skills/arlive-book/references/picture-book.md](.claude/skills/arlive-book/references/picture-book.md)
+
+**Families (`/signup`, `/account`, `/stories`)**
+- Free parent accounts: profile, children (first name, age, what they love) and liked books
+- Custom story requests: who it's for, the lesson (from a list or "something else"), the parent's
+  own words, the child's interests and the story language
+- Request status and notes from the team; the finished story appears in the account, private to
+  that family
+
+**Admin studio (`/admin`)**
+- Dashboard: library books, families, downloads, likes, AR scans and open story requests
+- Story requests: start a draft book owned by the family, build it in the studio, then deliver it
+  (publishes it for that family only)
+- Books: upload page images, mark AR pages, compile them into a MindAR `.mind` file in the browser,
+  publish, and feature on the home page; library stats per book
+- Who can read each book, approved emails (e.g. buyers of the printed book) and a **Reader access**
+  inbox for requests. Custom stories open only for approved emails; delivering one approves the family
+- Voice narration per page (MP3, M4A, OGG or WAV), played in order by the reader's Read to me
 - 3D scene editor per page: add GLB models (with animation clips), video, images, audio and text
   labels, then place them with move/rotate/scale gizmos
-- Schools: seats, join code, per-book or per-subject access, school admins
-- Access requests from schools, users, and usage analytics
+- Categories, users, and the school channel (schools, join codes, access requests)
 
-**School admin (`/school`)**
-- Overview with scans per day and most active students
-- Students: paste a class list to create accounts, print login slips, reset passwords
-- Join code + QR so students can sign up on their own
-- Catalog: request more books from the platform
-
-**Student (`/learn`, `/scan/:bookId`)**
-- Subject grid → subject page with a phone mockup and the books available to their school
-- Full-screen AR scanner: scanning guide, info card for the recognised page, replay, mute,
-  drag to spin, pinch to zoom, take and share a photo
-- Installable as an app (web manifest)
+**Schools (`/school`, `/learn`)**
+- Still supported: school admins manage students and request books; students join with a code and
+  read their school's books
 
 ## Stack
 
 Next.js 16 (App Router, server actions, `proxy.ts`) · React 19 · TypeScript · Tailwind CSS 4 ·
-Prisma (SQLite locally, PostgreSQL in production) · three.js + React Three Fiber · MindAR ·
-Radix primitives · JWT sessions (jose) with bcrypt.
+Prisma (SQLite locally, Cloudflare D1 in production) · three.js + React Three Fiber · MindAR ·
+8th Wall engine (iPhone world tracking) · Radix primitives · JWT sessions (jose) with bcrypt.
 
 ## Getting started
 
@@ -42,21 +62,22 @@ Radix primitives · JWT sessions (jose) with bcrypt.
 npm install
 cp .env.example .env          # then set SESSION_SECRET to a long random string
 npx prisma db push            # creates prisma/dev.db
-npm run db:seed               # demo school, users, subjects and a sample book
+npm run db:seed               # demo accounts, categories, sample books and a story request
 npm run dev
 ```
 
 Open http://localhost:3000 and sign in with a demo account (local development only):
 
-| Role           | Username            | Password     |
-| -------------- | ------------------- | ------------ |
-| Platform admin | `admin@arlive.app`  | `admin1234`  |
-| School admin   | `school@arlive.app` | `school1234` |
-| Student        | `student`           | `student123` |
+| Role           | Username                | Password     |
+| -------------- | ----------------------- | ------------ |
+| Platform admin | `admin@arlive.app`      | `admin1234`  |
+| Parent         | `parent@sketchling.app` | `parent1234` |
+| School admin   | `school@arlive.app`     | `school1234` |
+| Student        | `student`               | `student123` |
 
 The demo school's join code is `DEMO2026`.
 
-If the sample book shows **Not compiled**, open it under *Books & targets* and click **Compile**.
+If the sample book shows **Not compiled**, open it under *Books & AR pages* and click **Compile**.
 
 ### Testing on a phone (laptop without a camera)
 
@@ -83,7 +104,16 @@ Then:
 4. Tap **Start scanning** and point the phone at the target — printed, or just shown full screen
    on the laptop's monitor.
 
-If the phone can't connect, allow Node.js through the Windows firewall on private networks.
+If the phone can't connect, allow Node.js through your computer's firewall on private networks.
+
+### Checks
+
+```bash
+npm test             # unit tests (Node's built-in test runner)
+npm run typecheck
+```
+
+CI runs these plus a production build on every push to `main` and every pull request.
 
 ## How AR content works
 
@@ -94,6 +124,20 @@ If the phone can't connect, allow Node.js through the Windows firewall on privat
 - Content transforms are stored in page space: 1 unit = page width, origin = page centre, +Z points
   out of the page. Models are auto-scaled so their largest side is 1 unit before your scale applies.
 - Keep books under about 30 pages; split larger books into chapters for faster recognition.
+- A page can also have a **story world**: a 360° panorama shown as a closed box you walk into, with an
+  optional animation (rain with Lou the drop, or snow). Android Chrome places it with WebXR; iPhone uses
+  the 8th Wall engine (below), or AR Quick Look as a second choice; anything else looks round from
+  inside. `src/ar/` holds the box, its animation and the sessions.
+
+### 8th Wall engine (third-party)
+
+iPhone world tracking uses the **8th Wall engine binary** by Niantic Spatial, Inc., loaded unmodified from
+jsDelivr (`@8thwall/engine-binary@1.0.0`) only when someone opens that mode. It is not open source: it is
+used under the [XR Engine License Agreement](https://github.com/8thwall/engine/blob/main/LICENSE), which
+requires the credit shown on the story world page and during the AR session (Niantic Spatial as creator,
+copyright notice, and a link to the licence and its disclaimer of warranties). Keep that credit wherever
+the engine is used, don't modify the binary, and don't sell a product whose value comes
+mainly from the engine.
 
 ## Project layout
 
@@ -113,9 +157,9 @@ src/lib              auth, storage, shared helpers
 
 ## Making a book (read, AR, print)
 
-The seed installs **"Example: The Journey of a Water Drop"** (Chemistry): a cover + 6 two-page
+The seed installs **"Example: The Journey of a Water Drop"** (Science & nature): a cover + 6 two-page
 spreads in the sketchbook format, with three AR pages that already have 3D content (molecule model,
-3D text with animations). Open it from *Books & targets → Preview book* to see the result before
+3D text with animations). Open it from *Books & AR pages → Preview book* to see the result before
 making your own. Its pages are drawn by `scripts/make-example-book.ts`.
 
 1. Plan it with Claude: ask for a book on any topic. The `arlive-book` skill
@@ -140,7 +184,18 @@ hand: `npm run optimize:glb -- model.glb`.
 
 ## Production notes
 
-- Switch `provider` in `prisma/schema.prisma` to `postgresql` and set `DATABASE_URL`.
-- Uploads are written to `storage/uploads`; mount it on a persistent volume, or replace
-  `src/lib/storage.ts` with S3/R2 (same function signatures).
-- Set a strong `SESSION_SECRET`; cookies are `Secure` when `NODE_ENV=production`.
+The complete app runs on Cloudflare Workers at **https://pagewakes.com**. The Worker uses a
+native D1 database binding for records and a private R2 binding for media. There is no separate
+Node service. The existing Next.js development command still uses local SQLite and uploads.
+See [Cloudflare deployment and migration](docs/cloudflare-launch.md).
+
+The owner selected Workers Free for the test deployment. CPU-limit errors were observed during
+live testing, so the current deployment is not ready for a reliable public launch.
+
+- Run `npx wrangler login`, then `npm run deploy:worker` to build and publish updates.
+- `cloudflare.config.ts` defines the Worker, D1, R2, domains and public QR-code URL.
+- Store `SESSION_SECRET` as a Worker secret. Credentials, exports and generated clients stay outside Git.
+- Known demo accounts are disabled in the cloud import. The production owner has a separate account.
+  Passwords can be changed from the account menu, which signs out other devices.
+- Sign-in and join counters currently live in each Worker isolate. Distributed throttling should be
+  added before a large public campaign.

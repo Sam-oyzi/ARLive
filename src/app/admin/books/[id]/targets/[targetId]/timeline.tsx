@@ -110,7 +110,7 @@ export function Timeline({
         </label>
         <button
           onClick={() => onChange({ loop: !motion.loop })}
-          className={cn("flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold", motion.loop ? "bg-brand-500" : "bg-white/10 text-white/60")}
+          className={cn("flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold", motion.loop ? "bg-brand-600" : "bg-white/10 text-white/60")}
           title="Loop"
         >
           <Repeat className="size-3.5" /> Loop

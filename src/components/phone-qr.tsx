@@ -13,6 +13,21 @@ const REFRESH_MS = 4 * 60 * 1000; // tokens live 5 minutes
  * "Continue on your phone": a QR code that opens `path` on a phone, already signed in.
  * On a laptop running the dev server on localhost it points at the laptop's Wi-Fi address instead.
  */
+export function PhoneQRDisclosure({ path, size, className }: { path: string; size?: number; className?: string }) {
+  // The QR code holds a sign-in token, so only ask for one when somebody opens this.
+  const [open, setOpen] = useState(false);
+  return (
+    <details className={className} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary className="cursor-pointer rounded-sm font-semibold text-ink-700">Continue on your phone</summary>
+      {open && (
+        <div className="mt-2">
+          <PhoneQR path={path} size={size} />
+        </div>
+      )}
+    </details>
+  );
+}
+
 export function PhoneQR({ path, size = 96, dark, className }: { path: string; size?: number; dark?: boolean; className?: string }) {
   const [url, setUrl] = useState("");
   const [warning, setWarning] = useState<string | null>(null);

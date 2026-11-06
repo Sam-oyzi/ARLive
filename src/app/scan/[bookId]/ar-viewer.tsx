@@ -9,9 +9,9 @@ import {
   Download,
   Hand,
   LoaderCircle,
+  Orbit,
   RotateCcw,
   Share2,
-  ShieldAlert,
   Volume2,
   VolumeX,
   X,
@@ -23,16 +23,33 @@ import { applyTransform, createContent, type ContentHandle } from "@/ar/content-
 import { MotionPlayer } from "@/ar/motion";
 import { parseMotion } from "@/lib/motion-schema";
 import { PhoneQR } from "@/components/phone-qr";
+import { WorldViewer } from "@/components/story-world/world-viewer";
+import { Thumb } from "@/components/thumb";
 import type { ContentData } from "@/lib/content";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { cn, plural } from "@/lib/utils";
-import { QuickLook } from "./quick-look";
+import { storyMotionReady } from "@/lib/story-motion";
+import { worldExperienceOf, opensModel, placementModel, rendersOnTarget, type ScanAction } from "@/lib/scan-actions";
+import { ScanLaunchGate } from "@/lib/scan-launch";
+import { usePageSounds, type SoundLayer } from "@/lib/page-sound";
+import type { WorldEffect } from "@/lib/world-effects";
+import { QuickLookLaunch } from "./quick-look";
+import { QuickLookAssets, supportsQuickLook } from "@/ar/quick-look-assets";
+import { ModelPlacementViewer } from "@/components/model-placement-viewer";
 
 type ViewerTarget = {
   id: string;
   name: string;
   description: string | null;
   imageUrl: string;
+  /** Artwork for the selected story box or 360° view. */
+  worldUrl: string | null;
+  worldEffect: WorldEffect;
+  /** The studio-selected page experience. */
+  scanAction: ScanAction;
+  narrationUrl: string | null;
+  /** Sounds for whichever experience this page opens. */
+  sounds: SoundLayer[];
   targetIndex: number;
   contents: ContentData[];
 };
@@ -41,9 +58,14 @@ type Props = {
   book: { id: string; title: string; mindUrl: string; coverUrl: string | null; subject: { name: string; color: string; icon: string } };
   targets: ViewerTarget[];
   backHref: string;
+  scanHref: string;
+  previewTargetId?: string;
 };
 
-type Phase = "intro" | "starting" | "running" | "error";
+type Phase = "starting" | "running" | "error";
+
+/** Pages the studio set to open their story world when scanned (and that have one). */
+const opensWorld = (target: ViewerTarget) => worldExperienceOf(target.scanAction, target.worldUrl) !== null;
 
 const STAGE_TEXT: Record<ARStage, string> = {
   camera: "Waking up the camera…",
@@ -54,14 +76,14 @@ const STAGE_TEXT: Record<ARStage, string> = {
 
 type Loaded = { anchor: ARAnchor; handles: ContentHandle[]; motions: MotionPlayer[] };
 
-export function ARViewer({ book, targets, backHref }: Props) {
+export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<ARSession | null>(null);
   const loadedRef = useRef(new Map<string, Loaded>());
   const lastLogged = useRef(new Map<string, number>());
-  const wakeLock = useRef<{ release(): Promise<void> } | null>(null);
+  const wakeLock = useRef<WakeLockSentinel | null>(null);
 
-  const [phase, setPhase] = useState<Phase>("intro");
+  const [phase, setPhase] = useState<Phase>("starting");
   const [stage, setStage] = useState<ARStage>("camera");
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [tracking, setTracking] = useState(false);
@@ -69,19 +91,61 @@ export function ARViewer({ book, targets, backHref }: Props) {
   const [muted, setMuted] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [photo, setPhoto] = useState<string | null>(null);
-  const [isDesktop, setIsDesktop] = useState(false);
-  const [insecure, setInsecure] = useState(false);
   const [gestured, setGestured] = useState(false);
+  // A short "drag to spin" hint each time a page is recognised, then out of the way.
+  const [showHint, setShowHint] = useState(false);
+  useEffect(() => {
+    if (!activeId) return;
+    setShowHint(true);
+    const timer = setTimeout(() => setShowHint(false), 3000);
+    return () => clearTimeout(timer);
+  }, [activeId]);
+  // A recognised page opens exactly the experience selected in Studio.
+  const [world, setWorld] = useState<ViewerTarget | null>(null);
+  // Avoid pulling the child straight back inside when they return to the same printed page.
+  const launchGate = useRef(new ScanLaunchGate());
+  const [modelTarget, setModelTarget] = useState<ViewerTarget | null>(null);
+  const quickAssets = useRef<QuickLookAssets | null>(null);
+  const prepareQuickLook = useCallback((content: ContentData) => {
+    quickAssets.current ??= new QuickLookAssets();
+    return quickAssets.current.prepare(content);
+  }, []);
+
+  useEffect(() => {
+    const assets = new QuickLookAssets();
+    quickAssets.current = assets;
+    if (supportsQuickLook()) {
+      // Serial preparation limits memory use on phones; recognition can await an in-flight asset.
+      void (async () => {
+        for (const target of targets) {
+          if (quickAssets.current !== assets) break;
+          const model = target.scanAction === "quicklook" && placementModel(target.contents);
+          if (model) await assets.prepare(model).catch(() => {});
+        }
+      })();
+    }
+    return () => { if (quickAssets.current === assets) quickAssets.current = null; assets.dispose(); };
+  }, [targets]);
 
   const active = targets.find((t) => t.id === activeId) ?? null;
+  // A MindAR page's sounds, kept a moment after tracking drops so a wobble doesn't cut them.
+  // Pages that open another viewer play their sound there instead.
+  const [heard, setHeard] = useState(false);
+  useEffect(() => {
+    if (tracking) {
+      setHeard(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setHeard(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [tracking]);
+  const onTargetSound = phase === "running" && heard && !world && !modelTarget && active && rendersOnTarget(active.scanAction);
+  usePageSounds(onTargetSound ? active.sounds : null, { muted });
   const accent = { "--accent": book.subject.color } as CSSProperties;
 
   useEffect(() => {
-    // Start downloading the tracking engine while the student reads the intro.
+    // Warm the tracking engine while the camera opens.
     loadMindAR().catch(() => {});
-    // A mouse/trackpad means a laptop or desktop: offer the phone QR code up front.
-    setIsDesktop(window.matchMedia("(pointer: fine)").matches);
-    setInsecure(!window.isSecureContext);
   }, []);
 
   const teardown = useCallback(() => {
@@ -95,12 +159,33 @@ export function ARViewer({ book, targets, backHref }: Props) {
 
   useEffect(() => teardown, [teardown]);
 
+  // While the child is inside a story world, the scanner's camera rests; it starts again on the way out.
+  useEffect(() => {
+    if (!world && !modelTarget) return;
+    teardown();
+    setPhase("starting");
+  }, [world, modelTarget, teardown]);
+
+  /** Keeps the screen on while scanning. Browsers drop the lock whenever the page is hidden. */
+  const keepScreenOn = useCallback(async () => {
+    if (wakeLock.current && !wakeLock.current.released) return;
+    try {
+      const lock = await navigator.wakeLock?.request("screen");
+      if (sessionRef.current) wakeLock.current = lock ?? null;
+      else lock?.release().catch(() => {}); // left the scanner while waiting
+    } catch {
+      // not supported or denied; the screen may dim
+    }
+  }, []);
+
   useEffect(() => {
     if (phase !== "running") return;
     // Quick Look is a native overlay. Keep the tracking session and resume its
     // video if the browser paused it while the overlay had focus.
     const resume = () => {
-      if (!document.hidden) sessionRef.current?.resumeCamera();
+      if (document.hidden) return;
+      sessionRef.current?.resumeCamera();
+      void keepScreenOn();
     };
     document.addEventListener("visibilitychange", resume);
     window.addEventListener("focus", resume);
@@ -110,7 +195,7 @@ export function ARViewer({ book, targets, backHref }: Props) {
       window.removeEventListener("focus", resume);
       window.removeEventListener("pageshow", resume);
     };
-  }, [phase]);
+  }, [phase, keepScreenOn]);
 
   const logScan = useCallback(
     (targetId: string) => {
@@ -130,82 +215,116 @@ export function ARViewer({ book, targets, backHref }: Props) {
   function start() {
     const container = containerRef.current;
     if (!container) return;
+    // Story worlds use motion sensors on iPhone; ask from the scanner's start tap.
+    if (navigator.userActivation?.isActive && targets.some((target) => target.scanAction === "world" || target.scanAction === "eighthwall")) {
+      void storyMotionReady();
+    }
     teardown();
+    launchGate.current.resumeScanning();
     setError(null);
+    setActiveId(null);
+    setTracking(false);
+    setExpanded(false);
+    setGestured(false);
     setPhase("starting");
     setStage("camera");
 
-    const session = new ARSession(container, { mindUrl: book.mindUrl, onTrackingChange: setTracking });
-    sessionRef.current = session;
+    let session: ARSession | null = null;
+    const fail = (err: unknown) => {
+      if (session && sessionRef.current !== session) return;
+      teardown();
+      setError(
+        err instanceof ARError
+          ? { message: err.message, code: err.code }
+          : { message: "AR couldn't start on this device. Try Chrome on Android or Safari on iPhone." },
+      );
+      setPhase("error");
+    };
 
-    // Everything up to the first await runs inside the tap, so media can be unlocked for sound.
-    for (const target of targets) {
-      const anchor = session.addAnchor(target.targetIndex);
-      const handles: ContentHandle[] = [];
-      const motions: MotionPlayer[] = [];
-      for (const content of target.contents) {
-        const handle = createContent(content, "ar");
-        // wrapper = authored placement (keyframes drive it) → motion group (presets drive it) → content
-        const wrapper = new THREE.Group();
-        applyTransform(wrapper, content);
-        const motionGroup = new THREE.Group();
-        motionGroup.add(handle.object);
-        wrapper.add(motionGroup);
-        anchor.gesture.add(wrapper);
-        handle.unlock();
-        handle.setMuted(muted);
-        handles.push(handle);
-        motions.push(new MotionPlayer(parseMotion(content.motion), content.type, wrapper, motionGroup));
-      }
-      session.onTick((delta) => {
-        if (!anchor.visible) return;
-        handles.forEach((h) => h.update(delta));
-        motions.forEach((m) => m.update(delta));
-      });
-      anchor.onFound = () => {
-        handles.forEach((h) => {
-          h.load().catch(() => {});
-          h.play();
+    try {
+      session = new ARSession(container, { mindUrl: book.mindUrl, onTrackingChange: setTracking });
+      sessionRef.current = session;
+
+      // Everything up to the first await runs inside the tap, so media can be unlocked for sound.
+      for (const target of targets) {
+        const anchor = session.addAnchor(target.targetIndex);
+        const handles: ContentHandle[] = [];
+        const motions: MotionPlayer[] = [];
+        for (const content of rendersOnTarget(target.scanAction) ? target.contents : []) {
+          const handle = createContent(content, "ar");
+          // wrapper = authored placement (keyframes drive it) → motion group (presets drive it) → content
+          const wrapper = new THREE.Group();
+          applyTransform(wrapper, content);
+          const motionGroup = new THREE.Group();
+          motionGroup.add(handle.object);
+          wrapper.add(motionGroup);
+          anchor.gesture.add(wrapper);
+          handle.unlock();
+          handle.setMuted(muted);
+          handles.push(handle);
+          motions.push(new MotionPlayer(parseMotion(content.motion), content.type, wrapper, motionGroup));
+        }
+        session.onTick((delta) => {
+          if (!anchor.visible) return;
+          handles.forEach((h) => h.update(delta));
+          motions.forEach((m) => m.update(delta));
         });
-        motions.forEach((m) => m.found());
-        setActiveId(target.id);
-        setExpanded(false);
-        navigator.vibrate?.(25);
-        logScan(target.id);
-      };
-      anchor.onLost = () => {
-        handles.forEach((h) => h.pause());
-        motions.forEach((m) => m.lost());
-      };
-      loadedRef.current.set(target.id, { anchor, handles, motions });
+        anchor.onFound = () => {
+          // Like an image target that opens a scene: a page with a story world takes the child inside it,
+          // the first time it's scanned.
+          const action = launchGate.current.found(target.id, opensWorld(target) || opensModel(target.scanAction));
+          if (action === "ignore") return;
+          if (action === "resume") { setActiveId(target.id); return; }
+          if (action === "launch") {
+            navigator.vibrate?.(25);
+            logScan(target.id);
+            if (opensWorld(target)) setWorld(target);
+            else setModelTarget(target);
+            return;
+          }
+          handles.forEach((h) => {
+            h.load().catch(() => {});
+            h.play();
+          });
+          motions.forEach((m) => m.found());
+          setActiveId(target.id);
+          setExpanded(false);
+          navigator.vibrate?.(25);
+          logScan(target.id);
+        };
+        anchor.onLost = () => {
+          launchGate.current.lost(target.id);
+          handles.forEach((h) => h.pause());
+          motions.forEach((m) => m.lost());
+        };
+        loadedRef.current.set(target.id, { anchor, handles, motions });
+      }
+    } catch (err) {
+      fail(err);
+      return;
     }
 
     session
       .start(setStage)
       .then(async () => {
+        if (sessionRef.current !== session) return; // left the scanner while it was starting
         setPhase("running");
-        try {
-          const nav = navigator as Navigator & { wakeLock?: { request(type: "screen"): Promise<{ release(): Promise<void> }> } };
-          wakeLock.current = (await nav.wakeLock?.request("screen")) ?? null;
-        } catch {
-          // not supported or denied; the screen may dim
-        }
+        await keepScreenOn();
         // Warm up the remaining content in page order so the first scan feels instant.
         for (const { handles } of loadedRef.current.values()) {
           if (sessionRef.current !== session) return;
           await Promise.all(handles.map((h) => h.load().catch(() => {})));
         }
       })
-      .catch((err: unknown) => {
-        teardown();
-        setError(
-          err instanceof ARError
-            ? { message: err.message, code: err.code }
-            : { message: "AR couldn't start on this device. Try Chrome on Android or Safari on iPhone." },
-        );
-        setPhase("error");
-      });
+      .catch(fail);
   }
+
+  useEffect(() => {
+    const preview = targets.find((target) => target.id === previewTargetId && opensModel(target.scanAction));
+    const timer = window.setTimeout(() => preview ? setModelTarget(preview) : start(), 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- start once for this scanner mount
+  }, []);
 
   function toggleMute() {
     const next = !muted;
@@ -244,9 +363,11 @@ export function ARViewer({ book, targets, backHref }: Props) {
       const [a, b] = [...pointers.current.values()];
       pinch.current = { distance: Math.hypot(a!.x - b!.x, a!.y - b!.y), scale: activeGesture()?.scale.x ?? 1 };
     }
+    // A second finger starts a pinch, so it must not count as a double tap.
+    const singleFinger = pointers.current.size === 1;
     const now = Date.now();
-    if (now - lastTap.current < 300) resetGesture();
-    lastTap.current = now;
+    if (singleFinger && now - lastTap.current < 300) resetGesture();
+    lastTap.current = singleFinger ? now : 0;
   }
 
   function onPointerMove(e: React.PointerEvent) {
@@ -279,7 +400,7 @@ export function ARViewer({ book, targets, backHref }: Props) {
   async function sharePhoto() {
     if (!photo) return;
     const blob = await (await fetch(photo)).blob();
-    const file = new File([blob], `sketchling-${Date.now()}.jpg`, { type: "image/jpeg" });
+    const file = new File([blob], `pagewakes-${Date.now()}.jpg`, { type: "image/jpeg" });
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({ files: [file], title: active?.name ?? book.title }).catch(() => {});
     } else {
@@ -308,7 +429,7 @@ export function ARViewer({ book, targets, backHref }: Props) {
         />
       )}
 
-      {/* top bar — above the intro/loading/error screens (z-20) so Back is always reachable,
+      {/* top bar — above the loading/error screens (z-20) so Back is always reachable,
           below the photo preview (z-30) which has its own close button */}
       <div className="absolute inset-x-0 top-0 z-[25] flex items-center gap-3 px-4 safe-top">
         <Link href={backHref} className={cn("grid size-11 shrink-0 place-items-center rounded-full", glass)} aria-label="Back">
@@ -350,7 +471,7 @@ export function ARViewer({ book, targets, backHref }: Props) {
             <span className="absolute inset-x-3 h-0.5 animate-scan rounded-full bg-[var(--accent)] shadow-[0_0_24px_6px_var(--accent)]" />
           </div>
           <p className={cn("mt-6 rounded-full px-4 py-2 text-sm font-semibold", glass)}>
-            {active ? "Point at the page again" : "Point your camera at a page"}
+            {active ? "Point at the page again" : "Point your camera at a printed page"}
           </p>
         </div>
       )}
@@ -362,89 +483,64 @@ export function ARViewer({ book, targets, backHref }: Props) {
           <div className="flex gap-2.5 overflow-x-auto px-4 pb-1 scrollbar-none">
             {targets.map((t) => (
               <div key={t.id} className="w-16 shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={t.imageUrl} alt={t.name} className="aspect-[3/4] w-full rounded-xl object-cover ring-2 ring-white/30" />
+                <Thumb src={t.imageUrl} alt={t.name} width={64} height={85} className="aspect-[3/4] w-full rounded-xl object-cover ring-2 ring-white/30" />
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* info card for the recognised page */}
+      {/* the recognised page: a slim bar, so the AR on the page stays in view; details on a tap */}
       {phase === "running" && active && (
-        <div className="absolute inset-x-0 bottom-0 z-10 px-3 safe-bottom">
-          <div className="mx-auto max-w-lg animate-fade-up rounded-[28px] bg-white/95 p-4 text-ink-900 shadow-lift backdrop-blur-xl">
-            <button className="flex w-full items-start gap-3 text-left" onClick={() => setExpanded((v) => !v)}>
-              <span className="relative mt-0.5 grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent)] text-white">
-                <SubjectIcon icon={book.subject.icon} className="size-5" />
-                {tracking && <span className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-emerald-400 ring-2 ring-white" />}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[11px] font-bold tracking-wide text-[var(--accent)] uppercase">
-                  {tracking ? "Page recognised" : "Last page"}
-                </span>
-                <span className="block font-display text-lg leading-tight font-bold">{active.name}</span>
-                {active.description && (
-                  <span className={cn("mt-1 block text-sm leading-relaxed text-ink-600", !expanded && "line-clamp-2")}>{active.description}</span>
-                )}
-              </span>
-              {active.description && <ChevronDown className={cn("mt-1 size-5 shrink-0 text-ink-400 transition", expanded && "rotate-180")} />}
-            </button>
-            <QuickLook key={active.id} contents={active.contents} />
-            <div className="mt-3 flex gap-2">
-              <button onClick={replay} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-2xl bg-ink-100 text-sm font-semibold text-ink-800 active:bg-ink-200">
-                <RotateCcw className="size-4" /> Replay
-              </button>
-              {gestured ? (
-                <button onClick={resetGesture} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-2xl bg-ink-100 text-sm font-semibold text-ink-800 active:bg-ink-200">
-                  <Hand className="size-4" /> Reset
+        <div className="absolute inset-x-0 bottom-0 z-10 px-3 pb-2 safe-bottom">
+          <div className="mx-auto max-w-lg animate-fade-up">
+            {(opensWorld(active) || opensModel(active.scanAction)) && (
+              <div className="mb-2 flex flex-wrap justify-center gap-2">
+                <button
+                  onClick={() => {
+                    if (opensWorld(active)) setWorld(active);
+                    else setModelTarget(active);
+                  }}
+                  className="flex h-12 items-center gap-2 rounded-full bg-sky-600 px-5 text-sm font-bold text-white shadow-lift active:scale-[0.98]"
+                >
+                  <Orbit className="size-4" /> {active.scanAction === "panorama" ? "Look around 360°" : active.scanAction === "world" ? "Step inside" : active.scanAction === "quicklook" ? "Open AR Quick Look" : "Place the 3D model"}
                 </button>
-              ) : (
-                <span className="flex h-10 flex-1 items-center justify-center gap-2 rounded-2xl text-xs font-medium text-ink-500">
-                  <Hand className="size-4" /> Drag to spin · pinch to zoom
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* intro */}
-      {phase === "intro" && (
-        <div className="absolute inset-0 z-20 flex flex-col overflow-y-auto bg-ink-950">
-          <div className="absolute inset-0 bg-grid-dark" />
-          <div className="absolute -top-32 left-1/2 size-[480px] -translate-x-1/2 rounded-full bg-[var(--accent)] opacity-40 blur-[120px]" />
-          <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-6 pt-24 pb-10 text-center">
-            <div className="relative mb-8">
-              <div className="absolute inset-0 animate-pulse-ring rounded-[28px] bg-[var(--accent)]" />
-              <div className="relative grid h-36 w-28 place-items-center overflow-hidden rounded-[22px] bg-[var(--accent)] shadow-[0_30px_60px_-20px_var(--accent)] ring-1 ring-white/20">
-                {book.coverUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={book.coverUrl} alt="" className="size-full object-cover" />
-                ) : (
-                  <SubjectIcon icon={book.subject.icon} className="size-12" />
-                )}
-              </div>
-            </div>
-            <h1 className="font-display text-3xl font-bold tracking-tight">{book.title}</h1>
-            <p className="mt-2 text-white/60">{plural(targets.length, "page comes", "pages come")} alive in 3D. Open your book and get ready.</p>
-
-            {insecure && (
-              <div className="mt-6 flex gap-3 rounded-2xl bg-amber-400/15 p-4 text-left text-sm text-amber-100 ring-1 ring-amber-300/30">
-                <ShieldAlert className="mt-0.5 size-5 shrink-0" />
-                Browsers only allow the camera on secure (https://) pages. Ask your teacher for the https link.
               </div>
             )}
-
-            <button
-              onClick={start}
-              className="mt-8 flex h-14 w-full items-center justify-center gap-2.5 rounded-2xl bg-white text-base font-bold text-ink-950 shadow-[0_20px_40px_-12px_rgb(255_255_255/0.35)] transition active:scale-[0.98]"
-            >
-              <Camera className="size-5" /> Start scanning
-            </button>
-            <p className="mt-3 text-xs text-white/45">We&apos;ll ask for camera access. Nothing is recorded.</p>
-
-            {isDesktop && <PhoneQR path={`/scan/${book.id}`} dark className="mt-8 w-full text-left" />}
+            {expanded ? (
+              <div className="mb-2 rounded-3xl bg-white/95 p-4 text-ink-900 shadow-lift backdrop-blur-xl">
+                {active.description && <p className="text-sm leading-relaxed text-ink-600">{active.description}</p>}
+                {rendersOnTarget(active.scanAction) && <>
+                  <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-ink-500">
+                    <Hand className="size-3.5" /> Drag to spin · pinch to zoom
+                  </p>
+                </>}
+              </div>
+            ) : (
+              showHint && rendersOnTarget(active.scanAction) && (
+                <p className={cn("mx-auto mb-2 flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold", glass)}>
+                  <Hand className="size-3.5" /> Drag to spin · pinch to zoom
+                </p>
+              )
+            )}
+            <div className={cn("flex items-center gap-1.5 rounded-full p-1.5", glass)}>
+              <button onClick={() => setExpanded((v) => !v)} aria-expanded={expanded} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
+                <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-[var(--accent)] text-white">
+                  <SubjectIcon icon={book.subject.icon} className="size-4" />
+                  {tracking && <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-400 ring-2 ring-black/30" />}
+                </span>
+                <span className="min-w-0 truncate text-sm font-bold">{active.name}</span>
+                <ChevronDown className={cn("size-4 shrink-0 opacity-70 transition", !expanded && "rotate-180")} />
+              </button>
+              {gestured && (
+                <button onClick={resetGesture} aria-label="Put the model back" className="grid size-9 shrink-0 place-items-center rounded-full bg-white/15 active:bg-white/25">
+                  <Hand className="size-4" />
+                </button>
+              )}
+              {rendersOnTarget(active.scanAction) && <button onClick={replay} aria-label="Replay" className="grid size-9 shrink-0 place-items-center rounded-full bg-white/15 active:bg-white/25">
+                <RotateCcw className="size-4" />
+              </button>}
+            </div>
           </div>
         </div>
       )}
@@ -484,7 +580,7 @@ export function ARViewer({ book, targets, backHref }: Props) {
               )}
             </div>
             {/* No usable camera here (typical on laptops): hand over to a phone. */}
-            {error.code !== "targets" && <PhoneQR path={`/scan/${book.id}`} dark size={120} className="mt-6 w-full text-left" />}
+            {error.code !== "targets" && <PhoneQR path={scanHref} dark size={120} className="mt-6 w-full text-left" />}
           </div>
         </div>
       )}
@@ -502,13 +598,59 @@ export function ARViewer({ book, targets, backHref }: Props) {
             <img src={photo} alt="AR snapshot" className="max-h-full max-w-full rounded-3xl shadow-lift" />
           </div>
           <div className="mx-auto flex w-full max-w-sm gap-2">
-            <a href={photo} download={`sketchling-${book.id}.jpg`} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-white/10 text-sm font-semibold">
+            <a href={photo} download={`pagewakes-${book.id}.jpg`} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-white/10 text-sm font-semibold">
               <Download className="size-4" /> Save
             </a>
             <button onClick={sharePhoto} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-white text-sm font-bold text-ink-950">
               <Share2 className="size-4" /> Share
             </button>
           </div>
+        </div>
+      )}
+
+      {modelTarget && (modelTarget.scanAction === "quicklook" ? (
+        <QuickLookLaunch
+          key={modelTarget.id}
+          content={placementModel(modelTarget.contents)}
+          title={modelTarget.name}
+          prepare={prepareQuickLook}
+          onExit={() => { setModelTarget(null); start(); }}
+        />
+      ) : placementModel(modelTarget.contents) ? (
+        <ModelPlacementViewer
+          key={modelTarget.id}
+          content={placementModel(modelTarget.contents)!}
+          title={modelTarget.name}
+          sounds={modelTarget.sounds}
+          onExit={() => { setModelTarget(null); start(); }}
+        />
+      ) : (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-black px-6 text-center text-white">
+          <div><p role="alert">This page needs a 3D model. Ask the administrator to add one in Studio.</p><button className="mt-5 rounded-xl bg-white px-5 py-3 font-bold text-black" onClick={() => { setModelTarget(null); start(); }}>Back to scanning</button></div>
+        </div>
+      ))}
+
+      {world?.worldUrl && (
+        <div className="fixed inset-0 z-[60]">
+          <WorldViewer
+            key={`${world.id}:${world.scanAction}`}
+            world={{
+              url: world.worldUrl,
+              effect: world.worldEffect,
+              title: world.name,
+              bookTitle: book.title,
+              color: book.subject.color,
+              narrationUrl: world.narrationUrl,
+              sounds: world.sounds,
+            }}
+            backHref={scanHref}
+            experience={worldExperienceOf(world.scanAction, world.worldUrl)!}
+            onExit={() => {
+              // Back to scanning, from this tap (the camera may only start from one on iPhone).
+              setWorld(null);
+              start();
+            }}
+          />
         </div>
       )}
     </div>

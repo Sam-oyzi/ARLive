@@ -98,7 +98,7 @@ export default async function SchoolDetailPage({ params }: { params: Promise<{ i
           tone="sky"
           hint={school.maxStudents ? `${school.maxStudents - school._count.users} seats left of ${school.maxStudents}` : "Unlimited seats"}
         />
-        <StatCard label="Books granted" value={school.access.length} icon={BookOpen} tone="pink" />
+        <StatCard label="Books granted" value={school.access.length} icon={BookOpen} tone="rose" />
         <StatCard label="Scans · 14 days" value={scans.length} icon={ScanLine} tone="green" />
       </div>
 

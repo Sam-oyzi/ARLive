@@ -1,44 +1,56 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-bricolage), var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-instrument), ui-serif, Georgia, serif;
+  --font-sans: var(--font-jakarta), var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-jakarta), var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument), var(--font-arabic), ui-serif, Georgia, serif;
 
-  --color-brand-50: #f0f0ff;
-  --color-brand-100: #e3e3ff;
-  --color-brand-200: #cbcbff;
-  --color-brand-300: #a7a5ff;
-  --color-brand-400: #8278fd;
-  --color-brand-500: #5b5bf6;
-  --color-brand-600: #4b3fea;
-  --color-brand-700: #3f31cf;
-  --color-brand-800: #342aa7;
-  --color-brand-900: #2e2984;
-  --color-brand-950: #1b174d;
+  /* Sunny tangerine. 500 is for fills and icons; 600 and darker carry white text and links. */
+  --color-brand-50: #fff6ec;
+  --color-brand-100: #ffe9d1;
+  --color-brand-200: #ffd0a3;
+  --color-brand-300: #ffb06b;
+  --color-brand-400: #ff8c3a;
+  --color-brand-500: #f26a1a;
+  --color-brand-600: #c4460b;
+  --color-brand-700: #a53c0d;
+  --color-brand-800: #84320f;
+  --color-brand-900: #6b2b11;
+  --color-brand-950: #3a1306;
 
-  --color-ink-50: #f7f7fb;
-  --color-ink-100: #eeeef5;
-  --color-ink-200: #dcdce8;
-  --color-ink-300: #bfbfd1;
-  --color-ink-400: #8e8ea8;
-  --color-ink-500: #6a6a86;
-  --color-ink-600: #52526b;
-  --color-ink-700: #3e3e53;
-  --color-ink-800: #26263a;
-  --color-ink-900: #161624;
-  --color-ink-950: #0b0b14;
+  /* Warm neutrals, like paper and pencil. */
+  --color-ink-50: #fbf9f6;
+  --color-ink-100: #f4f0ea;
+  --color-ink-200: #e7e1d8;
+  --color-ink-300: #d2c9bc;
+  --color-ink-400: #a59b8d;
+  --color-ink-500: #73695d;
+  --color-ink-600: #5a5148;
+  --color-ink-700: #443d36;
+  --color-ink-800: #2d2823;
+  --color-ink-900: #1e1a16;
+  --color-ink-950: #12100d;
 
-  --shadow-soft: 0 1px 2px rgb(22 22 36 / 0.04), 0 4px 16px -4px rgb(22 22 36 / 0.08);
-  --shadow-lift: 0 2px 4px rgb(22 22 36 / 0.04), 0 18px 40px -12px rgb(22 22 36 / 0.18);
-  --shadow-glow: 0 10px 40px -10px rgb(91 91 246 / 0.55);
+  --shadow-soft: 0 1px 2px rgb(45 33 22 / 0.05), 0 4px 16px -4px rgb(45 33 22 / 0.09);
+  --shadow-lift: 0 2px 4px rgb(45 33 22 / 0.05), 0 18px 40px -12px rgb(45 33 22 / 0.2);
+  --shadow-glow: 0 10px 40px -10px rgb(242 106 26 / 0.55);
 
   --animate-float: float 4s ease-in-out infinite;
   --animate-scan: scan 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
   --animate-pulse-ring: pulse-ring 2s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
   --animate-spin-slow: spin 14s linear infinite;
   --animate-fade-up: fade-up 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  /* The reader's Auto read bar; each use sets its own duration. */
+  --animate-auto-read: auto-read 10s linear forwards;
 
+  @keyframes auto-read {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
   @keyframes float {
     0%, 100% { transform: translateY(0) rotate(0deg); }
     50% { transform: translateY(-10px) rotate(2deg); }

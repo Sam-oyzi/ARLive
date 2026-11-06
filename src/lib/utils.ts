@@ -64,3 +64,8 @@ export function timeAgo(date: Date | string): string {
 export function plural(count: number, word: string, pluralWord = `${word}s`) {
   return `${count} ${count === 1 ? word : pluralWord}`;
 }
+
+/** 1234 → "1.2K", for counters on small cards. */
+export function compactNumber(value: number): string {
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}

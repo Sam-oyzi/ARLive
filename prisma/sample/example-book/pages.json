@@ -22,7 +22,7 @@
       "file": "page-02.jpg",
       "title": "Lou in the sea",
       "story": "Lou lives in the big blue sea with billions of other drops. Fish dart past, and the waves rock Lou gently up and down.",
-      "ar": false,
+      "ar": true,
       "translations": {
         "fr": {
           "title": "Lou dans la mer",

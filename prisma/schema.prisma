@@ -1,9 +1,15 @@
-// ARLive data model.
-// SQLite for local development; switch `provider` to "postgresql" for production.
+// PageWakes data model.
+// SQLite for local development and Cloudflare D1 in production.
 // Roles and statuses are stored as strings so the schema stays portable (see src/lib/roles.ts).
 
 generator client {
   provider = "prisma-client-js"
+}
+
+generator workerClient {
+  provider   = "prisma-client-js"
+  output     = "../src/generated/prisma-worker"
+  engineType = "client"
 }
 
 datasource db {
@@ -38,7 +44,9 @@ model User {
   /// Login identifier: an email for staff, a short handle for students.
   username     String      @unique
   passwordHash String
-  /// SUPER_ADMIN | SCHOOL_ADMIN | STUDENT
+  /// Sessions issued before this are signed out (see isRevoked in src/lib/session.ts).
+  passwordChangedAt DateTime?
+  /// SUPER_ADMIN | SCHOOL_ADMIN | STUDENT | PARENT
   role         String      @default("STUDENT")
   grade        String?
   active       Boolean     @default(true)
@@ -48,8 +56,29 @@ model User {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   scans        ScanEvent[]
+  children     Child[]
+  likes        BookLike[]
+  ratings      BookRating[]
+  storyRequests StoryRequest[]
+  /// Custom stories made for this family.
+  ownedBooks   Book[]      @relation("OwnedBooks")
 
   @@index([schoolId, role])
+}
+
+/// A parent's child. Only what a story needs: a first name or nickname, an age and what they love.
+model Child {
+  id        String         @id @default(cuid())
+  parentId  String
+  parent    User           @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  name      String
+  age       Int?
+  interests String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  requests  StoryRequest[]
+
+  @@index([parentId])
 }
 
 model Subject {
@@ -72,10 +101,29 @@ model Book {
   title       String
   description String?
   gradeLevel  String?
+  /// Printed and digital back-cover credit, editable in Studio.
+  authorName  String          @default("Iassam Houzi")
+  copyrightYear Int?
+  /// An original quote for this story, editable in Studio.
+  bookQuote   String?
   coverUrl    String?
   /// Printed page size: A5 | SKETCH | A4 | LETTER | SQUARE (src/lib/book-format.ts)
   format      String          @default("A5")
   published   Boolean         @default(false)
+  /// Shown first on the home page.
+  featured    Boolean         @default(false)
+  /// Who may open a library book: PUBLIC (everyone) | MEMBERS (any signed-in account) |
+  /// APPROVED (only emails an admin approved, see BookReader). Custom stories always use the approved list.
+  visibility  String          @default("PUBLIC")
+  /// A custom story made for one family: only its owner (and admins) can open it, and it never
+  /// appears in the library. Null for library books, which are free for everyone.
+  ownerId     String?
+  owner       User?           @relation("OwnedBooks", fields: [ownerId], references: [id], onDelete: SetNull)
+  /// Library counters, kept in step with BookLike/BookRating by src/server/actions/library.ts.
+  downloads   Int             @default(0)
+  likeCount   Int             @default(0)
+  ratingCount Int             @default(0)
+  ratingAvg   Float           @default(0)
   subjectId   String
   subject     Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   mindUrl     String?
@@ -88,8 +136,91 @@ model Book {
   access      SchoolBook[]
   requests    AccessRequest[]
   scans       ScanEvent[]
+  likes       BookLike[]
+  ratings     BookRating[]
+  readers     BookReader[]
+  storyRequest StoryRequest?
 
   @@index([subjectId])
+  @@index([published, ownerId])
+}
+
+/// An email allowed to open a book that isn't public: approved by an admin, or asked for by a reader
+/// and waiting. Matched against User.username, so an email can be approved before its account exists.
+model BookReader {
+  id        String    @id @default(cuid())
+  bookId    String
+  book      Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  email     String
+  /// PENDING | APPROVED | DECLINED
+  status    String    @default("APPROVED")
+  /// What the reader wrote when asking.
+  message   String?
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+
+  @@unique([bookId, email])
+  @@index([email, status])
+  @@index([status, createdAt])
+}
+
+model BookLike {
+  userId    String
+  bookId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, bookId])
+  @@index([bookId])
+}
+
+/// One star rating (1–5) per reader per book.
+model BookRating {
+  userId    String
+  bookId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  stars     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, bookId])
+  @@index([bookId])
+}
+
+/// A parent asking for a story written for their child, around something they want the child to
+/// learn or think about (src/lib/stories.ts).
+model StoryRequest {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  childId     String?
+  child       Child?    @relation(fields: [childId], references: [id], onDelete: SetNull)
+  /// Copied from the child so the request still reads right if the profile changes.
+  childName   String
+  childAge    Int?
+  /// Key into STORY_GOALS
+  goal        String
+  /// The lesson in the parent's own words.
+  message     String
+  /// Things the child loves, to weave into the story.
+  interests   String?
+  /// BCP 47 code, e.g. "en", "fr", "ar"
+  language    String    @default("en")
+  /// NEW | IN_PROGRESS | DELIVERED | DECLINED
+  status      String    @default("NEW")
+  /// Shown to the parent.
+  adminNote   String?
+  /// The story being made, owned by the parent.
+  bookId      String?   @unique
+  book        Book?     @relation(fields: [bookId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deliveredAt DateTime?
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
 }
 
 /// One page of a book. Pages with `ar` are compiled as image targets; the others are story pages
@@ -101,6 +232,8 @@ model Target {
   name        String
   description String?
   translations Json?
+  /// Manual story typography keyed by language. Missing entries use automatic layout.
+  storyLayouts Json?
   imageUrl    String
   width       Int
   height      Int
@@ -108,12 +241,49 @@ model Target {
   ar          Boolean     @default(true)
   /// Position of this target inside the book's compiled .mind file.
   targetIndex Int?
+  /// Voice reading this page aloud, played by the reader's Auto read.
+  narrationUrl String?
+  /// Shown under the page in the laptop reader, where the story itself is on the page: a comment,
+  /// an explanation or a question to talk about.
+  note         String?
+  /// A 360° panorama (2:1 equirectangular) readers can step into from this page: the story world.
+  worldUrl     String?
+  /// What moves inside the story world's room: none | rain | snow (src/lib/world-effects.ts).
+  worldEffect  String     @default("none")
+  /// Reader/scan experience: ar (MindAR) | quicklook (native model) | eighthwall (tracked model) | world (tracked story box) | panorama (360°).
+  scanAction   String     @default("ar")
+  /// Where the story text sits on the page: auto | top | middle | bottom | off (src/lib/story-text.ts).
+  textPosition String     @default("auto")
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   contents    Content[]
+  sounds      PageSound[]
   scans       ScanEvent[]
 
   @@index([bookId, order])
+}
+
+/// A sound of a page, mixed with its others. `scene` sounds play on their own in the page's
+/// experience (MindAR, 8th Wall, the story box, the 360° view): up to four, e.g. a brook, birds and an
+/// owl. `reading` sounds are the reader's soundtrack, from this page on (src/lib/sound-layers.ts).
+model PageSound {
+  id        String   @id @default(cuid())
+  targetId  String
+  target    Target   @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  /// scene | reading
+  kind      String   @default("scene")
+  name      String
+  url       String
+  /// 0 to 1, before the reader's own volume.
+  volume    Float    @default(0.7)
+  /// Loops (its end crossfades into its start) or plays once.
+  loop      Boolean  @default(true)
+  /// Seconds after the experience opens before it starts.
+  delay     Float    @default(0)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([targetId, kind])
 }
 
 /// Something shown when a target is recognised. Transforms are in target space:

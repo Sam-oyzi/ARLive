@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { bucketByDay, daysAgo } from "@/lib/stats";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { plural } from "@/lib/utils";
+import { withReturnTo } from "@/lib/reader-navigation";
 
 export const metadata = { title: "My school" };
 
@@ -61,7 +62,7 @@ export default async function SchoolOverview() {
         />
         <StatCard label="Active · 14 days" value={activeStudents.length} icon={Trophy} tone="amber" hint="Students who scanned at least once" />
         <StatCard label="Scans · 14 days" value={scans.length} icon={ScanLine} tone="green" />
-        <StatCard label="AR books" value={books.length} icon={BookOpen} tone="pink" />
+        <StatCard label="AR books" value={books.length} icon={BookOpen} tone="rose" />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.6fr_1fr]">
@@ -121,7 +122,8 @@ export default async function SchoolOverview() {
           {books.map((book) => (
             <Link
               key={book.id}
-              href={`/scan/${book.id}`}
+              id={`book-${book.id}`}
+              href={withReturnTo(`/scan/${book.id}`, `/school#book-${book.id}`)}
               className="group flex items-center gap-4 rounded-3xl border border-ink-200/70 bg-white p-4 shadow-soft transition hover:shadow-lift"
             >
               <span className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl text-white" style={{ background: book.subject.color }}>

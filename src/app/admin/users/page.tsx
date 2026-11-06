@@ -13,7 +13,7 @@ import { UserDialog } from "./user-dialog";
 
 export const metadata = { title: "Users" };
 
-const ROLE_TONE: Record<string, BadgeTone> = { SUPER_ADMIN: "dark", SCHOOL_ADMIN: "brand", STUDENT: "neutral" };
+const ROLE_TONE: Record<string, BadgeTone> = { SUPER_ADMIN: "dark", SCHOOL_ADMIN: "brand", STUDENT: "neutral", PARENT: "green" };
 const PAGE_SIZE = 50;
 
 export default async function UsersPage({

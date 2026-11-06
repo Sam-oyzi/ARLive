@@ -18,7 +18,7 @@ export function JoinCodeCard({ schoolId, joinCode }: { schoolId: string; joinCod
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex gap-5 bg-gradient-to-br from-brand-500 to-brand-700 p-5 text-white">
+      <div className="flex gap-5 bg-gradient-to-br from-brand-600 to-brand-800 p-5 text-white">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-white/80">Student join code</div>
           <div className="mt-2 font-mono text-[28px] leading-none font-bold tracking-[0.18em]">{joinCode}</div>

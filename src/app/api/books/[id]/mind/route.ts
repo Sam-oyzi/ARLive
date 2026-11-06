@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { assertRole, AuthError } from "@/lib/auth";
 import { arTargets, targetsSignature } from "@/lib/books";
-import { db } from "@/lib/db";
+import { db, writeBatch } from "@/lib/db";
 import { deleteUpload, saveUpload, UploadError } from "@/lib/storage";
 
 // Stores a .mind file compiled in the admin's browser.
@@ -18,24 +19,35 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const compiled = arTargets(book.targets);
     const known = new Set(compiled.map((t) => t.id));
-    if (order.length !== known.size || !order.every((tid) => known.has(tid))) {
-      return NextResponse.json(
-        { error: "Pages changed while compiling. Refresh the page and compile again." },
-        { status: 409 },
-      );
+    const conflict = () => NextResponse.json(
+      { error: "Pages changed while compiling. Refresh the page and compile again." }, { status: 409 },
+    );
+    if (order.length !== known.size || new Set(order).size !== known.size || !order.every((tid) => known.has(tid))) {
+      return conflict();
     }
     if (!request.body) return NextResponse.json({ error: "No data received." }, { status: 400 });
 
     const { url } = await saveUpload("mind", "targets.mind", request.body);
-    await db.$transaction([
-      db.book.update({
-        where: { id },
-        data: { mindUrl: url, mindHash: targetsSignature(compiled), compiledAt: new Date() },
-      }),
-      // Story pages are not in the .mind file.
-      db.target.updateMany({ where: { bookId: id, ar: false }, data: { targetIndex: null } }),
-      ...order.map((targetId, index) => db.target.update({ where: { id: targetId }, data: { targetIndex: index } })),
+    const expected = JSON.stringify(compiled.map(({ id: targetId, imageUrl }) => ({ targetId, imageUrl })));
+    const now = new Date();
+    const published = Prisma.sql`EXISTS (SELECT 1 FROM "Book" WHERE "id" = ${id} AND "mindUrl" = ${url})`;
+    const [changed] = await writeBatch([
+      Prisma.sql`UPDATE "Book" SET "mindUrl" = ${url}, "mindHash" = ${targetsSignature(compiled)},
+        "compiledAt" = ${now}, "updatedAt" = ${now} WHERE "id" = ${id}
+        AND (SELECT COUNT(*) FROM "Target" WHERE "bookId" = ${id} AND "ar" = 1) = ${compiled.length}
+        AND (SELECT COUNT(*) FROM "Target", json_each(${expected}) AS target
+          WHERE "bookId" = ${id} AND "ar" = 1 AND "id" = json_extract(target.value, '$.targetId')
+            AND "imageUrl" = json_extract(target.value, '$.imageUrl')) = ${compiled.length}`,
+      Prisma.sql`UPDATE "Target" SET "targetIndex" = NULL, "updatedAt" = ${now}
+        WHERE "bookId" = ${id} AND "ar" = 0 AND ${published}`,
+      Prisma.sql`UPDATE "Target" SET "targetIndex" = targetOrder.key, "updatedAt" = ${now}
+        FROM json_each(${JSON.stringify(order)}) AS targetOrder
+        WHERE "Target"."id" = targetOrder.value AND "Target"."bookId" = ${id} AND ${published}`,
     ]);
+    if (!changed) {
+      await deleteUpload(url);
+      return conflict();
+    }
     await deleteUpload(book.mindUrl);
     revalidatePath("/", "layout");
     return NextResponse.json({ url });

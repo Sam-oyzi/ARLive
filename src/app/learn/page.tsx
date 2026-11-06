@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { BookOpen, Camera, ChevronRight, Sparkles } from "lucide-react";
 import { EmptyState } from "@/components/ui/misc";
+import { Thumb } from "@/components/thumb";
 import { requireUser } from "@/lib/auth";
 import { playableBooksWhere, readableBooksWhere } from "@/lib/books";
 import { db } from "@/lib/db";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { plural } from "@/lib/utils";
+import { withReturnTo } from "@/lib/reader-navigation";
 
 export const metadata = { title: "My subjects" };
 
@@ -42,7 +44,7 @@ export default async function LearnHome() {
       <section className="relative overflow-hidden rounded-[28px] bg-ink-950 p-6 text-white sm:p-8">
         <div className="absolute inset-0 bg-grid-dark" />
         <div className="absolute -top-24 -right-16 size-72 rounded-full bg-brand-500/50 blur-3xl" />
-        <div className="absolute -bottom-24 left-10 size-56 rounded-full bg-fuchsia-500/30 blur-3xl" />
+        <div className="absolute -bottom-24 left-10 size-56 rounded-full bg-amber-400/30 blur-3xl" />
         <div className="relative">
           <p className="text-sm font-medium text-white/60">{greeting()},</p>
           <h1 className="mt-1 font-display text-3xl font-bold tracking-tight sm:text-4xl">{user.name.split(" ")[0]} 👋</h1>
@@ -107,10 +109,9 @@ export default async function LearnHome() {
           <h2 className="mt-10 mb-4 font-display text-xl font-bold text-ink-900">Recently explored</h2>
           <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-none">
             {recentPages.map((s) => (
-              <Link key={s.id} href={`/scan/${s.book.id}`} className="w-32 shrink-0">
+              <Link key={s.id} id={`scan-${s.id}`} href={withReturnTo(`/scan/${s.book.id}`, `/learn#scan-${s.id}`)} className="w-32 shrink-0">
                 <div className="aspect-[3/4] overflow-hidden rounded-2xl bg-ink-100 shadow-soft">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={s.target.imageUrl} alt="" className="size-full object-cover" />
+                  <Thumb src={s.target.imageUrl} width={128} height={171} className="size-full object-cover" />
                 </div>
                 <div className="mt-2 truncate text-sm font-semibold text-ink-900">{s.target.name}</div>
                 <div className="truncate text-xs text-ink-500">{s.book.title}</div>

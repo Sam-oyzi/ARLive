@@ -9,20 +9,20 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="flex flex-1 items-center justify-center py-10">
           <div className="w-full max-w-sm animate-fade-up">{children}</div>
         </div>
-        <p className="text-xs text-ink-400">© {new Date().getFullYear()} Sketchling · Illustrated stories for kids</p>
+        <p className="text-xs text-ink-400">© {new Date().getFullYear()} PageWakes · Illustrated stories for kids</p>
       </div>
 
-      <div className="relative hidden overflow-hidden bg-ink-950 lg:flex lg:items-center lg:justify-center">
+      <div className="relative hidden overflow-hidden bg-gradient-to-b from-sky-500 to-sky-700 lg:flex lg:items-center lg:justify-center">
         <div className="absolute inset-0 bg-grid-dark" />
-        <div className="absolute -top-40 -right-40 size-[520px] rounded-full bg-brand-500/40 blur-[120px]" />
-        <div className="absolute -bottom-40 -left-20 size-[420px] rounded-full bg-fuchsia-500/25 blur-[120px]" />
+        <div className="absolute -top-40 -right-40 size-[520px] rounded-full bg-amber-300/50 blur-[120px]" />
+        <div className="absolute -bottom-40 -left-20 size-[420px] rounded-full bg-brand-400/35 blur-[120px]" />
         <div className="relative flex flex-col items-center gap-10 px-12 text-center">
-          <PhoneMockup color="#10b981" icon="dna" found={{ title: "DNA double helix", subtitle: "Biology · Chapter 3, page 42" }} />
+          <PhoneMockup color="#f26a1a" icon="droplets" found={{ title: "Lou the Water Drop", subtitle: "The Journey of a Water Drop" }} />
           <div className="max-w-md">
-            <h2 className="font-display text-3xl font-bold tracking-tight text-white">Every page can come alive.</h2>
-            <p className="mt-3 text-[15px] leading-relaxed text-white/60">
-              Students point their phone at the textbook and explore molecules, organs, planets and monuments in 3D —
-              right on the desk.
+            <h2 className="font-display text-3xl font-bold tracking-tight text-white">Stories that jump off the page.</h2>
+            <p className="mt-3 text-[15px] leading-relaxed text-white/90">
+              Read free picture books on any screen, print them at home, and scan the pages to meet the characters in 3D.
+              Or ask for a story written just for your child.
             </p>
           </div>
         </div>
