@@ -1,8 +1,10 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { assertRole } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, writeBatch } from "@/lib/db";
 import { goalLabel, STORY_GOAL_KEYS, STORY_LANGUAGES } from "@/lib/stories";
 import { failure, invalid, parseForm, refreshAll, type ActionState } from "../forms";
 
@@ -71,22 +73,22 @@ export async function startStoryBook(requestId: string): Promise<ActionState<{ b
     const category = await db.subject.findFirst({ orderBy: [{ order: "asc" }, { name: "asc" }] });
     if (!category) return { error: "Create a category first." };
 
-    const book = await db.$transaction(async (tx) => {
-      const created = await tx.book.create({
-        data: {
-          title: `${request.childName}'s story`,
-          description: `A custom story for ${request.childName}: ${goalLabel(request.goal).toLowerCase()}.`,
-          gradeLevel: request.childAge != null ? `Age ${request.childAge}` : null,
-          subjectId: category.id,
-          ownerId: request.userId,
-          visibility: "APPROVED",
-        },
-      });
-      await tx.storyRequest.update({ where: { id: requestId }, data: { bookId: created.id, status: "IN_PROGRESS" } });
-      return created;
-    });
+    const draftId = randomUUID();
+    const now = new Date();
+    const title = `${request.childName}'s story`;
+    const description = `A custom story for ${request.childName}: ${goalLabel(request.goal).toLowerCase()}.`;
+    const gradeLevel = request.childAge != null ? `Age ${request.childAge}` : null;
+    await writeBatch([
+      Prisma.sql`INSERT INTO "Book" ("id", "title", "description", "gradeLevel", "subjectId", "ownerId", "visibility", "createdAt", "updatedAt")
+        SELECT ${draftId}, ${title}, ${description}, ${gradeLevel}, ${category.id}, "userId", 'APPROVED', ${now}, ${now}
+        FROM "StoryRequest" WHERE "id" = ${requestId} AND "bookId" IS NULL`,
+      Prisma.sql`UPDATE "StoryRequest" SET "bookId" = ${draftId}, "status" = 'IN_PROGRESS', "updatedAt" = ${now}
+        WHERE "id" = ${requestId} AND EXISTS (SELECT 1 FROM "Book" WHERE "id" = ${draftId})`,
+    ]);
+    const { bookId } = await db.storyRequest.findUniqueOrThrow({ where: { id: requestId }, select: { bookId: true } });
+    if (!bookId) return { error: "The draft could not be created." };
     refreshAll();
-    return { ok: true, message: "Draft book created", data: { bookId: book.id } };
+    return { ok: true, message: "Draft book created", data: { bookId } };
   } catch (error) {
     return failure(error);
   }
@@ -130,15 +132,17 @@ export async function deliverStory(requestId: string): Promise<ActionState> {
 
     const now = new Date();
     const email = request.user.username;
-    await db.$transaction([
-      db.book.update({ where: { id: book.id }, data: { published: true, ownerId: request.userId, visibility: "APPROVED" } }),
-      db.bookReader.upsert({
-        where: { bookId_email: { bookId: book.id, email } },
-        update: { status: "APPROVED", decidedAt: now },
-        create: { bookId: book.id, email, status: "APPROVED", decidedAt: now },
-      }),
-      db.storyRequest.update({ where: { id: requestId }, data: { status: "DELIVERED", deliveredAt: now } }),
+    const requestStillExists = Prisma.sql`EXISTS (SELECT 1 FROM "StoryRequest" WHERE "id" = ${requestId} AND "bookId" = ${book.id})`;
+    const [published] = await writeBatch([
+      Prisma.sql`UPDATE "Book" SET "published" = 1, "ownerId" = ${request.userId}, "visibility" = 'APPROVED', "updatedAt" = ${now}
+        WHERE "id" = ${book.id} AND ${requestStillExists}`,
+      Prisma.sql`INSERT INTO "BookReader" ("id", "bookId", "email", "status", "createdAt", "decidedAt")
+        SELECT ${randomUUID()}, ${book.id}, ${email}, 'APPROVED', ${now}, ${now} WHERE ${requestStillExists}
+        ON CONFLICT ("bookId", "email") DO UPDATE SET "status" = 'APPROVED', "decidedAt" = excluded."decidedAt"`,
+      Prisma.sql`UPDATE "StoryRequest" SET "status" = 'DELIVERED', "deliveredAt" = ${now}, "updatedAt" = ${now}
+        WHERE "id" = ${requestId} AND "bookId" = ${book.id}`,
     ]);
+    if (!published) return { error: "The story request changed. Reopen it and try again." };
     refreshAll();
     return { ok: true, message: `Delivered to ${request.childName}'s family` };
   } catch (error) {

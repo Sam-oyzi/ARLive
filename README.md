@@ -1,4 +1,4 @@
-# Sketchling
+# PageWakes
 
 A free library of illustrated stories for kids. Families read the books on a phone or a laptop,
 download them as a PDF to print at home, and scan the pages marked AR with a phone to watch the
@@ -53,7 +53,7 @@ nobody installs an app.
 ## Stack
 
 Next.js 16 (App Router, server actions, `proxy.ts`) · React 19 · TypeScript · Tailwind CSS 4 ·
-Prisma (SQLite locally, PostgreSQL in production) · three.js + React Three Fiber · MindAR ·
+Prisma (SQLite locally, Cloudflare D1 in production) · three.js + React Three Fiber · MindAR ·
 8th Wall engine (iPhone world tracking) · Radix primitives · JWT sessions (jose) with bcrypt.
 
 ## Getting started
@@ -184,15 +184,18 @@ hand: `npm run optimize:glb -- model.glb`.
 
 ## Production notes
 
-- Switch `provider` in `prisma/schema.prisma` to `postgresql` and set `DATABASE_URL`.
-- Uploads are written to `storage/uploads`; mount it on a persistent volume, or replace
-  `src/lib/storage.ts` with S3/R2 (same function signatures).
-- Set a strong `SESSION_SECRET`; cookies are `Secure` when `NODE_ENV=production`.
-- Set `SITE_URL` to the public address (e.g. `https://sketchling.app`): it's printed into the QR code on
-  every book's back cover. In development the QR uses this computer's Wi-Fi address instead.
-- Never use the demo accounts: their passwords are public in this README, and `npm run db:seed` refuses to
-  run when `NODE_ENV=production`. Create the first platform admin with
-  `npm run admin:create -- you@example.com "Your Name"`, which prints a generated password once. Anyone
-  can change their own password from their account menu, which signs out their other devices.
-- Sign-in and join attempts are rate limited in memory (`src/lib/rate-limit.ts`). That covers one server
-  process; with several instances, move the counters to Redis or the database.
+The complete app runs on Cloudflare Workers at **https://pagewakes.com**. The Worker uses a
+native D1 database binding for records and a private R2 binding for media. There is no separate
+Node service. The existing Next.js development command still uses local SQLite and uploads.
+See [Cloudflare deployment and migration](docs/cloudflare-launch.md).
+
+The owner selected Workers Free for the test deployment. CPU-limit errors were observed during
+live testing, so the current deployment is not ready for a reliable public launch.
+
+- Run `npx wrangler login`, then `npm run deploy:worker` to build and publish updates.
+- `cloudflare.config.ts` defines the Worker, D1, R2, domains and public QR-code URL.
+- Store `SESSION_SECRET` as a Worker secret. Credentials, exports and generated clients stay outside Git.
+- Known demo accounts are disabled in the cloud import. The production owner has a separate account.
+  Passwords can be changed from the account menu, which signs out other devices.
+- Sign-in and join counters currently live in each Worker isolate. Distributed throttling should be
+  added before a large public campaign.

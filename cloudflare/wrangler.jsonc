@@ -1,0 +1,16 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "pagewakes",
+  "account_id": "47069793742c567508681d91efc8d738",
+  "compatibility_date": "2026-11-06",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pagewakes-db",
+      "database_id": "a7199e97-e0f4-4c1b-894d-074bb7650290",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "pagewakes-media" }]
+}

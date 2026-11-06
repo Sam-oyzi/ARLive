@@ -47,7 +47,7 @@ for locale in ['en','fr']:
  output=out/f'sarra-and-the-little-lost-roar-{locale}.pdf'
  pdf=canvas.Canvas(str(output),pagesize=(W,H),pageCompression=1)
  pdf.setTitle('Sarra and the Little Lost Roar' if locale=='en' else 'Sarra et le petit rugissement')
- pdf.setAuthor('Sketchling')
+ pdf.setAuthor('PageWakes')
  for index,page in enumerate(pages):
   image=root/'assets'/('fr-page-01.jpg' if index==0 and locale=='fr' else f'page-{index+1:02}.jpg')
   pdf.drawImage(ImageReader(str(image)),0,0,width=W,height=H)

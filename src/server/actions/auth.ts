@@ -106,7 +106,7 @@ async function attemptJoin(formData: FormData): Promise<ActionState> {
       return { error: "That school code isn't valid.", fieldErrors: { joinCode: ["Unknown code"] } };
     }
     if (school.maxStudents && school._count.users >= school.maxStudents) {
-      return { error: "This school has reached its student limit. Ask your school to contact Sketchling." };
+      return { error: "This school has reached its student limit. Ask your school to contact PageWakes." };
     }
     if (await db.user.findUnique({ where: { username } })) {
       return { error: "That username is taken.", fieldErrors: { username: ["Already taken"] } };

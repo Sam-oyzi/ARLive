@@ -35,7 +35,7 @@ export default async function SchoolsPage() {
 
   return (
     <>
-      <PageHeader title="Schools" description="Manage school access and see how students use Sketchling." actions={addButton} />
+      <PageHeader title="Schools" description="Manage school access and see how students use PageWakes." actions={addButton} />
       {schools.length === 0 ? (
         <EmptyState icon={School} title="No schools yet" description="Add your first school to start granting books." action={addButton} />
       ) : (

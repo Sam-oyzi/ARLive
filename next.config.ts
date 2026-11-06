@@ -16,8 +16,10 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.*.*.*", "*.ngrok-free.app", "*.trycloudflare.com"],
   poweredByHeader: false,
   images: {
+    // Signed-in media must go directly through the access check, without the shared image cache.
+    unoptimized: !!process.env.R2_BUCKET,
     // Only uploads can be resized, and SVG stays blocked (Next's default) because logos can be SVG.
-    localPatterns: [{ pathname: "/files/**", search: "" }],
+    localPatterns: process.env.R2_BUCKET ? [] : [{ pathname: "/files/**", search: "" }],
     qualities: [75],
   },
   async headers() {

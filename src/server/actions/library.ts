@@ -1,11 +1,11 @@
 "use server";
 
 import { headers } from "next/headers";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { AuthError, getCurrentUser } from "@/lib/auth";
 import { canUserReadBook } from "@/lib/books";
-import { db } from "@/lib/db";
-import { averageStars } from "@/lib/library";
+import { db, writeBatch } from "@/lib/db";
 import { isBlocked, recordFailure } from "@/lib/rate-limit";
 import { failure, refreshAll, type ActionState } from "../forms";
 
@@ -24,14 +24,15 @@ export async function toggleLike(bookId: string): Promise<ActionState<{ liked: b
     const user = await readerFor(bookId);
     const key = { userId_bookId: { userId: user.id, bookId } };
     const liked = !(await db.bookLike.findUnique({ where: key }));
-    const likes = await db.$transaction(async (tx) => {
-      if (liked) await tx.bookLike.create({ data: { userId: user.id, bookId } });
-      else await tx.bookLike.delete({ where: key });
-      // Recount rather than increment, so the counter can't drift from the rows.
-      const count = await tx.bookLike.count({ where: { bookId } });
-      await tx.book.update({ where: { id: bookId }, data: { likeCount: count } });
-      return count;
-    });
+    const now = new Date();
+    await writeBatch([
+      liked
+        ? Prisma.sql`INSERT INTO "BookLike" ("userId", "bookId", "createdAt") VALUES (${user.id}, ${bookId}, ${now}) ON CONFLICT ("userId", "bookId") DO NOTHING`
+        : Prisma.sql`DELETE FROM "BookLike" WHERE "userId" = ${user.id} AND "bookId" = ${bookId}`,
+      Prisma.sql`UPDATE "Book" SET "likeCount" = (SELECT COUNT(*) FROM "BookLike" WHERE "bookId" = ${bookId}),
+        "updatedAt" = ${now} WHERE "id" = ${bookId}`,
+    ]);
+    const { likeCount: likes } = await db.book.findUniqueOrThrow({ where: { id: bookId }, select: { likeCount: true } });
     refreshAll();
     return { ok: true, data: { liked, likes } };
   } catch (error) {
@@ -46,19 +47,21 @@ export async function rateBook(bookId: string, value: number): Promise<ActionSta
     const user = await readerFor(bookId);
     const parsed = stars.safeParse(value);
     if (!parsed.success) return { error: "Pick 1 to 5 stars." };
-    const summary = await db.$transaction(async (tx) => {
-      await tx.bookRating.upsert({
-        where: { userId_bookId: { userId: user.id, bookId } },
-        update: { stars: parsed.data },
-        create: { userId: user.id, bookId, stars: parsed.data },
-      });
-      const all = await tx.bookRating.findMany({ where: { bookId }, select: { stars: true } });
-      const result = { average: averageStars(all.map((r) => r.stars)), count: all.length };
-      await tx.book.update({ where: { id: bookId }, data: { ratingAvg: result.average, ratingCount: result.count } });
-      return result;
+    const now = new Date();
+    await writeBatch([
+      Prisma.sql`INSERT INTO "BookRating" ("userId", "bookId", "stars", "createdAt", "updatedAt")
+        VALUES (${user.id}, ${bookId}, ${parsed.data}, ${now}, ${now})
+        ON CONFLICT ("userId", "bookId") DO UPDATE SET "stars" = excluded."stars", "updatedAt" = excluded."updatedAt"`,
+      Prisma.sql`UPDATE "Book" SET
+        "ratingAvg" = (SELECT COALESCE(ROUND(AVG("stars"), 1), 0) FROM "BookRating" WHERE "bookId" = ${bookId}),
+        "ratingCount" = (SELECT COUNT(*) FROM "BookRating" WHERE "bookId" = ${bookId}),
+        "updatedAt" = ${now} WHERE "id" = ${bookId}`,
+    ]);
+    const { ratingAvg: average, ratingCount: count } = await db.book.findUniqueOrThrow({
+      where: { id: bookId }, select: { ratingAvg: true, ratingCount: true },
     });
     refreshAll();
-    return { ok: true, message: "Thanks for rating!", data: summary };
+    return { ok: true, message: "Thanks for rating!", data: { average, count } };
   } catch (error) {
     return failure(error);
   }

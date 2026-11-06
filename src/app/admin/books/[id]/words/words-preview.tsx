@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { composeStoryPage, type StoryPage } from "@/lib/story-page";
 import type { PageTranslations } from "@/lib/page-translations";
@@ -98,15 +98,20 @@ export function WordsPreview({ bookId, aspect, pages }: { bookId: string; aspect
               {version.blocks === undefined && <p className="mt-0.5 text-xs text-ink-500">{TEXT_POSITIONS[page.textPosition]}</p>}
             </button>
             </DialogTrigger>
-            {active === page.id && <PageTextEditor
+            {active === page.id && (version.blocks === undefined && result === undefined ? (
+              <DialogContent title={`Edit text · ${version.title}`}>
+                <p role="status" className="text-sm text-ink-600">Preparing the page layout…</p>
+              </DialogContent>
+            ) : <PageTextEditor
               bookId={bookId} pageId={page.id} title={version.title} imageUrl={version.imageUrl}
               story={version.story} aspect={aspect} language={key === "original" ? "" : key}
               position={page.textPosition} saved={version.blocks}
+              automaticBlocks={result?.automaticBlocks ?? (result === null && (page.textPosition === "off" || (i === 0 && page.textPosition === "auto")) ? [] : undefined)}
               onSaved={(blocks) => {
                 setOverrides((current) => ({ ...current, [`${page.id}:${key}`]: blocks }));
                 setActive(null);
               }}
-            />}
+            />)}
             </Dialog>
           );
         })}

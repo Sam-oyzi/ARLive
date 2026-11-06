@@ -116,12 +116,6 @@ Both upper 30–33% page bands are plain cream paper for app typesetting. Artwor
 Edit only the English title to "Sarra et le petit rugissement", in three centered black serif ink lines. Preserve all other art, characters and portrait composition.
 ```
 
-## Story worlds · world-forest.png and world-river.png
-
-```
-Seamless 2:1 equirectangular 360° watercolor and fineliner environments matching the reference artwork. Full 360 longitude/180 latitude, centered horizon, wrapping left/right edges, sky above and ground below. No borders, gutter, text or visible human protagonist. Small cub ahead on mossy rock, owl to the left, rabbit/elephant/tortoise around the sides. Keep apparent animal size, viewpoint, lighting direction and camera height consistent between maps. Forest: morning clearing, tiny garden gate behind and shallow brook. River: same woodland at golden sunset, low branch bridge and friends safe on moss. No rain or snow. 4096×2048 preferred.
-```
-
 ## Required review
 
 Inspect every half-spread against pages.json in reading order. Correct animal proportions, wardrobe, story timing and accidental zoom jumps. Recompile final AR art after any correction. See continuity.md.

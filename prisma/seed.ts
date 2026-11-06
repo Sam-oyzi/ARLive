@@ -6,13 +6,14 @@
 //   School join code DEMO2026
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import bcrypt from "bcryptjs";
 import { PrismaClient, type Prisma } from "@prisma/client";
 import { targetsSignature } from "../src/lib/books";
 import { averageStars } from "../src/lib/library";
 
 const db = new PrismaClient();
-const SAMPLE = path.join(__dirname, "sample");
+const SAMPLE = fileURLToPath(new URL("./sample/", import.meta.url));
 const UPLOADS = path.join(process.cwd(), "storage", "uploads");
 
 /** Copy a sample file into uploads under a fixed name and return its /files URL. */

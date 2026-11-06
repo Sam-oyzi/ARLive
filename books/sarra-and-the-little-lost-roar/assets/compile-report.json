@@ -21,30 +21,37 @@
     "matchingPoints": 3376
   },
   {
+    "file": "page-09.jpg",
+    "sha256": "29197855a5c46f786b9b4c694d50b9ec180ca4eea62a9be86a2329711f1fde77",
+    "target": 3,
+    "trackingPoints": 64,
+    "matchingPoints": 3003
+  },
+  {
     "file": "page-12.jpg",
     "sha256": "11d32336bd4e38998bbb296ebd5d1ebb96009c875e222b236702ca8eff8e8aab",
-    "target": 3,
+    "target": 4,
     "trackingPoints": 76,
     "matchingPoints": 3310
   },
   {
     "file": "page-15.jpg",
     "sha256": "67d0f2afa08df03dd429bf63b89a3cb6d408128b9d136dee53a848ae8de81809",
-    "target": 4,
+    "target": 5,
     "trackingPoints": 71,
     "matchingPoints": 3029
   },
   {
     "file": "page-17.jpg",
     "sha256": "8ee1eb25022fd92940de98070a9adf0984d2429f7bb7e6bc75fd4b0ff59dde5a",
-    "target": 5,
+    "target": 6,
     "trackingPoints": 76,
     "matchingPoints": 3337
   },
   {
     "file": "page-19.jpg",
     "sha256": "5184fc38303ef44a24f88a04ec3cb3f6e62332779b37a3c4fb5a81c5fd3066f4",
-    "target": 6,
+    "target": 7,
     "trackingPoints": 68,
     "matchingPoints": 2924
   }

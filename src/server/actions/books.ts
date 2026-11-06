@@ -322,7 +322,15 @@ export async function moveTarget(targetId: string, direction: -1 | 1): Promise<A
     const reordered = [...siblings];
     reordered[index] = swap;
     reordered[index + direction] = target;
-    await db.$transaction(reordered.map((t, i) => db.target.update({ where: { id: t.id }, data: { order: i } })));
+    const order = JSON.stringify(reordered.map(({ id }) => id));
+    const changed = await db.$executeRaw(Prisma.sql`
+      UPDATE "Target" SET "order" = newOrder.key, "updatedAt" = ${new Date()}
+      FROM json_each(${order}) AS newOrder
+      WHERE "Target"."bookId" = ${target.bookId} AND "Target"."id" = newOrder.value
+        AND (SELECT COUNT(*) FROM "Target" WHERE "bookId" = ${target.bookId}) = ${reordered.length}
+        AND (SELECT COUNT(*) FROM "Target" WHERE "id" IN (SELECT value FROM json_each(${order}))) = ${reordered.length}
+    `);
+    if (!changed) return { error: "The pages changed. Refresh the book and try again." };
     refreshAll();
     return { ok: true };
   } catch (error) {
@@ -446,9 +454,21 @@ export async function saveContents(targetId: string, items: z.input<typeof conte
     await assertRole(["SUPER_ADMIN"]);
     const parsed = z.array(contentUpdate).safeParse(items);
     if (!parsed.success) return invalid(parsed.error);
-    await db.$transaction(
-      parsed.data.map(({ id, ...data }, order) => db.content.update({ where: { id, targetId }, data: { ...data, order } })),
-    );
+    if (parsed.data.length) {
+      const content = JSON.stringify(parsed.data);
+      const fields = Prisma.join([
+        "name", "text", "color", "posX", "posY", "posZ", "rotX", "rotY", "rotZ",
+        "scale", "autoplay", "loop", "animation", "motion",
+      ].map((field) => Prisma.sql`${Prisma.raw(`"${field}"`)} = json_extract(item.value, ${`$.${field}`})`));
+      const changed = await db.$executeRaw(Prisma.sql`
+        UPDATE "Content" SET ${fields}, "order" = item.key, "updatedAt" = ${new Date()}
+        FROM json_each(${content}) AS item
+        WHERE "Content"."id" = json_extract(item.value, '$.id') AND "Content"."targetId" = ${targetId}
+          AND (SELECT COUNT(*) FROM "Content" WHERE "targetId" = ${targetId}
+            AND "id" IN (SELECT json_extract(value, '$.id') FROM json_each(${content}))) = ${parsed.data.length}
+      `);
+      if (changed !== parsed.data.length) return { error: "The scene changed. Reopen it and try again." };
+    }
     refreshAll();
     return { ok: true, message: "Scene saved" };
   } catch (error) {

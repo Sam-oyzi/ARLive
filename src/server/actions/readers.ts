@@ -1,6 +1,8 @@
 "use server";
 
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { assertRole, AuthError, getCurrentUser } from "@/lib/auth";
 import { VISIBILITY_KEYS } from "@/lib/books";
 import { db } from "@/lib/db";
@@ -63,15 +65,13 @@ export async function addBookReaders(bookId: string, text: string): Promise<Acti
     const parsed = emailList.safeParse(text);
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the emails." };
     const now = new Date();
-    await db.$transaction(
-      parsed.data.map((email) =>
-        db.bookReader.upsert({
-          where: { bookId_email: { bookId, email } },
-          update: { status: "APPROVED", decidedAt: now },
-          create: { bookId, email, status: "APPROVED", decidedAt: now },
-        }),
-      ),
-    );
+    const readers = JSON.stringify(parsed.data.map((email) => ({ id: randomUUID(), email })));
+    await db.$executeRaw(Prisma.sql`
+      INSERT INTO "BookReader" ("id", "bookId", "email", "status", "createdAt", "decidedAt")
+      SELECT json_extract(value, '$.id'), ${bookId}, json_extract(value, '$.email'), 'APPROVED', ${now}, ${now}
+      FROM json_each(${readers}) WHERE true
+      ON CONFLICT ("bookId", "email") DO UPDATE SET "status" = 'APPROVED', "decidedAt" = excluded."decidedAt"
+    `);
     refreshAll();
     return { ok: true, message: parsed.data.length === 1 ? `${parsed.data[0]} can read it now` : `${parsed.data.length} readers approved` };
   } catch (error) {

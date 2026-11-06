@@ -35,7 +35,7 @@ export default async function CatalogPage() {
     <>
       <PageHeader
         title="Book catalog"
-        description="Browse Sketchling’s storybooks and request the ones you’d like to share with your classes."
+        description="Browse PageWakes’s storybooks and request the ones you’d like to share with your classes."
       />
       {withBooks.length === 0 ? (
         <EmptyState icon={Library} title="The catalog is empty" description="New books will appear here as soon as they're published." />

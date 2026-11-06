@@ -92,7 +92,7 @@ Sarra held the little paw.
 
 Art: spread-04.png (left). Text: top.
 
-### 9. Listen by the water
+### 9. Listen by the water · AR target
 
 They listened to the leaves.
 They listened to the brook.
@@ -226,18 +226,19 @@ Art: spread-10.png (right). Text: top.
 
 ## AR choices
 
-- Page 3: Meet the cub in the sunlit listening woodland. Scanning: world.
-- Page 6: An original little songbird flutters its wings over the printed page. Scanning: ar.
-- Page 8: Return to the same woodland beside Owl’s tree, at the same scale. Scanning: world.
-- Page 12: A small original animated tortoise takes gentle brave steps. Scanning: ar.
-- Page 15: The original cub breathes calmly as he chooses to help his friend. Scanning: ar.
-- Page 17: Celebrate inside the golden river glade, with the same room scale and forward view. Scanning: world.
-- Page 19: Listen again in the same sunset glade without changing its scale or scene. Scanning: world.
+- Page 3. Meet the cub in the sunlit listening woodland.
+- Page 6. An original little songbird flutters its wings over the printed page.
+- Page 8. Look up to find Owl on a low branch, then turn toward the sound of the brook.
+- Page 9. Look around the reeds and shallow brook before the friends find the source of the voice.
+- Page 12. A small original animated tortoise takes gentle brave steps.
+- Page 15. The original cub breathes calmly as he chooses to help his friend.
+- Page 17. See the small tortoise on the fallen branch and look down at the stream crossing.
+- Page 19. Return to the same brook at golden hour, with the cub on the bank and the crossing nearby.
 
-Digital pages with worlds show Step Inside. Printed pages compile from their artwork, with no words or badge inside the target. The compositor keeps lettering on quiet paper; verify recognition on matte printed proofs.
+The printed-page scanner uses the same experience as the reader.
 
 ## Production
 
 The images, manifests, original model and installer live together in this folder. Keep the book as a reviewable draft until the family chooses to share it. Do not seed accounts or reset any database.
 
-Fallback import: drop cover.png, all ten spread images and pages.json into the admin studio with two-page spreads enabled. Set Sketchbook 3:4, configure the seven experiences from experience.json, and compile. The generated installer handles this for the local app.
+Fallback import: drop cover.png, all ten spread images and pages.json into the admin studio with two-page spreads enabled. Set Sketchbook 3:4, configure the eight experiences from experience.json, and compile. The generated installer handles this for the local app.

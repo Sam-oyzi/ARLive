@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseStory } from "./story-text";
 
 export const STORY_FONTS = ["book", "classic", "literary", "sans", "friendly", "display", "arabic"] as const;
 export const STORY_FONT_OPTIONS = {
@@ -16,8 +17,19 @@ export function storyFontFamily(font: (typeof STORY_FONTS)[number], resolve: (pr
   const primary = option.family ? resolve(option.family) : option.primary;
   return [primary, font !== "arabic" && resolve("--font-arabic"), option.fallback].filter(Boolean).join(", ");
 }
+const runStyle = z.object({
+  font: z.enum(STORY_FONTS).optional(),
+  color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
+  size: z.number().min(1.5).max(12).optional(),
+  bold: z.boolean().optional(),
+});
+const storyRun = runStyle.extend({ text: z.string().max(2000), sound: z.boolean().optional() });
+export type StoryRun = z.infer<typeof storyRun>;
+export type StoryRunStyle = z.infer<typeof runStyle>;
+
 export const storyBlocksSchema = z.array(z.object({
   text: z.string().max(2000),
+  runs: z.array(storyRun).max(2000).optional(),
   x: z.number().min(0).max(90),
   y: z.number().min(0).max(98),
   width: z.number().min(10).max(100),
@@ -26,9 +38,27 @@ export const storyBlocksSchema = z.array(z.object({
   font: z.enum(STORY_FONTS),
   align: z.enum(["start", "center", "end"]),
   bold: z.boolean(),
-})).max(24).refine((blocks) => blocks.every((block) => block.x + block.width <= 100.001), "Keep paragraphs within the page.");
+})).max(24)
+  .refine((blocks) => blocks.every((block) => block.x + block.width <= 100.001), "Keep paragraphs within the page.")
+  .refine((blocks) => blocks.every((block) => !block.runs || block.runs.map((run) => run.text).join("").length <= 2000), "Keep paragraphs under 2,000 characters.");
 
 export type StoryBlock = z.infer<typeof storyBlocksSchema>[number];
+
+export function storyLines(block: StoryBlock): StoryRun[][] {
+  if (!block.runs) return parseStory(block.text);
+  const lines: StoryRun[][] = [[]];
+  for (const run of block.runs) {
+    run.text.split("\n").forEach((text, index) => {
+      if (index) lines.push([]);
+      if (text) lines.at(-1)!.push({ ...run, text });
+    });
+  }
+  return lines;
+}
+
+export function storyRunText(runs: StoryRun[]) {
+  return runs.map((run) => run.sound ? run.text.split("\n").map((line) => line.trim() ? `*${line.replaceAll("*", "")}*` : line).join("\n") : run.text).join("");
+}
 export const storyLayoutsSchema = z.record(z.string(), storyBlocksSchema);
 
 export function readStoryLayouts(value: unknown) {

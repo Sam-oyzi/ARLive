@@ -16,7 +16,7 @@ node books/sarra-and-the-little-lost-roar/install-book.mjs
 
 The installer creates one new unpublished draft in the local Animal friends category. It copies prepared assets to public/book-art/sarra-and-the-little-lost-roar, writes the installed ID and preview URLs to installed.json, and refuses duplicate installation. It does not reset the database, create accounts, change another book or publish this child’s story. Edit the installed book in the admin studio thereafter.
 
-The source manifest can also be imported with cover.png and spread-01.png through spread-10.png, with two-page spreads enabled and Sketchbook 3:4 selected. Use experience.json for the seven AR scenes and two story worlds.
+The source manifest can also be imported with cover.png and spread-01.png through spread-10.png, with two-page spreads enabled and Sketchbook 3:4 selected. Use experience.json for the eight AR scenes and five rendered story worlds.
 
 English and French family reading PDFs are in output/pdf/sarra-and-the-little-lost-roar-en.pdf and output/pdf/sarra-and-the-little-lost-roar-fr.pdf. They embed Gelasio 500 and Fredoka 700 from the app’s font assets. Regenerate them with make-pdfs.py using the bundled Python runtime with reportlab, fonttools and brotli available. They deliberately omit draft-only scanner links; print a scannable copy from the app’s Print page after the book’s access and hosting are ready.
 

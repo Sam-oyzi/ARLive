@@ -20,6 +20,7 @@ export function textPositionOf(value: string | null | undefined): TextPosition {
 }
 
 export type StorySegment = { text: string; sound: boolean };
+export const STORY_SOUND_COLORS = ["#ea580c", "#0284c7", "#16a34a", "#e11d48", "#7c5a00"];
 /** One line as the author wrote it; an empty line is a gap. */
 export type StoryLine = StorySegment[];
 

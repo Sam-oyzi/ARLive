@@ -3,7 +3,7 @@
 // (in AR, walls are only pictures) and the walls give way to the world itself: the sky far away and
 // the ground of the panorama under your feet, with no corners or joins wherever you stand.
 // Used by WebXR on Android (placed where the reader taps on the floor), exported as USDZ for AR Quick
-// Look on iPhone, and looked round from the inside by the 360° view.
+// Look on iPhone. The standalone 360° view uses the same image without the room geometry.
 // Units are metres; the group's origin is the floor under the centre, and the side facing the reader
 // is +Z.
 import * as THREE from "three";
@@ -35,15 +35,19 @@ function faces(): Face[] {
   ];
 }
 
-/** The panorama's pixels, at most `maxWidth` wide, and the picture itself. */
-async function loadPanorama(url: string, maxWidth: number): Promise<{ pixels: ImageData; image: HTMLImageElement }> {
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+function loadStoryImage(url: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("Couldn't load the story world"));
     img.src = url;
   });
+}
+
+/** The panorama's pixels, at most `maxWidth` wide, and the picture itself. */
+async function loadPanorama(url: string, maxWidth: number): Promise<{ pixels: ImageData; image: HTMLImageElement }> {
+  const image = await loadStoryImage(url);
   const canvas = document.createElement("canvas");
   canvas.width = Math.min(image.naturalWidth, maxWidth);
   canvas.height = Math.round((canvas.width * image.naturalHeight) / image.naturalWidth);
@@ -58,11 +62,7 @@ async function loadPanorama(url: string, maxWidth: number): Promise<{ pixels: Im
 /** How far away the sky is drawn from inside: far enough that walking round the box shows no parallax. */
 const WORLD_RADIUS = 40;
 
-/**
- * The world seen from inside the box: the panorama on a far sphere whose lower half is flattened into
- * ground at the floor, so the child stands on the story's ground with its sky all round.
- */
-function insideWorld(image: HTMLImageElement): THREE.Mesh {
+function panoramaTexture(image: HTMLImageElement): THREE.Texture {
   let source: HTMLImageElement | HTMLCanvasElement = image;
   // Phones cap texture sizes; 4096 wide is plenty for a sky.
   if (image.naturalWidth > 4096) {
@@ -73,8 +73,17 @@ function insideWorld(image: HTMLImageElement): THREE.Mesh {
   }
   const texture = source instanceof HTMLCanvasElement ? new THREE.CanvasTexture(source) : new THREE.Texture(source);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
   texture.needsUpdate = true;
-  const world = new GroundedSkybox(texture, ROOM.eye, WORLD_RADIUS);
+  return texture;
+}
+
+/**
+ * The world seen from inside the box: the panorama on a far sphere whose lower half is flattened into
+ * ground at the floor, so the child stands on the story's ground with its sky all round.
+ */
+function insideWorld(image: HTMLImageElement): THREE.Mesh {
+  const world = new GroundedSkybox(panoramaTexture(image), ROOM.eye, WORLD_RADIUS);
   world.name = "StoryWorld";
   // The ground sits at the floor; the middle of the panorama straight ahead (-Z), as on the walls.
   world.position.y = ROOM.eye;
@@ -182,6 +191,22 @@ function side(face: Face, outside: boolean): THREE.BufferGeometry {
 }
 
 export type StoryRoom = { room: THREE.Group; clip: THREE.AnimationClip | null };
+
+/** Look around from the exact point of capture. No box faces or ground reprojection are needed. */
+export async function loadStoryPanorama(url: string, effect: WorldEffect): Promise<StoryRoom> {
+  const map = panoramaTexture(await loadStoryImage(url));
+  const sphere = new THREE.SphereGeometry(WORLD_RADIUS, 128, 64);
+  // Face inwards, with the image centre straight ahead and increasing longitude to the right.
+  sphere.scale(1, 1, -1);
+  sphere.rotateY(Math.PI / 2);
+  const sky = new THREE.Mesh(sphere, new THREE.MeshBasicMaterial({ map, depthWrite: false }));
+  sky.position.y = ROOM.eye;
+  sky.renderOrder = -1;
+  const room = new THREE.Group();
+  room.add(sky);
+  const clip = addWorldEffect(room, effect, (color) => new THREE.MeshBasicMaterial({ color }));
+  return { room, clip };
+}
 
 /**
  * The room for a panorama, with its effect (rain, snow) and the effect's looping animation.

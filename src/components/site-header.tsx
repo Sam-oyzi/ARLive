@@ -81,7 +81,7 @@ export function SiteFooter() {
           <Link href="/join" className="text-ink-600 hover:text-ink-900">I have a school code</Link>
         </div>
       </div>
-      <p className="border-t border-[#eadfca] py-5 text-center text-xs text-ink-400">© {new Date().getFullYear()} Sketchling · Illustrated stories for kids</p>
+      <p className="border-t border-[#eadfca] py-5 text-center text-xs text-ink-400">© {new Date().getFullYear()} PageWakes · Illustrated stories for kids</p>
     </footer>
   );
 }

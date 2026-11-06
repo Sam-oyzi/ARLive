@@ -149,7 +149,7 @@
       "title": "Listen by the water",
       "story": "They listened to the leaves.\nThey listened to the brook.\n\n*Plip. Plop. “Help?”*\n\nWho was calling now?",
       "textPosition": "top",
-      "ar": false,
+      "ar": true,
       "translations": {
         "fr": {
           "title": "Une voix près de l’eau",

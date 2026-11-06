@@ -9,18 +9,18 @@ const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-br
 // Book reader captions
 const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-instrument", display: "swap" });
 // Picture-book pages (src/lib/story-page.ts): a sturdy book serif for the text, a round bold face for sound words.
-const story = Gelasio({ subsets: ["latin"], weight: ["500", "600"], variable: "--font-story", display: "swap" });
+const story = Gelasio({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--font-story", display: "swap" });
 const sound = Fredoka({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-sound", display: "swap" });
 // Arabic books: a clear book Naskh, used for Arabic letters wherever the faces above have none.
 const arabic = Noto_Naskh_Arabic({ subsets: ["arabic"], weight: ["500", "600", "700"], variable: "--font-arabic", display: "swap", preload: false });
 // (not preloaded: browsers fetch it only when a page shows Arabic)
 
 export const metadata: Metadata = {
-  title: { default: "Sketchling — Illustrated stories for kids", template: "%s · Sketchling" },
+  title: { default: "PageWakes — Stories that come alive", template: "%s · PageWakes" },
   description:
     "Read illustrated children's stories together and use your phone to bring selected pages to life in 3D.",
-  applicationName: "Sketchling",
-  appleWebApp: { capable: true, title: "Sketchling", statusBarStyle: "black-translucent" },
+  applicationName: "PageWakes",
+  appleWebApp: { capable: true, title: "PageWakes", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

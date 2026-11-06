@@ -1,8 +1,7 @@
 // Builds three.js objects for AR content. Shared by the student AR viewer and the admin scene
 // editor so that what an admin places is exactly what students see.
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import type { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import type { ContentData } from "@/lib/content";
 
@@ -25,11 +24,17 @@ export type ContentHandle = {
   dispose(): void;
 };
 
-let gltfLoader: GLTFLoader | null = null;
-export function getGLTFLoader() {
+let gltfLoader: Promise<GLTFLoader> | null = null;
+export function getGLTFLoader(): Promise<GLTFLoader> {
   if (!gltfLoader) {
-    const draco = new DRACOLoader().setDecoderPath("/vendor/draco/");
-    gltfLoader = new GLTFLoader().setDRACOLoader(draco).setMeshoptDecoder(MeshoptDecoder);
+    // DRACO resolves browser asset URLs when imported. Load it only when a model is needed.
+    gltfLoader = Promise.all([
+      import("three/examples/jsm/loaders/GLTFLoader.js"),
+      import("three/examples/jsm/loaders/DRACOLoader.js"),
+    ]).then(([{ GLTFLoader }, { DRACOLoader }]) => {
+      const draco = new DRACOLoader().setDecoderPath("/vendor/draco/");
+      return new GLTFLoader().setDRACOLoader(draco).setMeshoptDecoder(MeshoptDecoder);
+    }).catch((error) => { gltfLoader = null; throw error; });
   }
   return gltfLoader;
 }
@@ -149,7 +154,7 @@ function modelContent(data: ContentData, mode: Mode): ContentHandle {
   handle.load = () => {
     if (!data.url) return Promise.resolve();
     loading ??= getGLTFLoader()
-      .loadAsync(data.url)
+      .then((loader) => loader.loadAsync(data.url!))
       .then((gltf) => {
         const model = gltf.scene;
         // Normalise: largest dimension = 1, centred on X/Z, resting on y = 0.

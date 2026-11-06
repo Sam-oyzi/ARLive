@@ -1,9 +1,15 @@
-// Sketchling data model.
-// SQLite for local development; switch `provider` to "postgresql" for production.
+// PageWakes data model.
+// SQLite for local development and Cloudflare D1 in production.
 // Roles and statuses are stored as strings so the schema stays portable (see src/lib/roles.ts).
 
 generator client {
   provider = "prisma-client-js"
+}
+
+generator workerClient {
+  provider   = "prisma-client-js"
+  output     = "../src/generated/prisma-worker"
+  engineType = "client"
 }
 
 datasource db {

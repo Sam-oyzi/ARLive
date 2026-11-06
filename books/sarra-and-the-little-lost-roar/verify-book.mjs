@@ -22,11 +22,12 @@ for(const [i,page] of pages.entries()){
  assert.equal(target.width/target.height,.75);
  assert.equal(page.ar,experiences.arPages.some(exp=>exp.page===i+1));
 }
-for(const world of ['world-forest.jpg','world-river.jpg']){const info=await sharp(path.join(root,'assets',world)).metadata();assert.equal(info.width,4096);assert.equal(info.height,2048);}
+for(const world of Object.keys(experiences.worlds)){const info=await sharp(path.join(root,'assets',world)).metadata();assert.equal(info.width,4096);assert.equal(info.height,2048);}
+for(const experience of experiences.arPages)if(experience.world)assert.ok(Object.hasOwn(experiences.worlds,experience.world));
 for(const animal of ['lion','tortoise','bird']){const doc=await new NodeIO().read(path.join(root,'assets',`${animal}.glb`));assert.ok(doc.getRoot().listMeshes().length>0);assert.ok(doc.getRoot().listAnimations().length>0);}
-assert.equal(experiences.arPages.length,7);
 const report=JSON.parse(await fs.readFile(path.join(root,'assets','compile-report.json'),'utf8'));
-assert.equal(report.length,7);
+assert.equal(report.length,experiences.arPages.length);
+assert.deepEqual(report.map(target=>target.file),experiences.arPages.map(({page})=>`page-${String(page).padStart(2,'0')}.jpg`));
 for(const target of report){assert.equal(target.sha256,createHash('sha256').update(await fs.readFile(path.join(root,'assets',target.file))).digest('hex'));assert.ok(target.trackingPoints>=20&&target.matchingPoints>=50);}
 assert.ok((await fs.stat(path.join(root,'assets','sarra.mind'))).size>10000);
-console.log('Verified 21 bilingual pages in order, ten spreads, seven AR pages, three animated original models and two 2:1 story worlds.');
+console.log(`Verified 21 bilingual pages, ${report.length} AR targets, three animated models and ${Object.keys(experiences.worlds).length} 2:1 story worlds.`);

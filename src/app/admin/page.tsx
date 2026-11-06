@@ -47,7 +47,7 @@ export default async function AdminDashboard() {
       <PageHeader
         eyebrow={new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date())}
         title={`Hello, ${user.name.split(" ")[0]}`}
-        description="Here's how families are using the Sketchling library."
+        description="Here's how families are using the PageWakes library."
         actions={
           <>
             <ButtonLink href="/admin/stories" variant="outline">

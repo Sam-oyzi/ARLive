@@ -8,7 +8,7 @@ export async function loadPlacementAsset(content: ContentData) {
   let model: Group | Mesh;
   let animations: AnimationClip[] = [];
   if (content.type === "MODEL" && content.url) {
-    const gltf = await getGLTFLoader().loadAsync(content.url);
+    const gltf = await (await getGLTFLoader()).loadAsync(content.url);
     model = gltf.scene;
     const selected = content.animation ? gltf.animations.filter((clip) => clip.name === content.animation) : gltf.animations;
     animations = content.autoplay ? (selected.length ? selected : gltf.animations) : [];

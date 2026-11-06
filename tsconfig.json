@@ -17,5 +17,5 @@
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
-  "exclude": ["node_modules", "stubs"]
+  "exclude": ["node_modules", "stubs", "src/generated", "dist", "output", "cloudflare", ".cloudflare", "cloudflare.config.ts", "vite.config.ts"]
 }

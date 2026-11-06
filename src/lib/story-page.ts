@@ -3,12 +3,11 @@
 // ink, with a margin round the drawing — and never over the sketch. When no empty area is big enough,
 // the picture is made a little smaller and the words get their own paper above (or below) it.
 // The result is a new image, so the words turn (and curl) with the page. Browser only.
-import { emptyCells, emptyRects, joinUnits, parseStory, shrinkMask, storyUnits, type TextPosition } from "./story-text";
-import { storyFontFamily, type StoryBlock } from "./story-layout";
+import { emptyCells, emptyRects, joinUnits, parseStory, shrinkMask, storyUnits, STORY_SOUND_COLORS, type TextPosition } from "./story-text";
+import { storyFontFamily, storyLines, type StoryBlock, type StoryRun } from "./story-layout";
 
 const INK = "#2b2118";
 const PAPER = "#fbf6ea";
-const SOUND_COLORS = ["#ea580c", "#0284c7", "#16a34a", "#e11d48", "#7c5a00"];
 const RTL_LANGUAGES = new Set(["ar", "he", "fa", "ur"]);
 // The picture is checked in cells this many columns across (rows follow the page shape), each sampled
 // with CELL × CELL pixels so a thin ink line inside a cell still shows up.
@@ -122,19 +121,20 @@ function sampleCells(source: HTMLCanvasElement, cols: number, rows: number): Cel
   return { light, contrast, paper: tone };
 }
 
-type Token = { text: string; sound: boolean; width: number };
+type Token = { text: string; sound: boolean; width: number; font: string; size: number; color?: string };
 type Row = { tokens: Token[]; width: number; height: number; sound: boolean };
 type Text = { rows: Row[]; height: number; width: number; size: number };
 
 // Text widths by font and text: layouts are tried many times while fitting, with the same words.
 const widths = new Map<string, number>();
 
-function layout(context: CanvasRenderingContext2D, story: string, size: number, maxWidth: number, f: Fonts, weight = 500): Text {
-  const bodyFont = `${weight} ${size}px ${f.story}`;
+function layout(context: CanvasRenderingContext2D, story: string, size: number, maxWidth: number, f: Fonts, weight = 500, rich?: {
+  lines: StoryRun[][];
+  pageWidth: number;
+  family: (font: StoryBlock["font"]) => string;
+}): Text {
   const soundSize = size * 1.75;
-  const soundFont = `700 ${soundSize}px ${f.sound}`;
-  const measure = (text: string, sound: boolean) => {
-    const font = sound ? soundFont : bodyFont;
+  const measure = (text: string, font: string) => {
     const key = `${font}|${text}`;
     let width = widths.get(key);
     if (width === undefined) {
@@ -147,7 +147,7 @@ function layout(context: CanvasRenderingContext2D, story: string, size: number, 
   };
   const rows: Row[] = [];
   let height = 0;
-  for (const line of parseStory(story)) {
+  for (const line of rich?.lines ?? parseStory(story) as StoryRun[][]) {
     if (line.length === 0) {
       rows.push({ tokens: [], width: 0, height: size * 0.7, sound: false });
       height += size * 0.7;
@@ -155,15 +155,19 @@ function layout(context: CanvasRenderingContext2D, story: string, size: number, 
     }
     // A sound word stays in one piece when it fits; ordinary text wraps word by word.
     const tokens: Token[] = line.flatMap((segment) => {
-      const text = segment.sound ? segment.text.toLocaleUpperCase() : segment.text;
-      const whole = { text, sound: segment.sound, width: measure(text, segment.sound) };
+      const sound = !!segment.sound;
+      const text = sound ? segment.text.toLocaleUpperCase() : segment.text;
+      const tokenSize = rich && segment.size !== undefined ? rich.pageWidth * segment.size / 100 : sound ? soundSize : size;
+      const family = rich && segment.font ? rich.family(segment.font) : sound ? f.sound : f.story;
+      const font = `${segment.bold === undefined ? (sound ? 700 : weight) : segment.bold ? 700 : 500} ${tokenSize}px ${family}`;
+      const whole = { text, sound, font, size: tokenSize, color: segment.color, width: measure(text, font) };
       if (segment.sound && whole.width <= maxWidth) return [whole];
-      return text.split(/(?<=\s)/).map((word) => ({ text: word, sound: segment.sound, width: measure(word, segment.sound) }));
+      return text.split(/(?<=\s)/).map((word) => ({ ...whole, text: word, width: measure(word, font) }));
     });
     let row: Row = { tokens: [], width: 0, height: 0, sound: false };
     const push = () => {
       if (!row.tokens.length) return;
-      row.height = row.sound ? soundSize * 1.08 : size * 1.36;
+      row.height = Math.max(row.sound ? soundSize * 1.08 : size * 1.36, ...row.tokens.map((token) => token.size * (token.sound ? 1.08 : 1.36)));
       rows.push(row);
       height += row.height;
       row = { tokens: [], width: 0, height: 0, sound: false };
@@ -171,7 +175,7 @@ function layout(context: CanvasRenderingContext2D, story: string, size: number, 
     for (const token of tokens) {
       if (row.tokens.length && row.width + token.width > maxWidth) push();
       if (!row.tokens.length && !token.sound) token.text = token.text.trimStart();
-      token.width = measure(token.text, token.sound);
+      token.width = measure(token.text, token.font);
       row.tokens.push(token);
       row.width += token.width;
       row.sound ||= token.sound;
@@ -208,17 +212,18 @@ function drawText(context: CanvasRenderingContext2D, text: Text, left: number, t
         context.save();
         context.translate(x + token.width / 2, baseline);
         context.rotate((((soundIndex + 1) % 3) - 1) * 0.05);
-        context.font = `700 ${size * 1.75}px ${f.sound}`;
+        context.font = token.font;
         context.textAlign = "center";
         context.lineJoin = "round";
         context.lineWidth = size * 0.24;
         context.strokeStyle = paper;
         context.strokeText(token.text, 0, 0);
-        context.fillStyle = SOUND_COLORS[soundIndex++ % SOUND_COLORS.length]!;
+        const soundColor = STORY_SOUND_COLORS[soundIndex++ % STORY_SOUND_COLORS.length]!;
+        context.fillStyle = token.color ?? soundColor;
         context.fillText(token.text, 0, 0);
         context.restore();
       } else {
-        context.font = `${style?.bold ? 700 : 500} ${size}px ${f.story}`;
+        context.font = token.font;
         context.textAlign = "left";
         if (outline) {
           context.save();
@@ -228,7 +233,7 @@ function drawText(context: CanvasRenderingContext2D, text: Text, left: number, t
           context.strokeText(token.text, x, baseline);
           context.restore();
         }
-        context.fillStyle = style?.color ?? INK;
+        context.fillStyle = token.color ?? style?.color ?? INK;
         context.fillText(token.text, x, baseline);
       }
       x += token.width;
@@ -237,7 +242,7 @@ function drawText(context: CanvasRenderingContext2D, text: Text, left: number, t
 }
 
 type Box = { x: number; y: number; w: number; h: number };
-type Placed = { box: Box; text: Text };
+type Placed = { box: Box; text: Text; source: string; wrapWidth: number };
 /** A block of words on the page, as fractions of its width and height. */
 export type WordBox = { left: number; right: number; top: number; bottom: number };
 
@@ -247,6 +252,8 @@ export type StoryPage = {
   mode: "space" | "room" | "manual";
   /** Where the words are, so badges drawn over the page can avoid them. */
   words: WordBox[];
+  /** Editable starting positions for the blocks chosen by the automatic layout. */
+  automaticBlocks?: StoryBlock[];
 };
 
 /**
@@ -305,18 +312,20 @@ export async function composeStoryPage({
   const rtl = RTL_LANGUAGES.has(lang.split("-")[0]!.toLowerCase());
   if (blocks) {
     const css = getComputedStyle(document.documentElement);
-    const families = blocks.map((block) => storyFontFamily(block.font, (property) => css.getPropertyValue(property).trim()));
-    await Promise.all(blocks.map((block, index) => document.fonts.load(`${block.bold ? 700 : 500} 40px ${families[index]}`, block.text).catch(() => [])));
+    const family = (font: StoryBlock["font"]) => storyFontFamily(font, (property) => css.getPropertyValue(property).trim());
+    await Promise.all(blocks.flatMap((block) => [block, ...(block.runs ?? [])].map((run) =>
+      document.fonts.load(`${(run.bold ?? block.bold) ? 700 : 500} 40px ${family(run.font ?? block.font)}`, run.text).catch(() => []))));
     context.drawImage(picture, 0, 0);
     const words: WordBox[] = [];
-    for (const [index, block] of blocks.entries()) {
+    for (const block of blocks) {
       if (!block.text.trim()) continue;
       const left = W * block.x / 100;
       const top = H * block.y / 100;
       const width = W * block.width / 100;
       const size = W * block.size / 100;
-      const blockFonts = { ...f, story: families[index]! };
-      const text = layout(context, block.text, size, width, blockFonts, block.bold ? 700 : 500);
+      const blockFonts = { ...f, story: family(block.font) };
+      const rich = block.runs ? { lines: storyLines(block), pageWidth: W, family } : undefined;
+      const text = layout(context, block.text, size, width, blockFonts, block.bold ? 700 : 500, rich);
       drawText(context, text, left, top, rtl, blockFonts, PAPER, false, block, width);
       words.push({ left: left / W, right: Math.min(1, (left + width) / W), top: top / H, bottom: Math.min(1, (top + text.height) / H) });
     }
@@ -344,10 +353,21 @@ export async function composeStoryPage({
   // Wide boxes read like a book; a narrow column of short broken lines doesn't.
   const roominess = (w: number) => 0.8 + 0.2 * Math.min(1, w / (W * 0.75));
   const pad = W * 0.02;
-  const fitIn = (box: Box, story: string) => {
-    const width = Math.min(box.w - pad * 2, W * 0.86);
-    const text = layout(context, story, bodySize, width, f);
-    return text.width <= width && text.height <= box.h - pad * 2 ? text : null;
+  const fitIn = (box: Box, source: string): Placed | null => {
+    const wrapWidth = Math.min(box.w - pad * 2, W * 0.86);
+    const text = layout(context, source, bodySize, wrapWidth, f);
+    return text.width <= wrapWidth && text.height <= box.h - pad * 2 ? { box, text, source, wrapWidth } : null;
+  };
+  const editableBlock = (source: string, text: Text, left: number, top: number, wrapWidth: number): StoryBlock => {
+    // Keep the edge the original text was aligned to, including right-to-left blocks.
+    const anchor = rtl ? left + text.width : left;
+    const space = rtl ? anchor : W - anchor;
+    const width = Math.max(10, Math.min(wrapWidth, space) * 100 / W);
+    const x = (rtl ? anchor * 100 / W - width : anchor * 100 / W);
+    return {
+      text: source, x: Math.max(0, Math.min(x, 100 - width)), y: Math.max(0, Math.min(98, top * 100 / H)),
+      width, size: 3.6, font: "book", color: INK, align: "start", bold: false,
+    };
   };
   const score = (box: Box) => preference((box.y + box.h / 2) / H) * roominess(box.w);
   // Cheap check before laying text out: the box must at least have the area the letters need.
@@ -378,9 +398,9 @@ export async function composeStoryPage({
     // One block of words, in the best wide box.
     for (const box of boxes) {
       if (box.w < W * 0.45 || !roomFor(box, story)) continue;
-      const text = fitIn(box, story);
-      if (text) {
-        const candidate = { blocks: [{ box, text }], score: score(box) };
+      const block = fitIn(box, story);
+      if (block) {
+        const candidate = { blocks: [block], score: score(box) };
         if (!best || candidate.score > best.score) best = candidate;
       }
     }
@@ -402,7 +422,7 @@ export async function composeStoryPage({
             const tb = ta && fitIn(second, rest);
             if (!ta || !tb) continue;
             const candidate = {
-              blocks: [{ box: first, text: ta }, { box: second, text: tb }],
+              blocks: [ta, tb],
               score: preference((first.y + first.h / 2) / H) * roominess(Math.min(first.w, second.w)),
             };
             if (!best || candidate.score > best.score) best = candidate;
@@ -422,18 +442,20 @@ export async function composeStoryPage({
       for (const [r, row] of usable.entries()) row.forEach((empty, c) => empty && context.fillRect(c * cellW, r * cellH, cellW, cellH));
     }
     const words: WordBox[] = [];
-    for (const { box, text } of placed) {
+    const automaticBlocks: StoryBlock[] = [];
+    for (const { box, text, source, wrapWidth } of placed) {
       const left = box.x + (box.w - text.width) / 2;
       const top = box.y + (box.h - text.height) / 2;
       drawText(context, text, left, top, rtl, f, cells.paper);
       words.push({ left: left / W, right: (left + text.width) / W, top: top / H, bottom: (top + text.height) / H });
+      automaticBlocks.push(editableBlock(source, text, left, top, wrapWidth));
       if (debug) {
         context.strokeStyle = "#16a34a";
         context.lineWidth = 3;
         context.strokeRect(box.x, box.y, box.w, box.h);
       }
     }
-    return finish(canvas, picture, "space", words);
+    return finish(canvas, picture, "space", words, automaticBlocks);
   }
 
   // ---------- 2. No room: keep the full page and outline only the letters ----------
@@ -458,7 +480,8 @@ export async function composeStoryPage({
     context.strokeRect((W - text.width) / 2, textTop, text.width, text.height);
   }
   const textLeft = (W - text.width) / 2;
-  return finish(canvas, picture, "room", [{ left: textLeft / W, right: (textLeft + text.width) / W, top: textTop / H, bottom: (textTop + text.height) / H }]);
+  return finish(canvas, picture, "room", [{ left: textLeft / W, right: (textLeft + text.width) / W, top: textTop / H, bottom: (textTop + text.height) / H }],
+    [editableBlock(story, text, textLeft, textTop, W - margin * 2)]);
 }
 
 /** Which end of the page a corner badge can use without landing on the words: `prefer` unless they're there. */
@@ -495,9 +518,9 @@ export function whenIdle(): Promise<void> {
   });
 }
 
-async function finish(canvas: HTMLCanvasElement, picture: HTMLCanvasElement, mode: StoryPage["mode"], words: StoryPage["words"]): Promise<StoryPage | null> {
+async function finish(canvas: HTMLCanvasElement, picture: HTMLCanvasElement, mode: StoryPage["mode"], words: StoryPage["words"], automaticBlocks?: StoryBlock[]): Promise<StoryPage | null> {
   picture.width = picture.height = 0;
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
   canvas.width = canvas.height = 0;
-  return blob ? { url: URL.createObjectURL(blob), mode, words } : null;
+  return blob ? { url: URL.createObjectURL(blob), mode, words, automaticBlocks } : null;
 }

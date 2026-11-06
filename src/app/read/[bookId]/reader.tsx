@@ -262,7 +262,8 @@ export function Reader({
       : { ...page, lang: "en" };
     const blocks = page.storyLayouts?.[translation ? locale : "original"];
     const story = storyBlockText(blocks, version.story);
-    const narrationUrl = plainStory(story ?? "") === plainStory(version.story ?? "") ? version.narrationUrl : null;
+    const spokenWords = (value: string | null) => plainStory(value ?? "").replace(/\s+/g, " ").trim();
+    const narrationUrl = spokenWords(story) === spokenWords(version.story) ? version.narrationUrl : null;
     return { ...version, blocks, story, narrationUrl };
   }), [pages, locale]);
 

@@ -30,7 +30,8 @@ new_d=[
 ('The gift of listening','“Was my roar here all along?”\nLion asked. Sarra nodded.\n“Sometimes brave things start quietly.”\n\nWould you listen too?','Le cadeau d’écouter','« Mon rugissement était là depuis toujours ? »\nSarra fit oui de la tête.\n« Le courage commence parfois tout doucement. »\n\nEt toi, tu l’écouterais ?')]
 entries=entries[:5]+new_a+entries[5:7]+new_b+entries[7:9]+new_c+entries[9:11]+new_d+entries[11:]
 assert len(entries)==21
-ar={2,5,7,11,14,16,18}
+experiences=json.loads((root/'experience.json').read_text(encoding='utf-8'))
+ar={entry['page']-1 for entry in experiences['arPages']}
 pages=[]
 for i,(title,story,frtitle,frstory) in enumerate(entries):
  p={'file':'cover.png' if i==0 else f'spread-{(i+1)//2:02}.png','title':title,'story':story,'textPosition':'off' if i==0 else 'top','ar':i in ar,'translations':{'fr':{'title':frtitle,'story':frstory}}}
@@ -41,30 +42,11 @@ for i,(title,story,frtitle,frstory) in enumerate(entries):
   assert len(words)<1000
  assert len(title)<120
 (root/'pages.json').write_text(json.dumps({'pages':pages},ensure_ascii=False,indent=2)+'\n')
-experiences={
- 'book':{'title':entries[0][0],'description':'An original watercolor listening adventure made for Sarra. A little lion has lost his roar; a friend who listens helps him find his courage. English and French.','gradeLevel':'Ages 4–7','format':'SKETCH','subjectSlug':'animals'},
- 'arPages':[
- {'page':3,'world':'world-forest.jpg','scanAction':'world','effect':'none','purpose':'Meet the little lion inside a sunlit watercolor clearing.'},
- {'page':6,'world':'world-forest.jpg','scanAction':'world','effect':'none','purpose':'Step into the listening woodland under Owl’s tree.'},
- {'page':8,'model':'tortoise.glb','scanAction':'ar','purpose':'An original gentle animated tortoise rises from the printed page.'},
- {'page':11,'world':'world-river.jpg','scanAction':'world','effect':'none','purpose':'Celebrate inside the golden river glade with all the animal friends.'}],
- 'typography':{'story':'Gelasio 500, existing app book typography','sounds':'Fredoka 700, existing app colored sound words','position':'top','quietBand':'Upper 27–33% of each half-page','note':'Story text stays editable and is typeset by the app, never baked into spread artwork.'},
- 'assumptions':['Child’s supplied first name: Sarra.','Age not supplied: written for approximately 4–7.','Language not supplied: English with full French reading option.','Physical appearance is a fictional illustration, not a claimed likeness.'],
- 'worlds':{'world-forest.jpg':'A seamless watercolor woodland clearing: cub straight ahead, owl in a gnarled tree to the left, rabbit and elephant further around, small garden gate behind. No lettering.','world-river.jpg':'A seamless golden-hour stream glade: cub, safe twig footbridge and tortoise ahead, elephant, rabbit and owl around the banks, golden fireflies. No lettering.'}}
-experiences['arPages']=[
- {'page':3,'world':'world-forest.jpg','scanAction':'world','effect':'none','purpose':'Meet the cub in the sunlit listening woodland.'},
- {'page':6,'model':'bird.glb','scanAction':'ar','purpose':'An original little songbird flutters its wings over the printed page.'},
- {'page':8,'world':'world-forest.jpg','scanAction':'world','effect':'none','purpose':'Return to the same woodland beside Owl’s tree, at the same scale.'},
- {'page':12,'model':'tortoise.glb','scanAction':'ar','purpose':'A small original animated tortoise takes gentle brave steps.'},
- {'page':15,'model':'lion.glb','scanAction':'ar','purpose':'The original cub breathes calmly as he chooses to help his friend.'},
- {'page':17,'world':'world-river.jpg','scanAction':'world','effect':'none','purpose':'Celebrate inside the golden river glade, with the same room scale and forward view.'},
- {'page':19,'world':'world-river.jpg','scanAction':'world','effect':'none','purpose':'Listen again in the same sunset glade without changing its scale or scene.'}]
-(root/'experience.json').write_text(json.dumps(experiences,ensure_ascii=False,indent=2)+'\n')
 text=['# Sarra and the Little Lost Roar','\nA small voice. A big friendship.\n','Original read-aloud animal adventure for Sarra, approximately ages 4–7. English and French.','\n## Story and visual direction\n','Sarra does not solve the problem by making the cub louder. She listens, stays beside him, and lets his voice return when a friend needs encouragement. The refrain invites the child to listen, rather than delivering a lesson.','\nCream cold-press paper, loose fineliner, transparent sepia/sienna/indigo washes, sage and honey accents. Sarra wears a mustard pinafore, cream shirt and teal boots; the honey-gold cub has a small russet mane and teal scarf. Neither is based on a supplied portrait.','\nGelasio book serif for story lines, Fredoka for expressive sounds; use the app’s existing text compositor on quiet paper. No text embedded in spreads.','\n## Pages\n']
 for i,p in enumerate(pages):
  text += [f'### {i+1}. {p["title"]}'+(' · AR target' if p['ar'] else ''),'',p['story'],'',f'Art: {p["file"]}'+(f' ({p["side"]})' if 'side'in p else '')+f'. Text: {p["textPosition"]}.','']
 text+=['## AR choices\n']
 for a in experiences['arPages']:text+=[f'- Page {a["page"]}: {a["purpose"]} Scanning: {a["scanAction"]}.']
-text+=['\nDigital pages with worlds show Step Inside. Printed pages compile from their artwork, with no words or badge inside the target. The compositor keeps lettering on quiet paper; verify recognition on matte printed proofs.','\n## Production\n','The images, manifests, original model and installer live together in this folder. Keep the book as a reviewable draft until the family chooses to share it. Do not seed accounts or reset any database.','\nFallback import: drop cover.png, all ten spread images and pages.json into the admin studio with two-page spreads enabled. Set Sketchbook 3:4, configure the seven experiences from experience.json, and compile. The generated installer handles this for the local app.']
+text+=['\nDigital pages show Step Inside or Look around 360° according to experience.json. Printed pages compile from their artwork, with no words or badge inside the target. The compositor keeps lettering on quiet paper; verify recognition on matte printed proofs.','\n## Production\n','The images, manifests, original model and installer live together in this folder. Keep the book as a reviewable draft until the family chooses to share it. Do not seed accounts or reset any database.','\nFallback import: drop cover.png, all ten spread images and pages.json into the admin studio with two-page spreads enabled. Set Sketchbook 3:4, configure the eight experiences from experience.json, and compile. The generated installer handles this for the local app.']
 (root/'plan.md').write_text('\n'.join(text)+'\n')
 print('Wrote 21-page bilingual story, plan and experience manifest.')

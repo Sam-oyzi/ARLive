@@ -28,11 +28,11 @@ A line on page 14 was adjusted to match the illustration’s pause on the bridge
 
 ## Story worlds
 
-The two panoramas share a 2:1 format, eye-level horizon, warm sketch palette and forward-facing cub on a low mossy rock. Forest worlds on pages 3 and 8 reuse the exact same map; river worlds on pages 17 and 19 reuse the exact same sunset map. The app’s fixed room size (3 m) and eye height (1.5 m) stay unchanged between them. Automatic entry surrounds the reader once, without changing the anchored room as they move. No unrelated rain, snow or water-drop characters are added.
+Five 4096 × 2048 renders replace the previous panorama art. They use the same level camera at 1.5 m above the bank. Page 3 opens the woodland path in Step Inside. Pages 8, 9, 17 and 19 open the owl grove, listening brook, branch bridge and evening river in the 360° viewer. The bridge and stream use the same geometry at the crossing on pages 17 and 19. The cub and tortoise reuse the book’s existing 3D models. The owl sits on a low branch above the horizon. Perspective proofs were checked ahead, right, behind, left, overhead and underfoot.
 
 ## Final verification
 
-Run prepare-assets.mjs, then compile-targets.mjs, then verify-book.mjs before install-book.mjs. Compilation records hashes of the final page JPGs so the verification detects stale AR targets after an art correction. Real printed-page recognition, camera tracking and floor estimation still require an on-device proof.
+To rebuild the panoramas, run Blender with `--python render-worlds.py`. Run prepare-assets.mjs, then compile-targets.mjs, then verify-book.mjs before a fresh install. The compiler records hashes of the final page JPGs. For an installed copy with the eight AR targets already compiled, run `node books/sarra-and-the-little-lost-roar/install-book.mjs --update-worlds` from the repository root to replace only the world assets and page settings. Printed-page recognition and floor tracking still require an on-device proof.
 
 ## Completed production checks
 

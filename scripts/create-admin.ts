@@ -2,7 +2,7 @@
 //   npm run admin:create -- you@example.com "Your Name"
 // The password comes from ADMIN_PASSWORD, or is generated and printed once.
 import bcrypt from "bcryptjs";
-import { PrismaClient } from "@prisma/client";
+import { db } from "../src/lib/db";
 import { randomPassword } from "../src/lib/utils";
 
 async function main() {
@@ -17,7 +17,6 @@ async function main() {
   const password = provided ?? randomPassword(20);
   const passwordHash = await bcrypt.hash(password, 10);
 
-  const db = new PrismaClient();
   try {
     const existing = await db.user.findUnique({ where: { username } });
     if (existing && existing.role !== "SUPER_ADMIN") {

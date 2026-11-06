@@ -10,7 +10,7 @@ import * as THREE from "three";
 import { EIGHTH_WALL_CREDIT, EIGHTH_WALL_LICENSE_URL, isTouchPhone, loadEighthWall, startEighthWallSession } from "@/ar/eighth-wall-session";
 import type { RoomSession } from "@/ar/room-controls";
 import { canPlaceRoom, startRoomSession, type RoomState } from "@/ar/room-session";
-import { disposeRoom, loadStoryRoom, ROOM, updateStoryRoom } from "@/ar/story-room";
+import { disposeRoom, loadStoryPanorama, ROOM } from "@/ar/story-room";
 import { cn } from "@/lib/utils";
 import { usePageSounds, type SoundLayer } from "@/lib/page-sound";
 import { requestStoryMotion, storyMotionReady } from "@/lib/story-motion";
@@ -170,15 +170,14 @@ export function WorldViewer({
     el.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    // Standing in the middle of the room, at eye height: the panorama all round, the rain in front.
-    // Far enough to see the story's sky, drawn well beyond the box's walls.
+    // The camera stays at the panorama's capture point while the reader looks around.
     const camera = new THREE.PerspectiveCamera(FOV.start, el.clientWidth / el.clientHeight, 0.05, 200);
     camera.position.set(0, ROOM.eye, 0);
 
     let alive = true;
     let room: THREE.Group | null = null;
     let mixer: THREE.AnimationMixer | null = null;
-    loadStoryRoom(world.url, { effect: world.effect })
+    loadStoryPanorama(world.url, world.effect)
       .then((built) => {
         if (!alive) return disposeRoom(built.room);
         room = built.room;
@@ -259,7 +258,6 @@ export function WorldViewer({
       const now = performance.now();
       mixer?.update(Math.min((now - last) / 1000, 0.1));
       last = now;
-      if (room) updateStoryRoom(room, camera);
       if (state.motion && state.heading !== null) {
         const toRad = THREE.MathUtils.degToRad;
         const screen = toRad(screenAngle());
