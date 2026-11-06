@@ -184,26 +184,7 @@ function layout(context: CanvasRenderingContext2D, story: string, size: number, 
 
 const stepsIn = (row: Row) => row.tokens.length > 0 && row.tokens.every((t) => t.sound);
 
-/** The biggest type (between min and max) whose text fits a box, or null if even the smallest doesn't. */
-function fit(context: CanvasRenderingContext2D, story: string, boxW: number, boxH: number, min: number, max: number, f: Fonts): Text | null {
-  const fits = (text: Text) => text.height <= boxH && text.width <= boxW;
-  const smallest = layout(context, story, min, boxW, f);
-  if (!fits(smallest)) return null;
-  let best = smallest;
-  let low = min;
-  let high = max;
-  for (let i = 0; i < 6; i++) {
-    const mid = (low + high) / 2;
-    const text = layout(context, story, mid, boxW, f);
-    if (fits(text)) {
-      best = text;
-      low = mid;
-    } else high = mid;
-  }
-  return best;
-}
-
-function drawText(context: CanvasRenderingContext2D, text: Text, left: number, top: number, rtl: boolean, f: Fonts, paper: string) {
+function drawText(context: CanvasRenderingContext2D, text: Text, left: number, top: number, rtl: boolean, f: Fonts, paper: string, outline = false) {
   const { size } = text;
   context.textBaseline = "alphabetic";
   context.direction = rtl ? "rtl" : "ltr";
@@ -235,6 +216,14 @@ function drawText(context: CanvasRenderingContext2D, text: Text, left: number, t
       } else {
         context.font = `500 ${size}px ${f.story}`;
         context.textAlign = "left";
+        if (outline) {
+          context.save();
+          context.lineJoin = "round";
+          context.lineWidth = size * 0.12;
+          context.strokeStyle = paper;
+          context.strokeText(token.text, x, baseline);
+          context.restore();
+        }
         context.fillStyle = INK;
         context.fillText(token.text, x, baseline);
       }
@@ -250,7 +239,7 @@ export type WordBox = { left: number; right: number; top: number; bottom: number
 
 export type StoryPage = {
   url: string;
-  /** "space": the words fit in empty paper (in one or two blocks); "room": the picture was made smaller to fit them. */
+  /** "space": the words fit in empty paper; "room": the words are outlined over the full-page artwork. */
   mode: "space" | "room";
   /** Where the words are, so badges drawn over the page can avoid them. */
   words: WordBox[];
@@ -308,9 +297,8 @@ export async function composeStoryPage({
   canvas.height = H;
   const context = canvas.getContext("2d")!;
   const rtl = RTL_LANGUAGES.has(lang.split("-")[0]!.toLowerCase());
-  const maxSize = W * 0.066;
-  // Type sizes to try, biggest first: about 16px on a phone, then smaller before the picture is touched.
-  const SIZES = [0.044, 0.038, 0.032, 0.028].map((share) => W * share);
+  // Size relative to the page so the reader and print agree at different render resolutions.
+  const bodySize = W * 0.036;
 
   // ---------- 1. Words in empty paper: one block, or the paragraph split between two ----------
   const rows = Math.round(COLUMNS * aspect);
@@ -330,22 +318,17 @@ export async function composeStoryPage({
   // Wide boxes read like a book; a narrow column of short broken lines doesn't.
   const roominess = (w: number) => 0.8 + 0.2 * Math.min(1, w / (W * 0.75));
   const pad = W * 0.02;
-  const fitIn = (box: Box, text: string, min: number) => fit(context, text, Math.min(box.w - pad * 2, W * 0.86), box.h - pad * 2, min, maxSize, f);
-  const score = (box: Box, size: number) => size * preference((box.y + box.h / 2) / H) * roominess(box.w);
+  const fitIn = (box: Box, story: string) => {
+    const width = Math.min(box.w - pad * 2, W * 0.86);
+    const text = layout(context, story, bodySize, width, f);
+    return text.width <= width && text.height <= box.h - pad * 2 ? text : null;
+  };
+  const score = (box: Box) => preference((box.y + box.h / 2) / H) * roominess(box.w);
   // Cheap check before laying text out: the box must at least have the area the letters need.
-  const roomFor = (box: Box, text: string, size: number) => box.w * box.h >= text.length * size * size * 0.62;
+  const roomFor = (box: Box, text: string) => box.w * box.h >= text.length * bodySize * bodySize * 0.62;
   const units = storyUnits(story);
 
-  // The biggest type wins; at the same size one block beats a split one, then the nicer box.
-  const tier = (size: number) => SIZES.findIndex((t) => size >= t * 0.999);
-  type Candidate = { blocks: Placed[]; size: number; score: number };
-  const better = (a: Candidate, b: Candidate | null) => {
-    if (!b) return true;
-    if (tier(a.size) !== tier(b.size)) return tier(a.size) < tier(b.size);
-    if (a.blocks.length !== b.blocks.length) return a.blocks.length < b.blocks.length;
-    return a.score > b.score;
-  };
-  const smallest = SIZES.at(-1)!;
+  type Candidate = { blocks: Placed[]; score: number };
 
   let best: Candidate | null = null;
   let usable = masks[0]!;
@@ -356,7 +339,7 @@ export async function composeStoryPage({
     for (const rect of emptyRects(mask)) {
       const box = { x: rect.left * cellW, y: rect.top * cellH, w: (rect.right - rect.left) * cellW, h: (rect.bottom - rect.top) * cellH };
       const centre = (box.y + box.h / 2) / H;
-      if (box.w < W * 0.24 || box.h < smallest * 2.4 || centre < zoneTop || centre > zoneBottom) continue;
+      if (box.w < W * 0.24 || box.h < bodySize * 1.36 + pad * 2 || centre < zoneTop || centre > zoneBottom) continue;
       const overlaps = boxes.some((kept) => {
         const ix = Math.max(0, Math.min(kept.x + kept.w, box.x + box.w) - Math.max(kept.x, box.x));
         const iy = Math.max(0, Math.min(kept.y + kept.h, box.y + box.h) - Math.max(kept.y, box.y));
@@ -368,18 +351,15 @@ export async function composeStoryPage({
 
     // One block of words, in the best wide box.
     for (const box of boxes) {
-      if (box.w < W * 0.45 || !roomFor(box, story, smallest)) continue;
-      const text = fitIn(box, story, smallest);
+      if (box.w < W * 0.45 || !roomFor(box, story)) continue;
+      const text = fitIn(box, story);
       if (text) {
-        const candidate = { blocks: [{ box, text }], size: text.size, score: score(box, text.size) };
-        if (better(candidate, best)) best = candidate;
+        const candidate = { blocks: [{ box, text }], score: score(box) };
+        if (!best || candidate.score > best.score) best = candidate;
       }
     }
-    // Two blocks at one size: the start of the paragraph in the first box, the rest in the second —
-    // one above the other, or side by side in reading order. Only worth it for bigger type.
-    const needTier = best ? tier(best.size) : SIZES.length;
-    if (needTier > 0 && units.length > 1) {
-      const min = SIZES[Math.min(needTier, SIZES.length) - 1]!;
+    // When one block cannot fit, try two boxes in reading order.
+    if (!best && units.length > 1) {
       const pairBoxes = boxes.slice(0, 12);
       for (const a of pairBoxes) {
         for (const b of pairBoxes) {
@@ -391,21 +371,15 @@ export async function composeStoryPage({
           for (let k = 1; k < units.length; k++) {
             const start = joinUnits(units.slice(0, k));
             const rest = joinUnits(units.slice(k));
-            if (!roomFor(first, start, min) || !roomFor(second, rest, min)) continue;
-            const ta = fitIn(first, start, min);
-            const tb = ta && fitIn(second, rest, min);
+            if (!roomFor(first, start) || !roomFor(second, rest)) continue;
+            const ta = fitIn(first, start);
+            const tb = ta && fitIn(second, rest);
             if (!ta || !tb) continue;
-            // The same type size in both blocks, so they read as one text.
-            const size = Math.min(ta.size, tb.size);
             const candidate = {
-              blocks: [
-                { box: first, text: ta.size === size ? ta : layout(context, start, size, Math.min(first.w - pad * 2, W * 0.86), f) },
-                { box: second, text: tb.size === size ? tb : layout(context, rest, size, Math.min(second.w - pad * 2, W * 0.86), f) },
-              ],
-              size,
-              score: size * preference((first.y + first.h / 2) / H) * roominess(Math.min(first.w, second.w)) * 0.95,
+              blocks: [{ box: first, text: ta }, { box: second, text: tb }],
+              score: preference((first.y + first.h / 2) / H) * roominess(Math.min(first.w, second.w)),
             };
-            if (better(candidate, best)) best = candidate;
+            if (!best || candidate.score > best.score) best = candidate;
           }
         }
       }
@@ -436,42 +410,22 @@ export async function composeStoryPage({
     return finish(canvas, picture, "space", words);
   }
 
-  // ---------- 2. No room: make the picture smaller and give the words their own paper ----------
+  // ---------- 2. No room: keep the full page and outline only the letters ----------
   const margin = W * 0.06;
-  let text = layout(context, story, W * 0.054, W - margin * 2, f);
-  while (text.height + margin * 1.4 > H * 0.36 && text.size > SIZES.at(-1)! * 0.85) text = layout(context, story, text.size * 0.92, W - margin * 2, f);
+  const text = layout(context, story, bodySize, W - margin * 2, f);
   const band = text.height + margin * 1.4;
   const wordsBelow = position === "bottom";
-  const k = (H - band - margin * 0.5) / H;
-  const pw = W * k;
-  const ph = H * k;
-  const px = (W - pw) / 2;
-  const py = wordsBelow ? margin * 0.5 : band;
-  context.fillStyle = cells.paper;
-  context.fillRect(0, 0, W, H);
-  // The whole picture, laid on the page like a print with a soft shadow; nothing is covered or cut.
-  context.save();
-  context.shadowColor = "rgb(60 44 26 / 0.22)";
-  context.shadowBlur = W * 0.02;
-  context.shadowOffsetY = W * 0.006;
-  context.beginPath();
-  context.roundRect(px, py, pw, ph, W * 0.015);
-  context.fillStyle = cells.paper;
-  context.fill();
-  context.restore();
-  context.save();
-  context.beginPath();
-  context.roundRect(px, py, pw, ph, W * 0.015);
-  context.clip();
-  context.drawImage(picture, px, py, pw, ph);
-  if (debug) {
-    // The empty paper that was found, on the smaller picture: too little of it for the words.
-    context.fillStyle = "rgb(22 163 74 / 0.3)";
-    for (const [r, row] of usable.entries()) row.forEach((empty, c) => empty && context.fillRect(px + c * cellW * k, py + r * cellH * k, cellW * k, cellH * k));
+  if (band >= H || text.width > W - margin * 2) {
+    canvas.width = canvas.height = picture.width = picture.height = 0;
+    return null;
   }
-  context.restore();
-  const textTop = wordsBelow ? py + ph + (band - text.height) / 2 : (band - text.height) / 2 + margin * 0.15;
-  drawText(context, text, (W - text.width) / 2, textTop, rtl, f, cells.paper);
+  context.drawImage(picture, 0, 0);
+  if (debug) {
+    context.fillStyle = "rgb(22 163 74 / 0.3)";
+    for (const [r, row] of usable.entries()) row.forEach((empty, c) => empty && context.fillRect(c * cellW, r * cellH, cellW, cellH));
+  }
+  const textTop = (wordsBelow ? H - band : 0) + (band - text.height) / 2;
+  drawText(context, text, (W - text.width) / 2, textTop, rtl, f, cells.paper, true);
   if (debug) {
     context.strokeStyle = "#e11d48";
     context.lineWidth = 3;

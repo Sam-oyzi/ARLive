@@ -706,7 +706,11 @@ export function Reader({
 
       {/* Under the book: the page titles and their notes. The story itself is on the page (and stays here
           for screen readers); until a page is drawn, or when it carries no words, it shows here instead. */}
-      <div className={cn("mx-auto w-full max-w-3xl shrink-0 px-6 pt-1 text-center", single && "px-5 pb-3 safe-bottom", single && wordsOnPage && "sr-only")}>
+      <div className={cn(
+        "mx-auto w-full max-w-3xl shrink-0 px-6 pt-1 text-center",
+        single ? "px-5 pb-3 safe-bottom" : "h-[min(6rem,16dvh)] overflow-y-auto",
+        single && wordsOnPage && "sr-only",
+      )}>
         <div className="truncate text-[13px] text-ink-600">{backCover ? say.backCover : shown.map((page, index) => <span key={page.id}>{index > 0 && " · "}<bdi lang={page.lang}>{page.title}</bdi></span>)}</div>
         {backCover && <span className="sr-only">Wonder begins with a question.</span>}
         {captionPages.some((page) => page.story) && (
