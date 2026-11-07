@@ -12,7 +12,7 @@ export function Logo({ href = "/", className, dark }: { href?: string; className
   return (
     <Link href={href} className={cn("flex items-center gap-2.5", className)}>
       <LogoMark />
-      <span className={cn("font-display text-xl font-bold tracking-tight", dark ? "text-white" : "text-ink-900")}>
+      <span className={cn("font-[family-name:var(--font-bricolage)] text-xl font-bold tracking-tight", dark ? "text-white" : "text-ink-900")}>
         Page<span className={dark ? "text-amber-300" : "text-[#176052]"}>Wakes</span>
       </span>
     </Link>

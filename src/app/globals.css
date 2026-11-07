@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-jakarta), var(--font-arabic-sans), var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-bricolage), var(--font-jakarta), var(--font-arabic-display), var(--font-arabic-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-jakarta), var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-jakarta), var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-instrument), var(--font-arabic), ui-serif, Georgia, serif;
 
   /* Sunny tangerine. 500 is for fills and icons; 600 and darker carry white text and links. */
@@ -136,9 +136,17 @@
   padding-bottom: max(env(safe-area-inset-bottom), 1rem);
 }
 
-/* The site in Arabic. Outside the layers on purpose, so it wins over the utilities it corrects:
-   Arabic letters join up, so letter-spacing would pull words apart, and its tall letters need more
-   room between lines than Latin headings get. */
+/* The site in Arabic. Outside the layers on purpose, so it wins over the theme and the utilities it
+   corrects. The Arabic faces lead: after the Latin ones, the Latin faces' Arial fallback would catch
+   the Arabic letters first. Arabic letters join up, so letter-spacing would pull words apart, and
+   its tall letters need more room between lines than Latin headings get. */
+html:lang(ar) {
+  --font-sans: var(--font-arabic-sans), var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-arabic-display), var(--font-arabic-sans), var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+}
+html:lang(ar) body {
+  font-feature-settings: normal;
+}
 html:lang(ar) body * {
   letter-spacing: normal !important;
 }
