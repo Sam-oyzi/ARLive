@@ -54,7 +54,9 @@ export default async function PrintPage({ params, searchParams }: {
           story: translation ? translation.story ?? null : t.description,
           lang: translation ? language : "en",
           blocks: readStoryLayouts(t.storyLayouts)[translation ? language : "original"],
-          textPosition: textPositionOf(t.textPosition),
+          // A language can sit and size its words its own way on the page.
+          textPosition: translation?.textPosition ?? textPositionOf(t.textPosition),
+          textScale: translation?.textScale ?? t.textScale,
         };
       })}
       backCover={{ imageUrl: backCoverFor(book), qrUrl: `${origin}${bookQrPath(book)}`, ar: !!book.mindUrl }}

@@ -9,6 +9,7 @@ import { pageAspect } from "@/lib/book-format";
 import { db } from "@/lib/db";
 import { pageSoundRow } from "@/lib/sound-layers";
 import { pageTranslationsSchema } from "@/lib/page-translations";
+import { readStoryLayouts } from "@/lib/story-layout";
 import { textPositionOf } from "@/lib/story-text";
 import { scanActionOf, worldExperienceOf, placementModel, opensModel } from "@/lib/scan-actions";
 import { worldEffectOf } from "@/lib/world-effects";
@@ -113,9 +114,11 @@ export default async function TargetEditorPage({ params }: { params: Promise<{ i
           sounds: target.sounds.map(pageSoundRow),
           note: target.note,
           textPosition: textPositionOf(target.textPosition),
+          textScale: target.textScale,
           pageAspect: pageAspect(target.book.format),
           isCover: index === 0,
           translations: pageTranslationsSchema.safeParse(target.translations).data ?? {},
+          manualLayouts: Object.keys(readStoryLayouts(target.storyLayouts)),
           worldUrl: target.worldUrl,
           worldEffect: worldEffectOf(target.worldEffect),
           scanAction: scanActionOf(target.scanAction),

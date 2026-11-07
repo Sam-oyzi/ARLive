@@ -18,7 +18,7 @@ from PIL import Image, ImageFilter
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 PUBLIC = os.path.join(ROOT, "public", "book-art", "sarra-and-the-little-lost-roar")
-LINES = ["سارة والزئير", "الصغير الضائع"]
+LINES = ["سارة والأسد", "الصغير الضائع"]
 # Where the English title sits on the 1200 × 1600 cover, clear of the trunk and the leaves either side,
 # with room below for the Arabic letters that drop under the line.
 BOX = (88, 12, 1125, 425)

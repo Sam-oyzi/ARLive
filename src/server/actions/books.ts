@@ -6,7 +6,7 @@ import { assertRole } from "@/lib/auth";
 import { CONTENT_META, CONTENT_TYPES, defaultTransform, type ContentData } from "@/lib/content";
 import { parseMotion } from "@/lib/motion-schema";
 import { pageTranslationsSchema } from "@/lib/page-translations";
-import { TEXT_POSITION_KEYS } from "@/lib/story-text";
+import { TEXT_POSITION_KEYS, TEXT_SCALE } from "@/lib/story-text";
 import { SCAN_ACTIONS, placementModel, opensModel } from "@/lib/scan-actions";
 import { WORLD_EFFECT_LABEL, WORLD_EFFECTS, type WorldEffect } from "@/lib/world-effects";
 import { BOOK_FORMATS, type BookFormat } from "@/lib/book-format";
@@ -123,6 +123,7 @@ const targetSchema = z.object({
   name: z.string({ error: "Enter a name" }).min(1).max(120),
   description: z.string().max(1000).optional(),
   textPosition: z.enum(TEXT_POSITION_KEYS).default("auto"),
+  textScale: z.coerce.number().min(TEXT_SCALE.min).max(TEXT_SCALE.max).default(1),
   note: z.string().max(600).optional(),
 });
 
@@ -131,8 +132,8 @@ export async function updateTarget(_prev: ActionState, formData: FormData): Prom
     await assertRole(["SUPER_ADMIN"]);
     const parsed = parseForm(targetSchema, formData);
     if (!parsed.success) return invalid(parsed.error);
-    const { id, name, description, textPosition, note } = parsed.data;
-    await db.target.update({ where: { id }, data: { name, description: description ?? null, textPosition, note: note ?? null } });
+    const { id, name, description, textPosition, textScale, note } = parsed.data;
+    await db.target.update({ where: { id }, data: { name, description: description ?? null, textPosition, textScale, note: note ?? null } });
     refreshAll();
     return { ok: true, message: "Page details saved" };
   } catch (error) {
@@ -175,6 +176,9 @@ const translationInput = z.object({
   title: z.string().trim().max(120),
   story: z.string().trim().max(1000),
   note: z.string().trim().max(600).default(""),
+  /** null: as on the original page. */
+  textPosition: z.enum(TEXT_POSITION_KEYS).nullable().default(null),
+  textScale: z.number().min(TEXT_SCALE.min).max(TEXT_SCALE.max).nullable().default(null),
 });
 
 /** Saves (or, with an empty title, removes) one language's title, story and note for a page. */
@@ -183,11 +187,11 @@ export async function savePageTranslation(targetId: string, input: z.input<typeo
     await assertRole(["SUPER_ADMIN"]);
     const parsed = translationInput.safeParse(input);
     if (!parsed.success) return invalid(parsed.error);
-    const { locale, title, story, note } = parsed.data;
+    const { locale, title, story, note, textPosition, textScale } = parsed.data;
     const target = await db.target.findUniqueOrThrow({ where: { id: targetId } });
     const current = pageTranslationsSchema.safeParse(target.translations).data ?? {};
     const next = { ...current };
-    if (title) next[locale] = { ...current[locale], title, story: story || undefined, note: note || undefined };
+    if (title) next[locale] = { ...current[locale], title, story: story || undefined, note: note || undefined, textPosition: textPosition ?? undefined, textScale: textScale ?? undefined };
     else delete next[locale];
     const checked = pageTranslationsSchema.safeParse(next);
     if (!checked.success) return invalid(checked.error);

@@ -17,7 +17,7 @@ export default async function WordsOnPages({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const book = await db.book.findUnique({
     where: { id },
-    select: { id: true, title: true, format: true, targets: { orderBy: [{ order: "asc" }, { createdAt: "asc" }], select: { id: true, name: true, imageUrl: true, description: true, textPosition: true, translations: true, storyLayouts: true } } },
+    select: { id: true, title: true, format: true, targets: { orderBy: [{ order: "asc" }, { createdAt: "asc" }], select: { id: true, name: true, imageUrl: true, description: true, textPosition: true, textScale: true, translations: true, storyLayouts: true } } },
   });
   if (!book) notFound();
 
@@ -33,7 +33,7 @@ export default async function WordsOnPages({ params }: { params: Promise<{ id: s
       <WordsPreview
         bookId={book.id}
         aspect={pageAspect(book.format)}
-        pages={book.targets.map((t) => ({ id: t.id, name: t.name, imageUrl: t.imageUrl, story: t.description, textPosition: textPositionOf(t.textPosition), translations: pageTranslationsSchema.safeParse(t.translations).data, layouts: readStoryLayouts(t.storyLayouts) }))}
+        pages={book.targets.map((t) => ({ id: t.id, name: t.name, imageUrl: t.imageUrl, story: t.description, textPosition: textPositionOf(t.textPosition), textScale: t.textScale, translations: pageTranslationsSchema.safeParse(t.translations).data, layouts: readStoryLayouts(t.storyLayouts) }))}
       />
     </>
   );

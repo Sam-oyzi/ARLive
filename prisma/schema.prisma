@@ -254,6 +254,9 @@ model Target {
   scanAction   String     @default("ar")
   /// Where the story text sits on the page: auto | top | middle | bottom | off (src/lib/story-text.ts).
   textPosition String     @default("auto")
+  /// How big the story text is drawn, as a share of the size that fits (0.6 to 1.6). Each translation
+  /// can set its own size and position (src/lib/page-translations.ts).
+  textScale    Float      @default(1)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   contents    Content[]

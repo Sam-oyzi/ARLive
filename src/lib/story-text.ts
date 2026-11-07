@@ -15,6 +15,13 @@ export const TEXT_POSITIONS = {
 export type TextPosition = keyof typeof TEXT_POSITIONS;
 export const TEXT_POSITION_KEYS = Object.keys(TEXT_POSITIONS) as [TextPosition, ...TextPosition[]];
 
+/** Studio's text size range: a share of the size the words would get on their own. */
+export const TEXT_SCALE = { min: 0.6, max: 1.6, step: 0.05 } as const;
+
+export function textScaleOf(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.min(TEXT_SCALE.max, Math.max(TEXT_SCALE.min, value)) : 1;
+}
+
 export function textPositionOf(value: string | null | undefined): TextPosition {
   return value && Object.hasOwn(TEXT_POSITIONS, value) ? (value as TextPosition) : "auto";
 }

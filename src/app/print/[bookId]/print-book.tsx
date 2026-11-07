@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { recordDownload } from "@/server/actions/library";
 import { PrintGuide } from "./print-guide";
 
-type PrintPage = { id: string; imageUrl: string; title: string; ar: boolean; experience: "box" | "panorama" | null; story: string | null; lang: string; textPosition: TextPosition; blocks?: StoryBlock[] };
+type PrintPage = { id: string; imageUrl: string; title: string; ar: boolean; experience: "box" | "panorama" | null; story: string | null; lang: string; textPosition: TextPosition; textScale: number; blocks?: StoryBlock[] };
 
 // Pixels per millimetre for the pages with words drawn in: about 240 dpi, crisp in print.
 const PRINT_PX_PER_MM = 240 / 25.4;
@@ -67,6 +67,7 @@ export function PrintBook({
               lang: page.lang,
               blocks: page.blocks,
               position: page.textPosition,
+              scale: page.textScale,
               aspect: format.heightMm / format.widthMm,
               width: format.widthMm * PRINT_PX_PER_MM,
               cover: index === 0,

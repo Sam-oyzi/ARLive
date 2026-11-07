@@ -10,7 +10,7 @@ import type { StoryBlock } from "@/lib/story-layout";
 import { TEXT_POSITIONS, type TextPosition } from "@/lib/story-text";
 import { PageTextEditor } from "./page-text-editor";
 
-type Page = { id: string; name: string; imageUrl: string; story: string | null; textPosition: TextPosition; translations?: PageTranslations; layouts: Record<string, StoryBlock[]> };
+type Page = { id: string; name: string; imageUrl: string; story: string | null; textPosition: TextPosition; textScale: number; translations?: PageTranslations; layouts: Record<string, StoryBlock[]> };
 
 export function WordsPreview({ bookId, aspect, pages }: { bookId: string; aspect: number; pages: Page[] }) {
   const [debug, setDebug] = useState(false);
@@ -28,6 +28,9 @@ export function WordsPreview({ bookId, aspect, pages }: { bookId: string; aspect
       imageUrl: translation?.imageUrl ?? page.imageUrl,
       story: translation ? translation.story ?? null : page.story,
       lang: translation ? language : "en",
+      // A language can sit and size its words its own way on the page.
+      position: translation?.textPosition ?? page.textPosition,
+      scale: translation?.textScale ?? page.textScale,
       blocks: Object.hasOwn(overrides, override) ? overrides[override] : page.layouts[key],
     };
   };
@@ -40,7 +43,7 @@ export function WordsPreview({ bookId, aspect, pages }: { bookId: string; aspect
     setDrawn({});
     (async () => {
       for (const [index, page] of pages.entries()) {
-        const result = await composeStoryPage({ ...versionOf(page), position: page.textPosition, aspect, width: 520, cover: index === 0, debug }).catch(() => null);
+        const result = await composeStoryPage({ ...versionOf(page), aspect, width: 520, cover: index === 0, debug }).catch(() => null);
         if (!alive) {
           if (result) URL.revokeObjectURL(result.url);
           return;
@@ -92,10 +95,10 @@ export function WordsPreview({ bookId, aspect, pages }: { bookId: string; aspect
                 ) : result?.mode === "space" ? (
                   <Badge tone="green">{result.words.length > 1 ? "Split on empty paper" : "On empty paper"}</Badge>
                 ) : result === null ? (
-                  <Badge>{version.story ? (i === 0 && page.textPosition === "auto" ? "Cover" : "Off") : "No words"}</Badge>
+                  <Badge>{version.story ? (i === 0 && version.position === "auto" ? "Cover" : "Off") : "No words"}</Badge>
                 ) : null}
               </div>
-              {version.blocks === undefined && <p className="mt-0.5 text-xs text-ink-500">{TEXT_POSITIONS[page.textPosition]}</p>}
+              {version.blocks === undefined && <p className="mt-0.5 text-xs text-ink-500">{TEXT_POSITIONS[version.position]}</p>}
             </button>
             </DialogTrigger>
             {active === page.id && (version.blocks === undefined && result === undefined ? (
@@ -105,8 +108,8 @@ export function WordsPreview({ bookId, aspect, pages }: { bookId: string; aspect
             ) : <PageTextEditor
               bookId={bookId} pageId={page.id} title={version.title} imageUrl={version.imageUrl}
               story={version.story} aspect={aspect} language={key === "original" ? "" : key}
-              position={page.textPosition} saved={version.blocks}
-              automaticBlocks={result?.automaticBlocks ?? (result === null && (page.textPosition === "off" || (i === 0 && page.textPosition === "auto")) ? [] : undefined)}
+              position={version.position} saved={version.blocks}
+              automaticBlocks={result?.automaticBlocks ?? (result === null && (version.position === "off" || (i === 0 && version.position === "auto")) ? [] : undefined)}
               onSaved={(blocks) => {
                 setOverrides((current) => ({ ...current, [`${page.id}:${key}`]: blocks }));
                 setActive(null);

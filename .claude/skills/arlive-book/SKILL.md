@@ -103,6 +103,15 @@ Tell the user: for consistency, generate page 1 first, then in the same ChatGPT 
   `bottom` or `off` (the cover is always `off`).
 - Validate before saving: every page has `file`, titles ≤ 120 characters, stories ≤ 1000, and the default manifest has at least 21 entries (cover + 20 story pages). Match each left/right image half to its own story beat.
 
+## Translations
+
+A book can carry other languages (the reader switches between them). Before translating, read
+[references/translation.md](references/translation.md): translate the story, not the sentences —
+natural word order and line breaks for that language, its own sound words, no calques; for Arabic,
+Modern Standard Arabic, verb-first narration and full diacritics. Deliver a
+`translations-<lang>.json`, apply it with `scripts/apply-translation.ts`, then read the book in that
+language on a phone and a laptop and fix crowded pages with that language's text size and position.
+
 ## 5. Story order and visual continuity review
 
 After generating illustrations, inspect them together in reading order against `pages.json` before

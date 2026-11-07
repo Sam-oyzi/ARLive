@@ -60,6 +60,8 @@ type ReaderPage = {
   scanAction: ScanAction;
   hasModel: boolean;
   textPosition: TextPosition;
+  /** Text size from Studio (1 = as fitted). */
+  textScale: number;
   translations?: PageTranslations;
   storyLayouts?: Record<string, StoryBlock[]>;
 };
@@ -265,7 +267,17 @@ export function Reader({
   const readingPages = useMemo(() => pages.map((page) => {
     const translation = page.translations?.[locale];
     const version = translation
-      ? { ...page, imageUrl: translation.imageUrl ?? page.imageUrl, title: translation.title, story: translation.story ?? null, note: translation.note ?? null, lang: locale }
+      ? {
+          ...page,
+          imageUrl: translation.imageUrl ?? page.imageUrl,
+          title: translation.title,
+          story: translation.story ?? null,
+          note: translation.note ?? null,
+          // A language can sit and size its words its own way on the page.
+          textPosition: translation.textPosition ?? page.textPosition,
+          textScale: translation.textScale ?? page.textScale,
+          lang: locale,
+        }
       : { ...page, lang: "en" };
     const blocks = page.storyLayouts?.[translation ? locale : "original"];
     const story = storyBlockText(blocks, version.story);
@@ -296,7 +308,7 @@ export function Reader({
         if (n >= visible.length) await whenIdle();
         if (!alive) return;
         const page = readingPages[i]!;
-        const drawn = await composeStoryPageCached({ imageUrl: page.imageUrl, story: page.story, position: page.textPosition, aspect, lang: page.lang, cover: i === 0, blocks: page.blocks, beforeDraw }).catch(() => null);
+        const drawn = await composeStoryPageCached({ imageUrl: page.imageUrl, story: page.story, position: page.textPosition, scale: page.textScale, aspect, lang: page.lang, cover: i === 0, blocks: page.blocks, beforeDraw }).catch(() => null);
         if (!alive) return;
         if (drawn) await loadPageImage(drawn.url).catch(() => {});
         await beforeDraw().catch(() => {});
@@ -479,7 +491,6 @@ export function Reader({
     const href = readerHref(book.id, currentPageId, locale);
     if (`${window.location.pathname}${window.location.search}` !== href) window.history.replaceState(window.history.state, "", href);
   }, [book.id, currentPageId, locale]);
-
 
   const handoffToExperience = useCallback(() => {
     readingRef.current = false;

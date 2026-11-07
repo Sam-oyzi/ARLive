@@ -75,7 +75,7 @@ export default async function ReadPage({ params, searchParams }: { params: Promi
       aspect={pageAspect(book.format)}
       pages={book.targets.map((t) => ({
         id: t.id, imageUrl: t.imageUrl, title: t.name, story: t.description, ar: t.ar, narrationUrl: t.narrationUrl, soundtrack: soundLayers(t.sounds), note: t.note, worldUrl: t.worldUrl,
-        scanAction: scanActionOf(t.scanAction), hasModel: t.contents.some(isPlaceableModel), textPosition: textPositionOf(t.textPosition),
+        scanAction: scanActionOf(t.scanAction), hasModel: t.contents.some(isPlaceableModel), textPosition: textPositionOf(t.textPosition), textScale: t.textScale,
         translations: pageTranslationsSchema.safeParse(t.translations).data,
         storyLayouts: readStoryLayouts(t.storyLayouts),
       }))}

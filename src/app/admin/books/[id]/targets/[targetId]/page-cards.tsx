@@ -14,7 +14,7 @@ import { CONTENT_META } from "@/lib/content";
 import { playPageSound, type PageSound } from "@/lib/page-sound";
 import { SOUND_LIMIT, type PageSoundRow, type SoundKind } from "@/lib/sound-layers";
 import { composeStoryPage, type StoryPage } from "@/lib/story-page";
-import { TEXT_POSITIONS, type TextPosition } from "@/lib/story-text";
+import { TEXT_POSITIONS, TEXT_SCALE, type TextPosition } from "@/lib/story-text";
 import { uploadFile } from "@/lib/upload-client";
 import type { PageTranslations } from "@/lib/page-translations";
 import { languageName } from "@/lib/stories";
@@ -35,11 +35,14 @@ export type EditorTarget = {
   sounds: PageSoundRow[];
   note: string | null;
   textPosition: TextPosition;
+  textScale: number;
   /** The book's page height / width, for the preview. */
   pageAspect: number;
   /** The first page: only gets words when a position is chosen. */
   isCover: boolean;
   translations: PageTranslations;
+  /** Versions placed by hand in Words on pages ("original" or a language): position and size don't apply to them. */
+  manualLayouts: string[];
   worldUrl: string | null;
   worldEffect: WorldEffect;
   scanAction: ScanAction;
@@ -356,6 +359,7 @@ export function PageDetails({ target }: { target: EditorTarget }) {
   const [state, action] = useActionState(updateTarget, undefined);
   const [story, setStory] = useState(target.description ?? "");
   const [position, setPosition] = useState<TextPosition>(target.textPosition);
+  const [scale, setScale] = useState(target.textScale);
   const [preview, setPreview] = useState<StoryPage | null>(null);
   useEffect(() => {
     if (state?.ok) toast.success(state.message);
@@ -367,7 +371,7 @@ export function PageDetails({ target }: { target: EditorTarget }) {
     let alive = true;
     let page: StoryPage | null = null;
     const timer = setTimeout(async () => {
-      page = await composeStoryPage({ imageUrl: target.imageUrl, story, position, aspect: target.pageAspect, width: 480, cover: target.isCover }).catch(() => null);
+      page = await composeStoryPage({ imageUrl: target.imageUrl, story, position, scale, aspect: target.pageAspect, width: 480, cover: target.isCover }).catch(() => null);
       if (alive) setPreview(page);
       else if (page) URL.revokeObjectURL(page.url);
     }, 350);
@@ -376,7 +380,7 @@ export function PageDetails({ target }: { target: EditorTarget }) {
       clearTimeout(timer);
       if (page) URL.revokeObjectURL(page.url);
     };
-  }, [target.imageUrl, target.pageAspect, target.isCover, story, position]);
+  }, [target.imageUrl, target.pageAspect, target.isCover, story, position, scale]);
 
   return (
     <Card className="p-5">
@@ -410,7 +414,7 @@ export function PageDetails({ target }: { target: EditorTarget }) {
         >
           <Textarea name="note" defaultValue={target.note ?? ""} maxLength={600} className="min-h-16" placeholder="Did you know? A tortoise can live for over 100 years." />
         </Field>
-        <Field label="Text on the page" hint="Where the words sit in the phone reader and in print.">
+        <Field label="Text on the page" hint="Where the words sit and how big they are, in the reader and in print. Other languages can have their own (Translations).">
           <Select name="textPosition" value={position} onChange={(event) => setPosition(event.target.value as TextPosition)}>
             {(Object.keys(TEXT_POSITIONS) as TextPosition[]).map((key) => (
               <option key={key} value={key}>
@@ -418,7 +422,9 @@ export function PageDetails({ target }: { target: EditorTarget }) {
               </option>
             ))}
           </Select>
+          <TextSizeSlider name="textScale" value={scale} onChange={setScale} disabled={position === "off"} />
         </Field>
+        {target.manualLayouts.includes("original") && <ManualLayoutNote bookId={target.bookId} />}
         {target.isCover && position === "auto" && (
           <p className="text-xs text-ink-500">This is the cover: its title is in the picture, so no words are added unless you pick a position.</p>
         )}
@@ -429,7 +435,7 @@ export function PageDetails({ target }: { target: EditorTarget }) {
           </div>
         )}
         {preview?.mode === "room" && (
-          <p className="text-xs text-amber-700">No empty paper fits these words, even split in two or smaller, so the picture is shown a little smaller to make room. Shorter text or a picture with a quiet top or bottom fixes it.</p>
+          <p className="text-xs text-amber-700">No empty paper fits these words, even split in two, so they are outlined over the artwork. A smaller size, shorter text or a picture with a quiet top or bottom fixes it.</p>
         )}
         <SubmitButton variant="outline" size="sm" pendingText="Saving…">
           Save page text
@@ -441,36 +447,110 @@ export function PageDetails({ target }: { target: EditorTarget }) {
 
 const TRANSLATION_LANGUAGES = ["fr", "ar", "es", "de"] as const;
 
-/** The page's title and story in other languages; readers switch language from the page. */
+/** How big the words are drawn: a share of the size that fits the page's empty paper. */
+function TextSizeSlider({ value, onChange, name, disabled }: { value: number; onChange: (value: number) => void; name?: string; disabled?: boolean }) {
+  return (
+    <div className="mt-2 flex items-center gap-3 text-xs text-ink-600">
+      <span className="shrink-0">Text size</span>
+      <input
+        type="range"
+        name={name}
+        min={TEXT_SCALE.min}
+        max={TEXT_SCALE.max}
+        step={TEXT_SCALE.step}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(Number(event.target.value))}
+        aria-label="Text size"
+        className="w-full accent-brand-500 disabled:opacity-40"
+      />
+      <span className="w-10 shrink-0 text-right tabular-nums">{Math.round(value * 100)}%</span>
+    </div>
+  );
+}
+
+/** Shown when this version's words were placed by hand: the reader and print use that layout instead. */
+function ManualLayoutNote({ bookId }: { bookId: string }) {
+  return (
+    <p className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
+      These words are placed by hand in{" "}
+      <Link href={`/admin/books/${bookId}/words`} className="font-medium underline">Words on pages</Link>, so readers and print use that
+      layout. This position and size apply after you choose <em>Use automatic layout</em> there.
+    </p>
+  );
+}
+
+/** A page's picture with the words drawn on it, as the reader will show it. */
+function WordsPreview({ page, label }: { page: StoryPage | null; label: string }) {
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {page ? <img src={page.url} alt={label} className="size-full object-cover" /> : <div className="size-full animate-pulse bg-ink-100" />}
+    </>
+  );
+}
+
+/**
+ * The page's title, story and note in other languages, each with its own text position and size:
+ * a language's words rarely take the same room as the original's. Readers switch language from the page.
+ */
 export function TranslationsCard({ target }: { target: EditorTarget }) {
   const [lang, setLang] = useState<(typeof TRANSLATION_LANGUAGES)[number]>("fr");
   const [saved, setSaved] = useState(target.translations);
   const [title, setTitle] = useState(saved.fr?.title ?? "");
   const [story, setStory] = useState(saved.fr?.story ?? "");
   const [note, setNote] = useState(saved.fr?.note ?? "");
+  // null: as on the original page.
+  const [position, setPosition] = useState<TextPosition | null>(saved.fr?.textPosition ?? null);
+  const [scale, setScale] = useState<number | null>(saved.fr?.textScale ?? null);
+  const [preview, setPreview] = useState<StoryPage | null>(null);
   const [pending, setPending] = useState(false);
   const rtl = lang === "ar";
+  const shownPosition = position ?? target.textPosition;
+  const shownScale = scale ?? target.textScale;
+  const imageUrl = saved[lang]?.imageUrl ?? target.imageUrl;
 
   function pick(next: (typeof TRANSLATION_LANGUAGES)[number]) {
     setLang(next);
     setTitle(saved[next]?.title ?? "");
     setStory(saved[next]?.story ?? "");
     setNote(saved[next]?.note ?? "");
+    setPosition(saved[next]?.textPosition ?? null);
+    setScale(saved[next]?.textScale ?? null);
   }
+
+  // This language's words on this page, as readers will see them.
+  useEffect(() => {
+    let alive = true;
+    let page: StoryPage | null = null;
+    setPreview(null);
+    const timer = setTimeout(async () => {
+      page = await composeStoryPage({ imageUrl, story, position: shownPosition, scale: shownScale, lang, aspect: target.pageAspect, width: 480, cover: target.isCover }).catch(() => null);
+      if (alive) setPreview(page);
+      else if (page) URL.revokeObjectURL(page.url);
+    }, 350);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      if (page) URL.revokeObjectURL(page.url);
+    };
+  }, [imageUrl, story, shownPosition, shownScale, lang, target.pageAspect, target.isCover]);
 
   async function save() {
     setPending(true);
-    const result = await runAction(savePageTranslation(target.id, { locale: lang, title, story, note }));
+    const result = await runAction(savePageTranslation(target.id, { locale: lang, title, story, note, textPosition: position, textScale: scale }));
     setPending(false);
     if (!result?.ok) return;
     setSaved((all) => {
       const next = { ...all };
-      if (title.trim()) next[lang] = { ...all[lang], title: title.trim(), story: story.trim() || undefined, note: note.trim() || undefined };
-      else delete next[lang];
+      if (title.trim()) {
+        next[lang] = { ...all[lang], title: title.trim(), story: story.trim() || undefined, note: note.trim() || undefined, textPosition: position ?? undefined, textScale: scale ?? undefined };
+      } else delete next[lang];
       return next;
     });
   }
 
+  const showsWords = shownPosition !== "off" && !(target.isCover && shownPosition === "auto") && story.trim();
   return (
     <Card className="p-5">
       <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-ink-500 uppercase">
@@ -498,12 +578,37 @@ export function TranslationsCard({ target }: { target: EditorTarget }) {
         <Field label="Title">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} dir={rtl ? "rtl" : "ltr"} lang={lang} maxLength={120} placeholder={`Title in ${languageName(lang)}`} />
         </Field>
-        <Field label="Story text" hint="Same rules as the original: short lines, *sound words* between stars. Leave the title empty to remove this language.">
+        <Field label="Story text" hint="Write it as that language tells it: its own word order and line breaks, not the original's. *sound words* between stars. Leave the title empty to remove this language.">
           <Textarea value={story} onChange={(e) => setStory(e.target.value)} dir={rtl ? "rtl" : "ltr"} lang={lang} maxLength={1000} className="min-h-24" />
         </Field>
         <Field label="Note under the page">
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} dir={rtl ? "rtl" : "ltr"} lang={lang} maxLength={600} className="min-h-14" />
         </Field>
+        <Field label={`Text on the page in ${languageName(lang)}`} hint="Its own position and size, saved with this language.">
+          <Select value={position ?? ""} onChange={(event) => setPosition((event.target.value || null) as TextPosition | null)}>
+            <option value="">As on the original page ({TEXT_POSITIONS[target.textPosition].split(" (")[0]})</option>
+            {(Object.keys(TEXT_POSITIONS) as TextPosition[]).map((key) => (
+              <option key={key} value={key}>
+                {TEXT_POSITIONS[key]}
+              </option>
+            ))}
+          </Select>
+          <TextSizeSlider value={shownScale} onChange={setScale} disabled={shownPosition === "off"} />
+          {scale !== null && (
+            <button type="button" onClick={() => setScale(null)} className="mt-1 self-start text-xs font-medium text-brand-600 hover:text-brand-700">
+              Same size as the original ({Math.round(target.textScale * 100)}%)
+            </button>
+          )}
+        </Field>
+        {target.manualLayouts.includes(lang) && <ManualLayoutNote bookId={target.bookId} />}
+        {showsWords && (
+          <div className="overflow-hidden rounded-xl ring-1 ring-ink-200" style={{ aspectRatio: `1 / ${target.pageAspect}` }}>
+            <WordsPreview page={preview} label={`Preview of the ${languageName(lang)} words on this page`} />
+          </div>
+        )}
+        {preview?.mode === "room" && (
+          <p className="text-xs text-amber-700">These words don&apos;t fit the empty paper at this size, so they are outlined over the artwork. A smaller size or another position may fit.</p>
+        )}
         <Button variant="outline" size="sm" disabled={pending} onClick={save}>
           {pending && <LoaderCircle className="animate-spin" />} Save {languageName(lang)}
         </Button>

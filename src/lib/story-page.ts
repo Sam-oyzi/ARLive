@@ -3,7 +3,7 @@
 // ink, with a margin round the drawing — and never over the sketch. When no empty area is big enough,
 // the picture is made a little smaller and the words get their own paper above (or below) it.
 // The result is a new image, so the words turn (and curl) with the page. Browser only.
-import { emptyCells, emptyRects, joinUnits, parseStory, shrinkMask, storyUnits, STORY_SOUND_COLORS, type TextPosition } from "./story-text";
+import { emptyCells, emptyRects, joinUnits, parseStory, shrinkMask, storyUnits, STORY_SOUND_COLORS, type TextPosition, textScaleOf } from "./story-text";
 import { storyFontFamily, storyLines, type StoryBlock, type StoryRun } from "./story-layout";
 import { loadPageImage } from "./page-images";
 
@@ -15,7 +15,8 @@ const RTL_LANGUAGES = new Set(["ar", "he", "fa", "ur"]);
 const COLUMNS = 40;
 const CELL = 5;
 
-type Fonts = { story: string; sound: string };
+/** `leading`: line height as a share of the type size; Arabic needs more, for its marks above and below. */
+type Fonts = { story: string; sound: string; leading?: number; soundLeading?: number };
 /** A sample of Arabic, so the Arabic face is fetched before a page in Arabic is drawn. */
 const ARABIC_SAMPLE = "سارة";
 let fonts: Promise<Fonts> | null = null;
@@ -118,6 +119,8 @@ function layout(context: CanvasRenderingContext2D, story: string, size: number, 
   family: (font: StoryBlock["font"]) => string;
 }): Text {
   const soundSize = size * 1.75;
+  const leading = f.leading ?? 1.36;
+  const soundLeading = f.soundLeading ?? 1.08;
   const measure = (text: string, font: string) => {
     const key = `${font}|${text}`;
     let width = widths.get(key);
@@ -151,7 +154,7 @@ function layout(context: CanvasRenderingContext2D, story: string, size: number, 
     let row: Row = { tokens: [], width: 0, height: 0, sound: false };
     const push = () => {
       if (!row.tokens.length) return;
-      row.height = Math.max(row.sound ? soundSize * 1.08 : size * 1.36, ...row.tokens.map((token) => token.size * (token.sound ? 1.08 : 1.36)));
+      row.height = Math.max(row.sound ? soundSize * soundLeading : size * leading, ...row.tokens.map((token) => token.size * (token.sound ? soundLeading : leading)));
       rows.push(row);
       height += row.height;
       row = { tokens: [], width: 0, height: 0, sound: false };
@@ -251,6 +254,7 @@ export async function composeStoryPage({
   position,
   aspect,
   lang = "en",
+  scale: textScale = 1,
   width: requestedWidth,
   cover = false,
   debug = false,
@@ -262,6 +266,8 @@ export async function composeStoryPage({
   position: TextPosition;
   aspect: number;
   lang?: string;
+  /** Text size set in Studio, as a share of the size that fits (1 = as fitted). */
+  scale?: number;
   /** Output width in pixels; defaults to the picture's own width (capped for phones). */
   width?: number;
   /** Covers carry their title in the art, so they only get words when a position is chosen. */
@@ -321,8 +327,12 @@ export async function composeStoryPage({
     return finish(canvas, picture, "manual", words);
   }
   if (!story || position === "off") return null;
-  // Size relative to the page so the reader and print agree at different render resolutions.
-  const bodySize = W * 0.036;
+  // Arabic needs more room between its lines, for its marks above and below. (Manual blocks keep the
+  // editor's spacing, so they look as they did when they were placed.)
+  const bookFonts: Fonts = rtl ? { ...f, leading: 1.62, soundLeading: 1.28 } : f;
+  // Size relative to the page so the reader and print agree at different render resolutions;
+  // Studio's text size makes it bigger or smaller.
+  const bodySize = W * 0.036 * textScaleOf(textScale);
 
   // ---------- 1. Words in empty paper: one block, or the paragraph split between two ----------
   const rows = Math.round(COLUMNS * aspect);
@@ -344,7 +354,7 @@ export async function composeStoryPage({
   const pad = W * 0.02;
   const fitIn = (box: Box, source: string): Placed | null => {
     const wrapWidth = Math.min(box.w - pad * 2, W * 0.86);
-    const text = layout(context, source, bodySize, wrapWidth, f);
+    const text = layout(context, source, bodySize, wrapWidth, bookFonts);
     return text.width <= wrapWidth && text.height <= box.h - pad * 2 ? { box, text, source, wrapWidth } : null;
   };
   const editableBlock = (source: string, text: Text, left: number, top: number, wrapWidth: number): StoryBlock => {
@@ -355,7 +365,7 @@ export async function composeStoryPage({
     const x = (rtl ? anchor * 100 / W - width : anchor * 100 / W);
     return {
       text: source, x: Math.max(0, Math.min(x, 100 - width)), y: Math.max(0, Math.min(98, top * 100 / H)),
-      width, size: 3.6, font: "book", color: INK, align: "start", bold: false,
+      width, size: bodySize * 100 / W, font: "book", color: INK, align: "start", bold: false,
     };
   };
   const score = (box: Box) => preference((box.y + box.h / 2) / H) * roominess(box.w);
@@ -374,7 +384,7 @@ export async function composeStoryPage({
     for (const rect of emptyRects(mask)) {
       const box = { x: rect.left * cellW, y: rect.top * cellH, w: (rect.right - rect.left) * cellW, h: (rect.bottom - rect.top) * cellH };
       const centre = (box.y + box.h / 2) / H;
-      if (box.w < W * 0.24 || box.h < bodySize * 1.36 + pad * 2 || centre < zoneTop || centre > zoneBottom) continue;
+      if (box.w < W * 0.24 || box.h < bodySize * (bookFonts.leading ?? 1.36) + pad * 2 || centre < zoneTop || centre > zoneBottom) continue;
       const overlaps = boxes.some((kept) => {
         const ix = Math.max(0, Math.min(kept.x + kept.w, box.x + box.w) - Math.max(kept.x, box.x));
         const iy = Math.max(0, Math.min(kept.y + kept.h, box.y + box.h) - Math.max(kept.y, box.y));
@@ -435,7 +445,7 @@ export async function composeStoryPage({
     for (const { box, text, source, wrapWidth } of placed) {
       const left = box.x + (box.w - text.width) / 2;
       const top = box.y + (box.h - text.height) / 2;
-      drawText(context, text, left, top, rtl, f, cells.paper);
+      drawText(context, text, left, top, rtl, bookFonts, cells.paper);
       words.push({ left: left / W, right: (left + text.width) / W, top: top / H, bottom: (top + text.height) / H });
       automaticBlocks.push(editableBlock(source, text, left, top, wrapWidth));
       if (debug) {
@@ -449,7 +459,7 @@ export async function composeStoryPage({
 
   // ---------- 2. No room: keep the full page and outline only the letters ----------
   const margin = W * 0.06;
-  const text = layout(context, story, bodySize, W - margin * 2, f);
+  const text = layout(context, story, bodySize, W - margin * 2, bookFonts);
   const band = text.height + margin * 1.4;
   const wordsBelow = position === "bottom";
   if (band >= H || text.width > W - margin * 2) {
@@ -462,7 +472,7 @@ export async function composeStoryPage({
     for (const [r, row] of usable.entries()) row.forEach((empty, c) => empty && context.fillRect(c * cellW, r * cellH, cellW, cellH));
   }
   const textTop = (wordsBelow ? H - band : 0) + (band - text.height) / 2;
-  drawText(context, text, (W - text.width) / 2, textTop, rtl, f, cells.paper, true);
+  drawText(context, text, (W - text.width) / 2, textTop, rtl, bookFonts, cells.paper, true);
   if (debug) {
     context.strokeStyle = "#e11d48";
     context.lineWidth = 3;
@@ -488,7 +498,7 @@ const drawn = new Map<string, Promise<StoryPage | null>>();
 
 /** composeStoryPage, remembered: callers must not revoke the URLs it returns. */
 export function composeStoryPageCached(options: Parameters<typeof composeStoryPage>[0]): Promise<StoryPage | null> {
-  const key = JSON.stringify([options.imageUrl, options.story, options.position, options.aspect, options.lang, options.width, options.cover, options.blocks]);
+  const key = JSON.stringify([options.imageUrl, options.story, options.position, options.scale ?? 1, options.aspect, options.lang, options.width, options.cover, options.blocks]);
   let page = drawn.get(key);
   if (!page) {
     page = composeStoryPage(options);
