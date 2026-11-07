@@ -6,17 +6,18 @@
   --font-serif: var(--font-instrument), var(--font-arabic), ui-serif, Georgia, serif;
 
   /* Sunny tangerine. 500 is for fills and icons; 600 and darker carry white text and links. */
-  --color-brand-50: #fff6ec;
-  --color-brand-100: #ffe9d1;
-  --color-brand-200: #ffd0a3;
-  --color-brand-300: #ffb06b;
-  --color-brand-400: #ff8c3a;
-  --color-brand-500: #f26a1a;
-  --color-brand-600: #c4460b;
-  --color-brand-700: #a53c0d;
-  --color-brand-800: #84320f;
-  --color-brand-900: #6b2b11;
-  --color-brand-950: #3a1306;
+  /* The logo's green ("Wakes" in PageWakes is brand-600). */
+  --color-brand-50: #ecf7f3;
+  --color-brand-100: #d3eee5;
+  --color-brand-200: #a9dccc;
+  --color-brand-300: #72c0aa;
+  --color-brand-400: #3f9f88;
+  --color-brand-500: #1f7f6b;
+  --color-brand-600: #176052;
+  --color-brand-700: #135146;
+  --color-brand-800: #10433a;
+  --color-brand-900: #0d362f;
+  --color-brand-950: #061e1a;
 
   /* Warm neutrals, like paper and pencil. */
   --color-ink-50: #fbf9f6;
@@ -33,7 +34,7 @@
 
   --shadow-soft: 0 1px 2px rgb(45 33 22 / 0.05), 0 4px 16px -4px rgb(45 33 22 / 0.09);
   --shadow-lift: 0 2px 4px rgb(45 33 22 / 0.05), 0 18px 40px -12px rgb(45 33 22 / 0.2);
-  --shadow-glow: 0 10px 40px -10px rgb(242 106 26 / 0.55);
+  --shadow-glow: 0 10px 40px -10px rgb(23 96 82 / 0.5);
 
   --animate-float: float 4s ease-in-out infinite;
   --animate-scan: scan 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
@@ -42,6 +43,14 @@
   --animate-fade-up: fade-up 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
   /* The reader's Auto read bar; each use sets its own duration. */
   --animate-auto-read: auto-read 10s linear forwards;
+  /* The reader's story backdrop fading to a new page's colours. */
+  --animate-backdrop-in: backdrop-in 1s ease-out both;
+
+  @keyframes backdrop-in {
+    from {
+      opacity: 0;
+    }
+  }
 
   @keyframes auto-read {
     from {

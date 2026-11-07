@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 const VARIANTS = {
   primary:
     // Bright on top for a sunny look, deeper underneath where the label sits so it stays legible.
-    "bg-gradient-to-b from-brand-500 to-brand-600 text-white text-shadow-[0_1px_1px_rgb(120_40_5/0.35)] shadow-[0_1px_0_rgb(255_255_255/0.25)_inset,0_8px_20px_-8px_rgb(242_106_26/0.8)] hover:from-brand-600 hover:to-brand-700 active:from-brand-700 active:to-brand-700",
+    "bg-gradient-to-b from-brand-500 to-brand-600 text-white text-shadow-[0_1px_1px_rgb(6_30_26/0.35)] shadow-[0_1px_0_rgb(255_255_255/0.25)_inset,0_8px_20px_-8px_rgb(23_96_82/0.7)] hover:from-brand-600 hover:to-brand-700 active:from-brand-700 active:to-brand-700",
   secondary: "bg-ink-900 text-white hover:bg-ink-800 active:bg-ink-950",
   outline: "border border-ink-200 bg-white text-ink-800 shadow-soft hover:bg-ink-50 hover:border-ink-300",
   ghost: "text-ink-700 hover:bg-ink-100 hover:text-ink-900",

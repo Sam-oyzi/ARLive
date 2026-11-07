@@ -12,9 +12,21 @@ test("a tiny movement or a drag returned to its starting point does not turn", (
   for (const distance of [-40, 0, 1, 3]) assert.equal(completesPageTurn(true, distance), false);
 });
 
-test("browser cancellations never finish a turn", () => {
-  assert.equal(completesPageTurn(false, 40), false);
-  assert.equal(completesPageTurn(false, 300), false);
+test("a finger slipping back a little as it lifts still turns the page", () => {
+  assert.equal(completesPageTurn(true, 22, 30), true);
+  assert.equal(completesPageTurn(true, 70, 120), true);
+});
+
+test("bringing the page most of the way back puts it back", () => {
+  assert.equal(completesPageTurn(true, 20, 120), false);
+  assert.equal(completesPageTurn(true, 3, 30), false);
+});
+
+test("a browser cancellation finishes a clear pull, never a tiny one", () => {
+  assert.equal(completesPageTurn(false, 40), true);
+  assert.equal(completesPageTurn(false, 300), true);
+  assert.equal(completesPageTurn(false, 10), false);
+  assert.equal(completesPageTurn(false, 10, 200), false);
 });
 
 test("dropped frames do not stretch a page turn or leave its controls locked", () => {

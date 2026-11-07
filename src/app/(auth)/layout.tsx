@@ -17,7 +17,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="absolute -top-40 -right-40 size-[520px] rounded-full bg-amber-300/50 blur-[120px]" />
         <div className="absolute -bottom-40 -left-20 size-[420px] rounded-full bg-brand-400/35 blur-[120px]" />
         <div className="relative flex flex-col items-center gap-10 px-12 text-center">
-          <PhoneMockup color="#f26a1a" icon="droplets" found={{ title: "Lou the Water Drop", subtitle: "The Journey of a Water Drop" }} />
+          <PhoneMockup color="#176052" icon="droplets" found={{ title: "Lou the Water Drop", subtitle: "The Journey of a Water Drop" }} />
           <div className="max-w-md">
             <h2 className="font-display text-3xl font-bold tracking-tight text-white">Stories that jump off the page.</h2>
             <p className="mt-3 text-[15px] leading-relaxed text-white/90">

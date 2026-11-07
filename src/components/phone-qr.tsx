@@ -30,6 +30,8 @@ export function PhoneQRDisclosure({ path, size, className }: { path: string; siz
 
 export function PhoneQR({ path, size = 96, dark, className }: { path: string; size?: number; dark?: boolean; className?: string }) {
   const [url, setUrl] = useState("");
+  // Only a signed-in visitor's code carries a sign-in.
+  const [signedIn, setSignedIn] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,6 +48,7 @@ export function PhoneQR({ path, size = 96, dark, className }: { path: string; si
       // `npm run dev:phone` serves phones over HTTPS on its own port; otherwise reuse this page's address.
       const base = phoneOrigin ?? (local && lanHost ? `${protocol}//${lanHost}${port ? `:${port}` : ""}` : origin);
       setUrl(token ? `${base}/handoff?t=${encodeURIComponent(token)}` : `${base}${path}`);
+      setSignedIn(!!token);
       if (!phoneOrigin && local && !lanHost) setWarning("Connect this computer to Wi-Fi so your phone can reach it.");
       else if (!base.startsWith("https:")) setWarning("Phone cameras only work over HTTPS. Restart the server with: npm run dev:phone");
       else setWarning(null);
@@ -69,7 +72,7 @@ export function PhoneQR({ path, size = 96, dark, className }: { path: string; si
             <Smartphone className="size-4 text-brand-400" /> Continue on your phone
           </div>
           <p className={cn("mt-1 text-xs leading-relaxed", dark ? "text-white/60" : "text-ink-500")}>
-            Scan with your phone&apos;s camera. You&apos;ll be signed in and the scanner opens there.
+            Scan with your phone&apos;s camera. {signedIn ? "You'll be signed in and the scanner opens there." : "The scanner opens there."}
           </p>
         </div>
       </div>

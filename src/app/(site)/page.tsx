@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, BookOpen, Camera, Download, Heart, Laptop, Printer, Smartphone, Sparkles, Star, Wand2 } from "lucide-react";
+import { PageExperiences } from "@/components/home/page-experiences";
 import { BookCover, BookGrid } from "@/components/library/book-card";
 import { ButtonLink } from "@/components/ui/button";
 import { libraryBooksWhere } from "@/lib/books";
@@ -44,7 +45,7 @@ export default async function Home() {
             <h1 className="mt-6 font-display text-[42px] leading-[1.02] font-bold tracking-tight text-ink-900 sm:text-6xl lg:text-[68px]">
               Stories kids love,
               <br />
-              <span className="bg-gradient-to-r from-rose-500 via-brand-500 to-amber-600 bg-clip-text text-transparent">lessons parents choose.</span>
+              <span className="bg-gradient-to-r from-brand-700 via-brand-500 to-emerald-500 bg-clip-text text-transparent">lessons parents choose.</span>
             </h1>
             <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-ink-600 lg:mx-0">
               Read illustrated stories for free on a phone or a laptop, print them at home, and scan the pages to watch them come
@@ -58,16 +59,24 @@ export default async function Home() {
                 <Wand2 /> Ask for a custom story
               </ButtonLink>
             </div>
-            <dl className="mt-10 flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm lg:justify-start">
+            <a href="#experiences" className="mt-5 hidden items-center gap-1.5 text-sm font-semibold text-ink-600 underline decoration-ink-300 underline-offset-4 hover:text-ink-900 lg:inline-flex">
+              <Sparkles aria-hidden="true" className="size-4 text-brand-500" /> What do Scan, Step inside and 360° mean?
+            </a>
+            <dl className="mt-8 flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm lg:justify-start">
               <Stat icon={BookOpen} value={totals._count._all} label={["free book", "free books"]} />
               <Stat icon={Download} value={totals._sum.downloads ?? 0} label={["download", "downloads"]} />
               <Stat icon={Heart} value={totals._sum.likeCount ?? 0} label={["like", "likes"]} />
             </dl>
           </div>
 
-          <HeroBooks books={hero} />
+          {/* Phones go straight from the words to what the pages can do; the books are on the shelf below. */}
+          <div className="hidden lg:block">
+            <HeroBooks books={hero} />
+          </div>
         </div>
       </section>
+
+      <PageExperiences />
 
       {/* categories */}
       {categories.length > 0 && (

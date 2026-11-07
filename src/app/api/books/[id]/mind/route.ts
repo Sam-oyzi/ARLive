@@ -30,14 +30,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { url } = await saveUpload("mind", "targets.mind", request.body);
     const expected = JSON.stringify(compiled.map(({ id: targetId, imageUrl }) => ({ targetId, imageUrl })));
     const now = new Date();
-    const published = Prisma.sql`EXISTS (SELECT 1 FROM "Book" WHERE "id" = ${id} AND "mindUrl" = ${url})`;
+    const published = Prisma.sql`EXISTS (SELECT 1 FROM "Book" WHERE "Book"."id" = ${id} AND "Book"."mindUrl" = ${url})`;
+    // json_each() has its own "id" column, so every Target column next to it is named in full, and
+    // its alias must not be "target": SQLite names are case-insensitive, so that is "Target" again.
     const [changed] = await writeBatch([
       Prisma.sql`UPDATE "Book" SET "mindUrl" = ${url}, "mindHash" = ${targetsSignature(compiled)},
         "compiledAt" = ${now}, "updatedAt" = ${now} WHERE "id" = ${id}
         AND (SELECT COUNT(*) FROM "Target" WHERE "bookId" = ${id} AND "ar" = 1) = ${compiled.length}
-        AND (SELECT COUNT(*) FROM "Target", json_each(${expected}) AS target
-          WHERE "bookId" = ${id} AND "ar" = 1 AND "id" = json_extract(target.value, '$.targetId')
-            AND "imageUrl" = json_extract(target.value, '$.imageUrl')) = ${compiled.length}`,
+        AND (SELECT COUNT(*) FROM "Target", json_each(${expected}) AS compiledPage
+          WHERE "Target"."bookId" = ${id} AND "Target"."ar" = 1 AND "Target"."id" = json_extract(compiledPage.value, '$.targetId')
+            AND "Target"."imageUrl" = json_extract(compiledPage.value, '$.imageUrl')) = ${compiled.length}`,
       Prisma.sql`UPDATE "Target" SET "targetIndex" = NULL, "updatedAt" = ${now}
         WHERE "bookId" = ${id} AND "ar" = 0 AND ${published}`,
       Prisma.sql`UPDATE "Target" SET "targetIndex" = targetOrder.key, "updatedAt" = ${now}

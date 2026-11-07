@@ -11,7 +11,7 @@ export default function GlobalError({ retry }: { error: unknown; retry: () => vo
           <p style={{ color: "#6a6a86", margin: "8px 0 24px" }}>It&apos;s not your fault. Please try again in a moment.</p>
           <button
             onClick={() => retry()}
-            style={{ height: 44, padding: "0 20px", border: 0, borderRadius: 12, background: "#c4460b", color: "#fff", font: "inherit", fontWeight: 600, cursor: "pointer" }}
+            style={{ height: 44, padding: "0 20px", border: 0, borderRadius: 12, background: "#176052", color: "#fff", font: "inherit", fontWeight: 600, cursor: "pointer" }}
           >
             Try again
           </button>

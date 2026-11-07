@@ -57,8 +57,11 @@ export function refreshAll() {
   revalidatePath("/", "layout");
 }
 
+// An unticked checkbox isn't sent at all, so the key is missing: `.optional()` (not a union with
+// z.undefined(), which zod 4 treats as a required key) lets it through as false.
 export const checkbox = z
-  .union([z.literal("on"), z.literal("true"), z.literal("false"), z.undefined()])
+  .enum(["on", "true", "false"])
+  .optional()
   .transform((v) => v === "on" || v === "true");
 
 export const optionalInt = z.coerce.number().int().min(0).optional();

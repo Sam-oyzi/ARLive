@@ -93,6 +93,15 @@ export function PrintBook({
 
   const w = `${format.widthMm}mm`;
   const h = `${format.heightMm}mm`;
+  // The sheets are their real printed size; on a narrow screen the preview shrinks to fit (print is untouched).
+  const [fit, setFit] = useState(1);
+  useEffect(() => {
+    // clientWidth: on phones innerWidth grows to fit content that is too wide, the very thing being fixed.
+    const measure = () => setFit(Math.min(1, (document.documentElement.clientWidth - 32) / (format.widthMm * (96 / 25.4))));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [format.widthMm]);
 
   return (
     <div className="min-h-dvh bg-ink-100 print:bg-white">
@@ -146,7 +155,7 @@ export function PrintBook({
         </p>
       </header>
 
-      <main className="flex flex-col items-center gap-8 py-10 print:block print:gap-0 print:p-0">
+      <main className="flex flex-col items-center gap-8 py-10 print:block print:gap-0 print:p-0 print:[zoom:1]!" style={{ zoom: fit }}>
         {pages.map((page, i) => {
           // The print-only instructions after the front cover shift the physical page sides.
           const recto = i === 0 || i % 2 === 1;

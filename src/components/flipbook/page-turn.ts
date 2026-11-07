@@ -1,9 +1,16 @@
-// A four-pixel sideways pull lifts the paper and finishes the turn on release.
-// Returning to the starting point or a browser cancellation puts it back.
+// A four-pixel sideways pull lifts the paper, and once lifted it carries on over when let go, like a
+// real page: a short pull is enough, and a finger slipping back a little as it lifts doesn't matter.
+// Only bringing the page most of the way back to where it started puts it back. If the browser takes
+// the gesture away mid-pull (a phone's own swipe, a link starting to drag), a clear pull still turns.
 export const PAGE_PULL_PX = 4;
+/** A pull this long is a deliberate turn, even when the browser cancels the gesture. */
+export const SURE_PULL_PX = 24;
+/** Letting go further back than this share of the furthest pull means "not this page after all". */
+const TAKEN_BACK = 0.4;
 
-export function completesPageTurn(released: boolean, forwardDistance: number): boolean {
-  return released && forwardDistance >= PAGE_PULL_PX;
+export function completesPageTurn(released: boolean, forwardDistance: number, furthest = forwardDistance): boolean {
+  const kept = forwardDistance >= Math.max(PAGE_PULL_PX, furthest * TAKEN_BACK);
+  return kept && (released || furthest >= SURE_PULL_PX);
 }
 
 /** The same spring sampled by elapsed wall time, even after an expensive or dropped frame. */

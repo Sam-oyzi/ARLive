@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  * Pure CSS so it renders instantly on the server; used on the landing, login and subject pages.
  */
 export function PhoneMockup({
-  color = "#f26a1a",
+  color = "#176052",
   icon = "book",
   caption = "Point your camera at a page",
   found,

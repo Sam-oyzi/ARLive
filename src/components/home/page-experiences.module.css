@@ -1,0 +1,278 @@
+/*
+ * The little phone scenes on the home page that show what each page badge does. Every animated
+ * element's own style is its "finished" look, so with reduced motion (globals.css cuts animations
+ * short) each scene shows its result standing still. Off screen, everything pauses.
+ */
+.stage[data-paused="true"] *,
+.stage[data-paused="true"] {
+  animation-play-state: paused !important;
+}
+
+.phoneSway {
+  animation: phone-sway 7s ease-in-out infinite;
+}
+@keyframes phone-sway {
+  0%, 100% { transform: perspective(900px) rotateY(-9deg); }
+  50% { transform: perspective(900px) rotateY(9deg); }
+}
+
+/* ---------- Scan: the printed page is found, the lion hops out ---------- */
+.desk {
+  background: radial-gradient(130% 90% at 50% 100%, #6b5847 0%, #3a302a 55%, #221d1a 100%);
+}
+.scanPage {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  width: 66%;
+  aspect-ratio: 3 / 4;
+  transform: translate(-50%, -50%) perspective(640px) rotateX(38deg);
+  border-radius: 3px;
+  box-shadow: 0 30px 40px -12px rgb(0 0 0 / 0.65);
+}
+.scanLine {
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  height: 3px;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, #7dd3fc, transparent);
+  box-shadow: 0 0 14px 2px #38bdf8;
+  animation: scan-sweep 6s ease-in-out infinite;
+}
+@keyframes scan-sweep {
+  0% { top: 0; opacity: 0; }
+  6% { opacity: 1; }
+  30% { top: 100%; opacity: 1; }
+  33%, 100% { top: 100%; opacity: 0; }
+}
+.corner {
+  position: absolute;
+  width: 16%;
+  aspect-ratio: 1;
+  /* Widths come from the markup (one corner = two sides). */
+  border-style: solid;
+  border-color: #4ade80;
+  animation: corner-found 6s ease-in-out infinite;
+}
+@keyframes corner-found {
+  0%, 29% { border-color: rgb(255 255 255 / 0.85); scale: 1.08; }
+  33%, 93% { border-color: #4ade80; scale: 1; }
+  100% { border-color: rgb(255 255 255 / 0.85); scale: 1.08; }
+}
+.popUp {
+  animation: pop-up 6s cubic-bezier(0.3, 0.7, 0.3, 1) infinite;
+}
+@keyframes pop-up {
+  0%, 33% { transform: translateY(55%) scale(0.15); opacity: 0; }
+  43% { transform: translateY(-14%) scale(1.08); opacity: 1; }
+  49% { transform: translateY(2%) scale(0.97); }
+  55%, 93% { transform: none; opacity: 1; }
+  100% { transform: none; opacity: 0; }
+}
+.bob {
+  animation: bob 2.2s ease-in-out infinite;
+}
+@keyframes bob {
+  0%, 100% { translate: 0 0; rotate: -2deg; }
+  50% { translate: 0 -6px; rotate: 2deg; }
+}
+.shadowGrow {
+  animation: shadow-grow 6s ease-out infinite;
+}
+@keyframes shadow-grow {
+  0%, 35% { scale: 0; opacity: 0; }
+  45%, 93% { scale: 1; opacity: 1; }
+  100% { scale: 1; opacity: 0; }
+}
+.sparkle {
+  position: absolute;
+  opacity: 0;
+  animation: sparkle 6s ease-out infinite;
+}
+@keyframes sparkle {
+  0%, 40% { opacity: 0; scale: 0.2; }
+  46% { opacity: 1; scale: 1.15; }
+  60% { opacity: 0; scale: 0.7; }
+  100% { opacity: 0; }
+}
+.chipIn {
+  animation: chip-in 6s ease-out infinite;
+}
+@keyframes chip-in {
+  0%, 30% { opacity: 0; translate: 0 -6px; }
+  35%, 93% { opacity: 1; translate: 0 0; }
+  100% { opacity: 0; }
+}
+
+/* ---------- Room: a wall and a wooden floor, seen through the camera ---------- */
+.room {
+  background: linear-gradient(180deg, #efe4d0 0%, #e2d2b6 52%, #a47950 52%);
+}
+.ring {
+  position: absolute;
+  left: 50%;
+  top: 76%;
+  width: 54%;
+  aspect-ratio: 3.2;
+  translate: -50% -50%;
+  border-radius: 50%;
+  border: 3px solid rgb(255 255 255 / 0.9);
+  box-shadow: 0 0 18px rgb(255 255 255 / 0.6), inset 0 0 12px rgb(255 255 255 / 0.5);
+}
+.ringPulse {
+  animation: ring-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ring-pulse {
+  0%, 100% { scale: 1; opacity: 1; }
+  50% { scale: 1.08; opacity: 0.6; }
+}
+
+/* ---------- Step inside: a story box on the floor, then the world around you ---------- */
+.walkIn {
+  transform-origin: 50% 70%;
+  animation: walk-in 9s ease-in infinite;
+}
+@keyframes walk-in {
+  0%, 42% { scale: 1; opacity: 1; }
+  57% { scale: 3.4; opacity: 1; }
+  63%, 97% { scale: 3.4; opacity: 0; }
+  100% { scale: 1; opacity: 0; }
+}
+.cubeWrap {
+  position: absolute;
+  left: 50%;
+  top: 79%;
+  translate: -50% -100%;
+  width: var(--cube);
+  height: var(--cube);
+  perspective: 520px;
+  animation: box-appear 9s cubic-bezier(0.3, 0.7, 0.3, 1.2) infinite;
+}
+@keyframes box-appear {
+  0%, 10% { scale: 0.2; opacity: 0; }
+  20% { scale: 1.06; opacity: 1; }
+  25%, 100% { scale: 1; opacity: 1; }
+}
+.cube {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform: rotateX(-14deg) rotateY(-30deg);
+}
+.face {
+  position: absolute;
+  inset: 0;
+  background-size: 400% 100%;
+  background-repeat: no-repeat;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.35);
+}
+.inside {
+  opacity: 0;
+  animation: inside-in 9s ease-out infinite;
+}
+@keyframes inside-in {
+  0%, 57% { opacity: 0; }
+  64%, 95% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.insidePan {
+  animation: inside-pan 9s linear infinite;
+}
+@keyframes inside-pan {
+  0%, 57% { translate: 0 0; }
+  100% { translate: -18% 0; }
+}
+.outsideChip {
+  animation: outside-chip 9s ease-out infinite;
+}
+@keyframes outside-chip {
+  0%, 18% { opacity: 0; }
+  24%, 46% { opacity: 1; }
+  52%, 100% { opacity: 0; }
+}
+.insideChip {
+  opacity: 0;
+  animation: inside-chip 9s ease-out infinite;
+}
+@keyframes inside-chip {
+  0%, 64% { opacity: 0; translate: 0 6px; }
+  70%, 95% { opacity: 1; translate: 0 0; }
+  100% { opacity: 0; }
+}
+
+/* ---------- 360°: the whole scene turns around you ---------- */
+.panoTrack {
+  animation: pano-spin 16s linear infinite;
+}
+@keyframes pano-spin {
+  from { translate: 0 0; }
+  to { translate: -50% 0; }
+}
+.needle {
+  animation: needle-spin 16s linear infinite;
+}
+@keyframes needle-spin {
+  from { rotate: 0deg; }
+  to { rotate: -360deg; }
+}
+
+/* ---------- Place model: a character lands on your floor ---------- */
+.drop {
+  animation: drop 7s cubic-bezier(0.4, 0, 0.3, 1) infinite;
+}
+@keyframes drop {
+  0%, 22% { transform: translateY(-160%); opacity: 0; }
+  32% { transform: translateY(4%); opacity: 1; }
+  36% { transform: translateY(-5%); }
+  40%, 94% { transform: none; opacity: 1; }
+  100% { transform: none; opacity: 0; }
+}
+.dropShadow {
+  animation: drop-shadow 7s ease-out infinite;
+}
+@keyframes drop-shadow {
+  0%, 22% { scale: 0.3; opacity: 0; }
+  32%, 94% { scale: 1; opacity: 1; }
+  100% { opacity: 0; }
+}
+.turntable {
+  animation: turntable 7s ease-in-out infinite;
+}
+@keyframes turntable {
+  0%, 46% { scale: 1 1; }
+  60% { scale: -1 1; }
+  74%, 100% { scale: 1 1; }
+}
+.friend {
+  animation: friend 7s cubic-bezier(0.3, 0.7, 0.3, 1.3) infinite;
+}
+@keyframes friend {
+  0%, 48% { scale: 0; opacity: 0; }
+  56%, 94% { scale: 1; opacity: 1; }
+  100% { scale: 1; opacity: 0; }
+}
+.ringFade {
+  animation: ring-fade 7s ease-out infinite;
+}
+@keyframes ring-fade {
+  0%, 26% { opacity: 1; }
+  34%, 100% { opacity: 0; }
+}
+.placeChip {
+  animation: place-chip 7s ease-out infinite;
+}
+@keyframes place-chip {
+  0%, 4% { opacity: 0; }
+  8%, 26% { opacity: 1; }
+  30%, 100% { opacity: 0; }
+}
+.walkChip {
+  animation: walk-chip 7s ease-out infinite;
+}
+@keyframes walk-chip {
+  0%, 40% { opacity: 0; }
+  46%, 94% { opacity: 1; }
+  100% { opacity: 0; }
+}

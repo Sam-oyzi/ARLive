@@ -35,6 +35,8 @@ type Drag = {
   startY: number;
   edgeY: number;
   turn?: Turn;
+  /** The furthest the page was pulled forward, in pixels. */
+  furthest?: number;
 };
 
 // Strips in a turning leaf: fewer on phones, where every strip is two textured 3D layers.
@@ -357,6 +359,7 @@ export const FlipBook = forwardRef<
     const lift = Math.min(0.2, Math.abs(dy) / pageH * 0.45);
     const p = Math.min(1, Math.max(0, dx / (pageW * 2 * 0.62), lift));
     const offsetY = Math.max(-pageH * 0.5, Math.min(pageH * 0.5, dy));
+    d.furthest = Math.max(d.furthest ?? 0, dx);
     d.turn = { dir: d.dir, p, pull: { edgeY: d.edgeY, offsetY } };
     updateTurn(d.turn);
   }
@@ -365,13 +368,15 @@ export const FlipBook = forwardRef<
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
     drag.current = null;
-    const released = e.type === "pointerup";
+    // Only the browser cancelling counts as cancelled; some browsers say they lost the pointer before
+    // they say it was lifted, and that is a release too.
+    const released = e.type !== "pointercancel";
     if (!d.turn) {
-      if (released && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 10 && !(e.target as HTMLElement).closest("button, a, input, label")) animateTo(d.dir, 0, 1);
+      if (e.type === "pointerup" && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 10 && !(e.target as HTMLElement).closest("button, a, input, label")) animateTo(d.dir, 0, 1);
       return;
     }
     const { p, pull } = d.turn;
-    const commit = completesPageTurn(released, (d.startX - e.clientX) * d.dir);
+    const commit = completesPageTurn(released, (d.startX - e.clientX) * d.dir, d.furthest);
     animateTo(d.dir, p, commit ? 1 : 0, pull);
   }
 
@@ -480,6 +485,7 @@ export const FlipBook = forwardRef<
       d.dir = dir;
     }
     const offsetY = Math.max(-pageH * 0.5, Math.min(pageH * 0.5, e.clientY - d.startY));
+    d.furthest = Math.max(d.furthest ?? 0, -dx * d.dir);
     d.turn = { dir: d.dir, p: Math.min(1, Math.max(0, (-dx * d.dir) / (pageW * 0.9))), pull: { edgeY: d.edgeY, offsetY } };
     updateTurn(d.turn);
   }
@@ -488,9 +494,9 @@ export const FlipBook = forwardRef<
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
     drag.current = null;
-    const released = e.type === "pointerup";
+    const released = e.type !== "pointercancel";
     if (!d.turn) {
-      if (!released || Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 10) return;
+      if (e.type !== "pointerup" || Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 10) return;
       // Like a book app: a tap near either edge turns the page that way, and the middle (top to
       // bottom, page or not) shows or hides the controls.
       const rect = e.currentTarget.getBoundingClientRect();
@@ -502,7 +508,7 @@ export const FlipBook = forwardRef<
       } else onTap?.();
       return;
     }
-    const commit = completesPageTurn(released, (d.startX - e.clientX) * d.dir);
+    const commit = completesPageTurn(released, (d.startX - e.clientX) * d.dir, d.furthest);
     animateTo(d.dir, d.turn.p, commit ? 1 : 0, d.turn.pull);
   }
 

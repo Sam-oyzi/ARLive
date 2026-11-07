@@ -41,6 +41,8 @@ import { soundtrackFor, type SoundLayer } from "@/lib/sound-layers";
 import { readerHref, readerPageIndex, withReturnTo } from "@/lib/reader-navigation";
 import { nearbyReaderPages, visibleReaderPages } from "@/lib/reader-pages";
 import { loadPageImage } from "@/lib/page-images";
+import { StoryBackdrop } from "./story-backdrop";
+import { PaperBadge } from "@/components/paper-badge";
 import { requestStoryMotion } from "@/lib/story-motion";
 import { SubjectIcon } from "@/lib/subject-icons";
 import { cn } from "@/lib/utils";
@@ -641,7 +643,11 @@ export function Reader({
 
   return (
     // Phones read on plain paper so the edge-to-edge page blends into the screen, like a book app.
-    <div className="fixed inset-0 flex flex-col overflow-hidden text-ink-900" style={{ background: single ? PAGE_PAPER : DESK }}>
+    // `clip`, not just `hidden`: the page strip slides below the edge when it hides, and a hidden
+    // overflow can still be scrolled (focusing a thumbnail did), which lifted the whole page up.
+    <div className="fixed inset-0 flex flex-col overflow-hidden text-ink-900" style={{ background: single ? PAGE_PAPER : DESK, overflow: "clip" }}>
+      {/* Tablets and laptops: the desk round the book takes the colours of the open pages. */}
+      {!single && <StoryBackdrop art={artwork} />}
       {/* Shared by every page so phones keep allowing playback after the first tap. */}
       <audio
         ref={audio}
@@ -704,21 +710,15 @@ export function Reader({
               const returnTo = readerHref(book.id, page.id, locale);
               const badge = opensModel(page.scanAction) && page.hasModel ? (
                 <Link href={withReturnTo(`/place/${book.id}/${page.id}`, returnTo)} onClick={() => { handoffToExperience(); if (page.scanAction === "eighthwall") void requestStoryMotion(); }} className={PAD} title="Place this model in your room. No printed book needed.">
-                  <span className="flex items-center gap-1.5 rounded-full bg-sky-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-md">
-                    <Box aria-hidden="true" className="size-3.5" /> <bdi lang={locale || undefined}>{say.placeModel}</bdi>
-                  </span>
+                  <PaperBadge kind="model" label={say.placeModel} lang={locale || undefined} size="sm" tilt={side === "left" ? -1 : 1} />
                 </Link>
               ) : experience ? (
                 <Link href={withReturnTo(`/world/${book.id}/${page.id}`, returnTo)} onClick={() => { handoffToExperience(); void requestStoryMotion(); }} className={PAD}>
-                  <span className="flex items-center gap-1.5 rounded-full bg-sky-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-md">
-                    <Orbit aria-hidden="true" className="size-3.5" /> <bdi lang={locale || undefined}>{experience === "box" ? say.stepInside : say.lookAround}</bdi>
-                  </span>
+                  <PaperBadge kind={experience === "box" ? "inside" : "panorama"} label={experience === "box" ? say.stepInside : say.lookAround} lang={locale || undefined} size="sm" tilt={side === "left" ? -1 : 1} />
                 </Link>
               ) : page.scanAction === "ar" && ar && book.canScan ? (
                 <Link href={withReturnTo(`/scan/${book.id}`, returnTo)} onClick={handoffToExperience} className={PAD} title="Point your camera at this page in the printed book">
-                  <span className="flex items-center gap-1.5 rounded-full bg-ink-950/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
-                    <ScanLine aria-hidden="true" className="size-3.5" /> <bdi lang={locale || undefined}>{say.scanPrintedBook}</bdi>
-                  </span>
+                  <PaperBadge kind="scan" label={say.scanPrintedBook} lang={locale || undefined} size="sm" tilt={side === "left" ? -1 : 1} />
                 </Link>
               ) : null;
               // On a phone the controls hide while reading, so each page carries its own language switch.

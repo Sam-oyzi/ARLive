@@ -89,7 +89,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
               key={key}
               href={href({ sort: key })}
               aria-current={key === sort ? "true" : undefined}
-              className={cn("rounded-full px-3.5 py-1.5 text-sm font-semibold transition", key === sort ? "bg-ink-900 text-white" : "text-ink-600 hover:text-ink-900")}
+              className={cn("flex h-10 items-center rounded-full px-4 text-sm font-semibold transition", key === sort ? "bg-ink-900 text-white" : "text-ink-600 hover:text-ink-900")}
             >
               {LIBRARY_SORTS[key].label}
             </Link>
