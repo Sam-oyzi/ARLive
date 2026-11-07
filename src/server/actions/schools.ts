@@ -6,6 +6,7 @@ import { assertRole, AuthError } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { deleteUpload } from "@/lib/storage";
 import { randomCode, slugify } from "@/lib/utils";
+import { wordsFor } from "@/lib/i18n/server";
 import { failure, hexColor, invalid, optionalInt, parseForm, refreshAll, type ActionState } from "../forms";
 
 const schoolSchema = z.object({
@@ -76,7 +77,7 @@ export async function regenerateJoinCode(schoolId: string): Promise<ActionState>
     if (user.role === "SCHOOL_ADMIN" && user.schoolId !== schoolId) throw new AuthError();
     await db.school.update({ where: { id: schoolId }, data: { joinCode: await uniqueJoinCode() } });
     refreshAll();
-    return { ok: true, message: "New join code generated" };
+    return { ok: true, message: (await wordsFor(user.role)).server.newJoinCode };
   } catch (error) {
     return failure(error);
   }

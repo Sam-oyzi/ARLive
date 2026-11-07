@@ -7,13 +7,19 @@ import { Avatar, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui/m
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { daysAgo } from "@/lib/stats";
-import { timeAgo } from "@/lib/utils";
+import { getI18n } from "@/lib/i18n/server";
+import { timeAgo } from "@/lib/i18n/format";
+import type { Metadata } from "next";
 import { AddStudentsDialog } from "./add-students-dialog";
 
-export const metadata = { title: "Students" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getI18n()).t.meta.students };
+}
 
 export default async function StudentsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const user = await requireUser(["SCHOOL_ADMIN"]);
+  const { locale, t } = await getI18n();
+  const d = t.dashboard;
   const school = user.school!;
   const { q } = await searchParams;
   const [students, scanCounts] = await Promise.all([
@@ -38,19 +44,19 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader
-        title="Students"
-        description={`${students.length} student${students.length === 1 ? "" : "s"}${school.maxStudents ? ` of ${school.maxStudents} seats` : ""}. Students can also join on their own with your join code.`}
+        title={d.students}
+        description={d.studentsText(students.length, school.maxStudents)}
         actions={addButton}
       />
       <form className="relative mb-5 max-w-md">
-        <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-ink-400" />
-        <Input name="q" defaultValue={q} placeholder="Search name, username or class" className="pl-10" />
+        <Search className="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
+        <Input name="q" defaultValue={q} placeholder={d.searchStudents} aria-label={d.searchStudents} className="ps-10" />
       </form>
       {students.length === 0 ? (
         <EmptyState
           icon={Users}
-          title={q ? "No matching students" : "No students yet"}
-          description={q ? "Try another search." : "Add your class lists, or share your join code so students sign up themselves."}
+          title={q ? d.noMatching : d.noStudents}
+          description={q ? d.tryAnother : d.noStudentsText}
           action={q ? undefined : addButton}
         />
       ) : (
@@ -58,10 +64,10 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
           <Table>
             <thead>
               <tr>
-                <Th>Student</Th>
-                <Th>Class</Th>
-                <Th>Scans · 30d</Th>
-                <Th>Last sign-in</Th>
+                <Th>{d.colStudent}</Th>
+                <Th>{d.colClass}</Th>
+                <Th>{d.colScans}</Th>
+                <Th>{d.colLastSignIn}</Th>
                 <Th />
               </tr>
             </thead>
@@ -74,15 +80,15 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 font-semibold text-ink-900">
                           {s.name}
-                          {!s.active && <Badge tone="red">Disabled</Badge>}
+                          {!s.active && <Badge tone="red">{d.disabled}</Badge>}
                         </div>
-                        <div className="font-mono text-xs text-ink-500">{s.username}</div>
+                        <div dir="ltr" className="text-start font-mono text-xs text-ink-500">{s.username}</div>
                       </div>
                     </div>
                   </Td>
                   <Td>{s.grade ?? <span className="text-ink-400">—</span>}</Td>
                   <Td className="tabular-nums">{scans.get(s.id) ?? 0}</Td>
-                  <Td className="text-ink-500">{s.lastLoginAt ? timeAgo(s.lastLoginAt) : "Never"}</Td>
+                  <Td className="text-ink-500">{s.lastLoginAt ? timeAgo(locale, s.lastLoginAt, t.common.justNow) : d.never}</Td>
                   <Td className="w-10">
                     <UserRowActions user={s} />
                   </Td>

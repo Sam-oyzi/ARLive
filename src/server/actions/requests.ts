@@ -2,22 +2,24 @@
 
 import { assertRole, assertSchoolAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getI18n } from "@/lib/i18n/server";
 import { failure, refreshAll, type ActionState } from "../forms";
 
 /** A school admin asks for access to a published book. */
 export async function requestAccess(bookId: string, message?: string): Promise<ActionState> {
   try {
     const admin = await assertSchoolAdmin();
+    const say = (await getI18n()).t.server;
     const book = await db.book.findFirst({ where: { id: bookId, published: true } });
-    if (!book) return { error: "That book isn't available." };
+    if (!book) return { error: say.bookUnavailable };
     const granted = await db.schoolBook.findUnique({ where: { schoolId_bookId: { schoolId: admin.schoolId, bookId } } });
-    if (granted) return { ok: true, message: "Your school already has this book." };
+    if (granted) return { ok: true, message: say.schoolHasBook };
     const pending = await db.accessRequest.findFirst({ where: { schoolId: admin.schoolId, bookId, status: "PENDING" } });
     if (!pending) {
       await db.accessRequest.create({ data: { schoolId: admin.schoolId, bookId, message: message?.slice(0, 500) } });
     }
     refreshAll();
-    return { ok: true, message: "Request sent to PageWakes" };
+    return { ok: true, message: say.requestToTeam };
   } catch (error) {
     return failure(error);
   }
@@ -28,7 +30,7 @@ export async function cancelRequest(requestId: string): Promise<ActionState> {
     const admin = await assertSchoolAdmin();
     await db.accessRequest.deleteMany({ where: { id: requestId, schoolId: admin.schoolId, status: "PENDING" } });
     refreshAll();
-    return { ok: true, message: "Request cancelled" };
+    return { ok: true, message: (await getI18n()).t.server.requestCancelled };
   } catch (error) {
     return failure(error);
   }

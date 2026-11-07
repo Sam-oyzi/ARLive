@@ -2,17 +2,20 @@
 
 import { useState } from "react";
 import type { DayCount } from "@/lib/stats";
+import { useI18n } from "@/lib/i18n/client";
 
 /** Single-series column chart: scans per day. Hover any column for its value. */
 export function ScansChart({ data, height = 180 }: { data: DayCount[]; height?: number }) {
   const [hover, setHover] = useState<number | null>(null);
+  const { t } = useI18n();
   // Round the axis up to an even number so the midline tick is a whole number.
   const max = Math.max(2, Math.ceil(Math.max(...data.map((d) => d.count)) / 2) * 2);
   const peak = data.reduce((best, d, i) => (d.count > (data[best]?.count ?? -1) ? i : best), 0);
   const ticks = [max, max / 2, 0];
 
   return (
-    <div>
+    // Time runs left to right, as on a calendar, in every language.
+    <div dir="ltr">
       <div className="flex gap-3">
         <div className="flex flex-col justify-between text-right text-[11px] text-ink-400 tabular-nums" style={{ height }}>
           {ticks.map((t, i) => (
@@ -53,7 +56,7 @@ export function ScansChart({ data, height = 180 }: { data: DayCount[]; height?: 
                       className="pointer-events-none absolute z-10 rounded-xl bg-ink-900 px-2.5 py-1.5 text-xs whitespace-nowrap text-white shadow-lift"
                       style={{ bottom: Math.max(3, h) + 8 }}
                     >
-                      <div className="font-semibold tabular-nums">{d.count} scans</div>
+                      <div className="font-semibold tabular-nums">{t.dashboard.scans(d.count)}</div>
                       <div className="text-white/60">{d.label}</div>
                     </div>
                   )}
@@ -66,12 +69,12 @@ export function ScansChart({ data, height = 180 }: { data: DayCount[]; height?: 
       <div className="mt-2 flex gap-0.5 pl-8 text-[11px] text-ink-400">
         {data.map((d, i) => (
           <span key={i} className="flex-1 text-center">
-            {i % 2 === data.length % 2 ? d.label.split(" ")[1] : ""}
+            {i % 2 === data.length % 2 ? d.day : ""}
           </span>
         ))}
       </div>
       <table className="sr-only">
-        <caption>Scans per day</caption>
+        <caption>{t.dashboard.scansPerDay}</caption>
         <tbody>
           {data.map((d) => (
             <tr key={d.label}>

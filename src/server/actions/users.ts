@@ -6,13 +6,15 @@ import { assertRole, AuthError, type CurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { needsSchool, ROLES } from "@/lib/roles";
 import { randomPassword, slugify } from "@/lib/utils";
+import { wordsFor } from "@/lib/i18n/server";
 import { failure, invalid, parseForm, refreshAll, type ActionState } from "../forms";
 
 /** Platform admins manage everyone; school admins only their own school's students. */
 async function assertCanManage(actor: CurrentUser, userId: string) {
   const target = await db.user.findUnique({ where: { id: userId } });
-  if (!target) throw new AuthError("User not found.");
-  if (target.id === actor.id) throw new AuthError("You can't do that to your own account.");
+  const say = (await wordsFor(actor.role)).server;
+  if (!target) throw new AuthError(say.userNotFound);
+  if (target.id === actor.id) throw new AuthError(say.notYourself);
   if (actor.role === "SUPER_ADMIN") return target;
   if (actor.role === "SCHOOL_ADMIN" && target.role === "STUDENT" && target.schoolId === actor.schoolId) return target;
   throw new AuthError();
@@ -59,7 +61,8 @@ export async function setUserActive(userId: string, active: boolean): Promise<Ac
     await assertCanManage(actor, userId);
     await db.user.update({ where: { id: userId }, data: { active } });
     refreshAll();
-    return { ok: true, message: active ? "Account enabled" : "Account disabled" };
+    const say = (await wordsFor(actor.role)).server;
+    return { ok: true, message: active ? say.accountEnabled : say.accountDisabled };
   } catch (error) {
     return failure(error);
   }
@@ -83,7 +86,7 @@ export async function deleteUser(userId: string): Promise<ActionState> {
     await assertCanManage(actor, userId);
     await db.user.delete({ where: { id: userId } });
     refreshAll();
-    return { ok: true, message: "User deleted" };
+    return { ok: true, message: (await wordsFor(actor.role)).server.userDeleted };
   } catch (error) {
     return failure(error);
   }
@@ -127,6 +130,7 @@ export async function createStudents(
   try {
     const actor = await assertRole(["SCHOOL_ADMIN", "SUPER_ADMIN"]);
     const schoolId = actor.role === "SCHOOL_ADMIN" ? actor.schoolId : String(formData.get("schoolId") ?? "");
+    const say = (await wordsFor(actor.role)).server;
     if (!schoolId) return { error: "Pick a school." };
     const parsed = parseForm(bulkSchema, formData);
     if (!parsed.success) return invalid(parsed.error);
@@ -135,10 +139,10 @@ export async function createStudents(
       .split(/\r?\n/)
       .map((n) => n.trim().replace(/\s+/g, " "))
       .filter((n) => n.length >= 2);
-    if (names.length === 0) return { error: "Add at least one full name, one per line." };
-    if (names.length > 300) return { error: "Add at most 300 students at a time." };
+    if (names.length === 0) return { error: say.addOneName };
+    if (names.length > 300) return { error: say.max300 };
     const capacity = await studentCapacity(schoolId);
-    if (names.length > capacity) return { error: `Your plan allows ${Math.max(0, capacity)} more student(s).` };
+    if (names.length > capacity) return { error: say.planAllows(Math.max(0, capacity)) };
 
     const created: CreatedStudent[] = [];
     const reserved = new Set<string>();
@@ -152,7 +156,7 @@ export async function createStudents(
       data: created.map((s, i) => ({ name: s.name, username: s.username, role: "STUDENT", schoolId, grade: parsed.data.grade, passwordHash: hashes[i]! })),
     });
     refreshAll();
-    return { ok: true, data: created, message: `${created.length} student account(s) created` };
+    return { ok: true, data: created, message: say.studentsCreated(created.length) };
   } catch (error) {
     return failure(error);
   }

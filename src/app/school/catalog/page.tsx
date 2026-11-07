@@ -5,14 +5,20 @@ import { Thumb } from "@/components/thumb";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { SubjectIcon } from "@/lib/subject-icons";
-import { plural } from "@/lib/utils";
+import { getI18n } from "@/lib/i18n/server";
+import { categoryDescription, categoryName } from "@/lib/i18n/messages";
+import type { Metadata } from "next";
 import { withReturnTo } from "@/lib/reader-navigation";
 import { RequestButton } from "./request-button";
 
-export const metadata = { title: "Book catalog" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getI18n()).t.meta.catalog };
+}
 
 export default async function CatalogPage() {
   const user = await requireUser(["SCHOOL_ADMIN"]);
+  const { t } = await getI18n();
+  const d = t.dashboard;
   const schoolId = user.schoolId!;
   const [subjects, granted, pending] = await Promise.all([
     db.subject.findMany({
@@ -35,11 +41,11 @@ export default async function CatalogPage() {
   return (
     <>
       <PageHeader
-        title="Book catalog"
-        description="Browse PageWakes’s storybooks and request the ones you’d like to share with your classes."
+        title={d.catalog}
+        description={d.catalogText}
       />
       {withBooks.length === 0 ? (
-        <EmptyState icon={Library} title="The catalog is empty" description="New books will appear here as soon as they're published." />
+        <EmptyState icon={Library} title={d.catalogEmpty} description={d.catalogEmptyText} />
       ) : (
         <div className="flex flex-col gap-10">
           {withBooks.map((subject) => (
@@ -49,8 +55,8 @@ export default async function CatalogPage() {
                   <SubjectIcon icon={subject.icon} className="size-5" />
                 </span>
                 <div>
-                  <h2 className="font-display text-lg font-bold text-ink-900">{subject.name}</h2>
-                  {subject.description && <p className="text-sm text-ink-500">{subject.description}</p>}
+                  <h2 className="font-display text-lg font-bold text-ink-900">{categoryName(t, subject.slug, subject.name)}</h2>
+                  {categoryDescription(t, subject.slug, subject.description) && <p className="text-sm text-ink-500">{categoryDescription(t, subject.slug, subject.description)}</p>}
                 </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -64,18 +70,18 @@ export default async function CatalogPage() {
                       )}
                     </div>
                     <div className="flex min-w-0 flex-1 flex-col">
-                      <h3 className="line-clamp-2 font-semibold text-ink-900">{book.title}</h3>
+                      <h3 dir="auto" className="line-clamp-2 font-semibold text-ink-900">{book.title}</h3>
                       <p className="mt-0.5 text-xs text-ink-500">
-                        {[book.gradeLevel, plural(book._count.targets, "AR page")].filter(Boolean).join(" · ")}
+                        {book.gradeLevel && <><bdi>{book.gradeLevel}</bdi> · </>}{d.arPages(book._count.targets)}
                       </p>
                       <div className="mt-auto flex items-center justify-between gap-2 pt-3">
                         {has.has(book.id) ? (
                           <>
                             <span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
-                              <CircleCheck className="size-4" /> Enabled
+                              <CircleCheck className="size-4" /> {d.enabled}
                             </span>
                             <Link href={withReturnTo(`/scan/${book.id}`, `/school/catalog#book-${book.id}`)} className="text-sm font-semibold text-brand-600 hover:underline">
-                              Preview
+                              {d.preview}
                             </Link>
                           </>
                         ) : (

@@ -10,13 +10,20 @@ import { playableBooksWhere } from "@/lib/books";
 import { db } from "@/lib/db";
 import { bucketByDay, daysAgo } from "@/lib/stats";
 import { SubjectIcon } from "@/lib/subject-icons";
-import { plural } from "@/lib/utils";
+import { getI18n } from "@/lib/i18n/server";
+import { INTL_LOCALE } from "@/lib/i18n/config";
+import { categoryName } from "@/lib/i18n/messages";
+import type { Metadata } from "next";
 import { withReturnTo } from "@/lib/reader-navigation";
 
-export const metadata = { title: "My school" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getI18n()).t.meta.school };
+}
 
 export default async function SchoolOverview() {
   const user = await requireUser(["SCHOOL_ADMIN"]);
+  const { locale, t } = await getI18n();
+  const d = t.dashboard;
   const school = user.school!;
   const since = daysAgo(13);
   const [students, activeStudents, scans, books, topStudents] = await Promise.all([
@@ -45,47 +52,47 @@ export default async function SchoolOverview() {
     <>
       <PageHeader
         title={school.name}
-        description="See how your students use AR and invite new ones with your join code."
+        description={d.overviewText}
         actions={
           <ButtonLink href="/school/students">
-            <Users /> Manage students
+            <Users /> {d.manageStudents}
           </ButtonLink>
         }
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Students"
+          label={d.students}
           value={students}
           icon={Users}
           tone="sky"
-          hint={school.maxStudents ? `${Math.max(0, school.maxStudents - students)} seats left` : "Unlimited seats"}
+          hint={school.maxStudents ? d.seatsLeft(Math.max(0, school.maxStudents - students)) : d.unlimited}
         />
-        <StatCard label="Active · 14 days" value={activeStudents.length} icon={Trophy} tone="amber" hint="Students who scanned at least once" />
-        <StatCard label="Scans · 14 days" value={scans.length} icon={ScanLine} tone="green" />
-        <StatCard label="AR books" value={books.length} icon={BookOpen} tone="rose" />
+        <StatCard label={d.active14} value={activeStudents.length} icon={Trophy} tone="amber" hint={d.activeHint} />
+        <StatCard label={d.scans14} value={scans.length} icon={ScanLine} tone="green" />
+        <StatCard label={d.arBooks} value={books.length} icon={BookOpen} tone="rose" />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.6fr_1fr]">
         <Card>
           <CardHeader>
             <div>
-              <CardTitle>Scans per day</CardTitle>
-              <CardDescription>Your students, last 14 days</CardDescription>
+              <CardTitle>{d.scansPerDay}</CardTitle>
+              <CardDescription>{d.last14}</CardDescription>
             </div>
           </CardHeader>
           <CardBody>
-            <ScansChart data={bucketByDay(scans.map((s) => s.createdAt))} />
+            <ScansChart data={bucketByDay(scans.map((s) => s.createdAt), 14, INTL_LOCALE[locale])} />
           </CardBody>
         </Card>
         <div className="flex flex-col gap-6">
           <JoinCodeCard schoolId={school.id} joinCode={school.joinCode} />
           <Card>
             <CardHeader>
-              <CardTitle>Most curious students</CardTitle>
+              <CardTitle>{d.curious}</CardTitle>
             </CardHeader>
             <CardBody>
               {topStudents.length === 0 ? (
-                <p className="text-sm text-ink-500">No scans in the last 14 days.</p>
+                <p className="text-sm text-ink-500">{d.noScans}</p>
               ) : (
                 <ol className="flex flex-col gap-3">
                   {topStudents.map((row, i) => {
@@ -109,13 +116,13 @@ export default async function SchoolOverview() {
         </div>
       </div>
 
-      <h2 className="mt-10 mb-4 font-display text-lg font-bold text-ink-900">Books your students can scan</h2>
+      <h2 className="mt-10 mb-4 font-display text-lg font-bold text-ink-900">{d.booksToScan}</h2>
       {books.length === 0 ? (
         <EmptyState
           icon={Library}
-          title="No books yet"
-          description="Browse the catalog and request the books your classes use."
-          action={<ButtonLink href="/school/catalog">Open catalog</ButtonLink>}
+          title={d.noBooks}
+          description={d.noBooksText}
+          action={<ButtonLink href="/school/catalog">{d.openCatalog}</ButtonLink>}
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -136,10 +143,10 @@ export default async function SchoolOverview() {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-xs font-semibold" style={{ color: book.subject.color }}>
-                  {book.subject.name}
+                  {categoryName(t, book.subject.slug, book.subject.name)}
                 </span>
-                <span className="block truncate font-semibold text-ink-900 group-hover:text-brand-600">{book.title}</span>
-                <span className="block text-xs text-ink-500">{plural(book._count.targets, "AR page")} · tap to preview</span>
+                <span dir="auto" className="block truncate font-semibold text-ink-900 group-hover:text-brand-600">{book.title}</span>
+                <span className="block text-xs text-ink-500">{d.arPages(book._count.targets)} · {d.tapPreview}</span>
               </span>
             </Link>
           ))}

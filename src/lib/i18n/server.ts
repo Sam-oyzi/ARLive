@@ -11,3 +11,8 @@ export async function getI18n(): Promise<{ locale: Locale; t: Messages }> {
   const locale = await getLocale();
   return { locale, t: messages[locale] };
 }
+
+/** Words for a server action's reply: the admin studio is in English, everyone else gets their own language. */
+export async function wordsFor(role: string): Promise<Messages> {
+  return role === "SUPER_ADMIN" ? messages.en : (await getI18n()).t;
+}

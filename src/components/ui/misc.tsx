@@ -118,7 +118,7 @@ export function Progress({ value, className }: { value: number; className?: stri
 export function Table({ className, ...props }: ComponentProps<"table">) {
   return (
     <div className="overflow-x-auto">
-      <table className={cn("w-full text-left text-sm", className)} {...props} />
+      <table className={cn("w-full text-start text-sm", className)} {...props} />
     </div>
   );
 }
@@ -127,7 +127,7 @@ export function Th({ className, ...props }: ComponentProps<"th">) {
   return (
     <th
       className={cn(
-        "border-b border-ink-100 px-4 py-3 text-xs font-semibold tracking-wide whitespace-nowrap text-ink-500 uppercase first:pl-6 last:pr-6",
+        "border-b border-ink-100 px-4 py-3 text-xs font-semibold tracking-wide whitespace-nowrap text-ink-500 uppercase first:ps-6 last:pe-6",
         className,
       )}
       {...props}
@@ -136,5 +136,5 @@ export function Th({ className, ...props }: ComponentProps<"th">) {
 }
 
 export function Td({ className, ...props }: ComponentProps<"td">) {
-  return <td className={cn("border-b border-ink-100 px-4 py-3.5 text-ink-700 first:pl-6 last:pr-6", className)} {...props} />;
+  return <td className={cn("border-b border-ink-100 px-4 py-3.5 text-ink-700 first:ps-6 last:pe-6", className)} {...props} />;
 }
