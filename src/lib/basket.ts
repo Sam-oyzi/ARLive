@@ -77,18 +77,14 @@ export function clearBasket() {
   write([]);
 }
 
+/** The words of the order message, in the visitor's language. */
+export type OrderWords = { hello: string; total: (copies: number) => string; for: (organisation: string) => string };
+
 /** The WhatsApp message listing the order, ready to send. */
-export function orderMessage(items: BasketItem[], origin: string, organisation: string): string {
+export function orderMessage(items: BasketItem[], origin: string, organisation: string, words: OrderWords): string {
   const lines = items.map((item) => `• ${item.title} × ${item.copies}\n  ${origin}/library/${item.bookId}`);
   const copies = items.reduce((sum, item) => sum + item.copies, 0);
-  return [
-    "Hello PageWakes! I'd like to order printed books:",
-    "",
-    ...lines,
-    "",
-    `Total: ${copies} ${copies === 1 ? "copy" : "copies"}`,
-    ...(organisation.trim() ? [`For: ${organisation.trim()}`] : []),
-  ].join("\n");
+  return [words.hello, "", ...lines, "", words.total(copies), ...(organisation.trim() ? [words.for(organisation.trim())] : [])].join("\n");
 }
 
 /** A wa.me link from a phone number in any format (digits and an optional leading +). */

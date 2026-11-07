@@ -7,10 +7,13 @@ import { useEffect, useState } from "react";
 import { Thumb } from "@/components/thumb";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
+import { useI18n } from "@/lib/i18n/client";
 import { addToBasket, MAX_COPIES, orderMessage, removeFromBasket, setCopies, useBasket, whatsappLink, type BasketItem } from "@/lib/basket";
 
 export function BasketView({ adding, whatsapp, origin }: { adding: Omit<BasketItem, "copies"> | null; whatsapp: string | null; origin: string }) {
   const router = useRouter();
+  const { t } = useI18n();
+  const w = t.basket;
   const items = useBasket();
   const [ready, setReady] = useState(false);
   const [organisation, setOrganisation] = useState("");
@@ -25,28 +28,25 @@ export function BasketView({ adding, whatsapp, origin }: { adding: Omit<BasketIt
   }, [adding, router]);
 
   const copies = items.reduce((sum, item) => sum + item.copies, 0);
-  const message = orderMessage(items, origin, organisation);
+  const message = orderMessage(items, origin, organisation, w.message);
 
   return (
     <div className="mx-auto max-w-3xl px-4 pt-6 pb-20 sm:px-6">
       <Link href="/library" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-900">
-        <ArrowLeft aria-hidden="true" className="size-4" /> Library
+        <ArrowLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" /> {t.common.library}
       </Link>
-      <h1 className="mt-4 font-display text-4xl font-bold tracking-tight text-ink-900">Your basket</h1>
-      <p className="mt-2 max-w-xl text-pretty text-ink-600">
-        Printed books are made to order, for schools, shops and families. Send us your list on WhatsApp and we&apos;ll reply with the
-        price and delivery. Nothing is paid here.
-      </p>
+      <h1 className="mt-4 font-display text-4xl font-bold tracking-tight text-ink-900">{w.title}</h1>
+      <p className="mt-2 max-w-xl text-pretty text-ink-600">{w.intro}</p>
 
       {!ready ? (
         <div className="mt-8 h-40 animate-pulse rounded-3xl bg-white/70" />
       ) : items.length === 0 ? (
         <div className="mt-8 flex flex-col items-center rounded-3xl bg-white px-6 py-12 text-center ring-1 ring-[#eadfca]">
           <ShoppingBasket aria-hidden="true" className="size-10 text-ink-300" />
-          <p className="mt-3 font-semibold text-ink-800">Your basket is empty</p>
-          <p className="mt-1 text-sm text-ink-500">Find a book you love and tap Buy printed book.</p>
+          <p className="mt-3 font-semibold text-ink-800">{w.emptyTitle}</p>
+          <p className="mt-1 text-sm text-ink-500">{w.emptyText}</p>
           <ButtonLink href="/library" className="mt-5">
-            Browse the library
+            {w.browse}
           </ButtonLink>
         </div>
       ) : (
@@ -58,27 +58,27 @@ export function BasketView({ adding, whatsapp, origin }: { adding: Omit<BasketIt
                   {item.imageUrl && <Thumb src={item.imageUrl} alt="" width={112} height={150} className="aspect-[3/4] w-full object-cover" />}
                 </Link>
                 <div className="min-w-0 flex-1">
-                  <Link href={`/library/${item.bookId}`} className="line-clamp-2 font-semibold text-ink-900 hover:underline">
+                  <Link dir="auto" href={`/library/${item.bookId}`} className="line-clamp-2 font-semibold text-ink-900 hover:underline">
                     {item.title}
                   </Link>
-                  <p className="text-sm text-ink-500">Printed book</p>
+                  <p className="text-sm text-ink-500">{w.printedBook}</p>
                 </div>
                 <div className="flex items-center gap-1 rounded-full bg-[#f6efe1] p-1">
-                  <Button variant="ghost" size="icon-sm" aria-label={`One copy fewer of ${item.title}`} disabled={item.copies <= 1} onClick={() => setCopies(item.bookId, item.copies - 1)}>
+                  <Button variant="ghost" size="icon-sm" aria-label={w.fewer(item.title)} disabled={item.copies <= 1} onClick={() => setCopies(item.bookId, item.copies - 1)}>
                     <Minus />
                   </Button>
                   <input
-                    aria-label={`Copies of ${item.title}`}
+                    aria-label={w.copiesOf(item.title)}
                     inputMode="numeric"
                     value={item.copies}
                     onChange={(event) => setCopies(item.bookId, Number(event.target.value.replace(/\D/g, "")))}
                     className="w-12 bg-transparent text-center font-semibold text-ink-900 tabular-nums outline-none"
                   />
-                  <Button variant="ghost" size="icon-sm" aria-label={`One more copy of ${item.title}`} disabled={item.copies >= MAX_COPIES} onClick={() => setCopies(item.bookId, item.copies + 1)}>
+                  <Button variant="ghost" size="icon-sm" aria-label={w.more(item.title)} disabled={item.copies >= MAX_COPIES} onClick={() => setCopies(item.bookId, item.copies + 1)}>
                     <Plus />
                   </Button>
                 </div>
-                <Button variant="ghost" size="icon-sm" aria-label={`Remove ${item.title}`} onClick={() => removeFromBasket(item.bookId)}>
+                <Button variant="ghost" size="icon-sm" aria-label={w.remove(item.title)} onClick={() => removeFromBasket(item.bookId)}>
                   <Trash2 />
                 </Button>
               </li>
@@ -86,12 +86,12 @@ export function BasketView({ adding, whatsapp, origin }: { adding: Omit<BasketIt
           </ul>
 
           <div className="mt-6 rounded-3xl bg-white p-5 ring-1 ring-[#eadfca]">
-            <Field label="School, shop or organisation (optional)" htmlFor="organisation">
-              <Input id="organisation" value={organisation} onChange={(event) => setOrganisation(event.target.value)} placeholder="e.g. Green Valley School" />
+            <Field label={w.organisation} htmlFor="organisation">
+              <Input id="organisation" value={organisation} onChange={(event) => setOrganisation(event.target.value)} placeholder={w.organisationPlaceholder} />
             </Field>
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm font-semibold text-ink-700">
-                {copies} {copies === 1 ? "copy" : "copies"} · {items.length} {items.length === 1 ? "book" : "books"}
+                {w.summary(copies, items.length)}
               </p>
               {whatsapp ? (
                 <a
@@ -100,10 +100,10 @@ export function BasketView({ adding, whatsapp, origin }: { adding: Omit<BasketIt
                   rel="noreferrer"
                   className="inline-flex h-12 items-center gap-2 rounded-2xl bg-[#25D366] px-5 font-bold text-white shadow-lift transition hover:bg-[#1ebe5a]"
                 >
-                  <WhatsAppIcon /> Order on WhatsApp
+                  <WhatsAppIcon /> {w.order}
                 </a>
               ) : (
-                <p className="text-sm text-ink-500">Ordering on WhatsApp opens soon.</p>
+                <p className="text-sm text-ink-500">{w.soon}</p>
               )}
             </div>
           </div>

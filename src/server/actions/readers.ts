@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { assertRole, AuthError, getCurrentUser } from "@/lib/auth";
 import { VISIBILITY_KEYS } from "@/lib/books";
 import { db } from "@/lib/db";
+import { getI18n } from "@/lib/i18n/server";
 import { failure, refreshAll, type ActionState } from "../forms";
 
 const MAX_EMAILS_AT_ONCE = 200;
@@ -14,15 +15,16 @@ const MAX_EMAILS_AT_ONCE = 200;
 export async function requestBookAccess(bookId: string, message?: string): Promise<ActionState> {
   try {
     const user = await getCurrentUser();
-    if (!user) throw new AuthError("Sign in to ask for access.");
+    const say = (await getI18n()).t.server;
+    if (!user) throw new AuthError(say.signInFirst);
     const book = await db.book.findFirst({ where: { id: bookId, published: true }, select: { ownerId: true, visibility: true } });
     // Custom stories can only be asked for by the family they were made for.
     if (!book || (book.ownerId ? book.ownerId !== user.id : book.visibility !== "APPROVED")) {
-      return { error: "This book can't be requested." };
+      return { error: say.cantRequest };
     }
     const key = { bookId_email: { bookId, email: user.username } };
     const existing = await db.bookReader.findUnique({ where: key });
-    if (existing?.status === "APPROVED") return { ok: true, message: "You already have access" };
+    if (existing?.status === "APPROVED") return { ok: true, message: say.hasAccess };
     const note = message?.trim().slice(0, 300) || null;
     await db.bookReader.upsert({
       where: key,
@@ -30,7 +32,7 @@ export async function requestBookAccess(bookId: string, message?: string): Promi
       create: { bookId, email: user.username, status: "PENDING", message: note },
     });
     refreshAll();
-    return { ok: true, message: "Request sent. We'll let you in once it's approved." };
+    return { ok: true, message: say.accessRequested };
   } catch (error) {
     return failure(error);
   }

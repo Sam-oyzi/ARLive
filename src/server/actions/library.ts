@@ -7,6 +7,7 @@ import { AuthError, getCurrentUser } from "@/lib/auth";
 import { canUserReadBook } from "@/lib/books";
 import { db, writeBatch } from "@/lib/db";
 import { isBlocked, recordFailure } from "@/lib/rate-limit";
+import { getI18n } from "@/lib/i18n/server";
 import { failure, refreshAll, type ActionState } from "../forms";
 
 // One download per visitor per book in this window, so reprinting doesn't inflate the counter.
@@ -14,8 +15,9 @@ const DOWNLOAD_WINDOW_MS = 6 * 60 * 60 * 1000;
 
 async function readerFor(bookId: string) {
   const user = await getCurrentUser();
-  if (!user) throw new AuthError("Sign in to do that.");
-  if (!(await canUserReadBook(user, bookId))) throw new AuthError("This book isn't available.");
+  const say = (await getI18n()).t.server;
+  if (!user) throw new AuthError(say.signInFirst);
+  if (!(await canUserReadBook(user, bookId))) throw new AuthError(say.unavailable);
   return user;
 }
 
@@ -46,7 +48,8 @@ export async function rateBook(bookId: string, value: number): Promise<ActionSta
   try {
     const user = await readerFor(bookId);
     const parsed = stars.safeParse(value);
-    if (!parsed.success) return { error: "Pick 1 to 5 stars." };
+    const say = (await getI18n()).t.server;
+    if (!parsed.success) return { error: say.pickStars };
     const now = new Date();
     await writeBatch([
       Prisma.sql`INSERT INTO "BookRating" ("userId", "bookId", "stars", "createdAt", "updatedAt")
@@ -61,7 +64,7 @@ export async function rateBook(bookId: string, value: number): Promise<ActionSta
       where: { id: bookId }, select: { ratingAvg: true, ratingCount: true },
     });
     refreshAll();
-    return { ok: true, message: "Thanks for rating!", data: { average, count } };
+    return { ok: true, message: say.thanksRating, data: { average, count } };
   } catch (error) {
     return failure(error);
   }

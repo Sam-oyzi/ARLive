@@ -3,6 +3,7 @@
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { X } from "lucide-react";
 import type { KeyboardEventHandler, ReactNode } from "react";
+import { useI18n } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
 
 export const Dialog = DialogPrimitive.Root;
@@ -24,6 +25,7 @@ export function DialogContent({
   wide?: boolean;
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
 }) {
+  const { t } = useI18n();
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-950/40 backdrop-blur-[2px]" />
@@ -35,7 +37,7 @@ export function DialogContent({
           className,
         )}
       >
-        <div className="mb-5 pr-8">
+        <div className="mb-5 pe-8">
           <DialogPrimitive.Title className="font-display text-lg font-semibold text-ink-900">{title}</DialogPrimitive.Title>
           <DialogPrimitive.Description className={description ? "mt-1 text-sm text-ink-500" : "sr-only"}>
             {description ?? title}
@@ -43,8 +45,8 @@ export function DialogContent({
         </div>
         {children}
         <DialogPrimitive.Close
-          className="absolute top-5 right-5 grid size-8 place-items-center rounded-full text-ink-400 transition hover:bg-ink-100 hover:text-ink-700"
-          aria-label="Close"
+          className="absolute end-5 top-5 grid size-8 place-items-center rounded-full text-ink-400 transition hover:bg-ink-100 hover:text-ink-700"
+          aria-label={t.common.close}
         >
           <X className="size-4" />
         </DialogPrimitive.Close>

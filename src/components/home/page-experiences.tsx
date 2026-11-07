@@ -3,9 +3,11 @@
 // What the badges on a page mean (Scan, Step inside, 360° view, Place model), each acted out in a
 // little phone. The scenes are CSS only, drawn from the Sarra book's own art and 3D characters
 // (public/experiences), so the home page stays light. The badges match the ones in the reader.
-import { Box, Check, Compass, Hand, Orbit, Play, ScanLine, Sparkles, type LucideIcon } from "lucide-react";
+import { Box, Check, Compass, Hand, Orbit, Play, ScanLine, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { PaperBadge, type PaperBadgeKind } from "@/components/paper-badge";
+import { useI18n } from "@/lib/i18n/client";
+import type { Messages } from "@/lib/i18n/messages";
 import { cn } from "@/lib/utils";
 import styles from "./page-experiences.module.css";
 
@@ -13,53 +15,17 @@ const BADGE_KIND: Record<"scan" | "inside" | "360" | "model", PaperBadgeKind> = 
 
 type Experience = {
   key: "scan" | "inside" | "360" | "model";
-  name: string;
-  /** The badge as it appears on a page in the reader. */
-  badge: { label: string; icon: LucideIcon; dark?: boolean };
-  title: string;
-  text: string;
-  need: string;
+  /** Where its words live in the dictionary. */
+  words: "scan" | "inside" | "panorama" | "model";
   /** How long one loop of the scene lasts, in ms: the showcase moves on after it. */
   loop: number;
 };
 
 const EXPERIENCES: Experience[] = [
-  {
-    key: "scan",
-    name: "Scan",
-    badge: { label: "Scan printed book", icon: ScanLine, dark: true },
-    title: "Scan the printed page",
-    text: "Open the printed book, then point a phone at a page marked AR. The page wakes up: characters hop out in 3D, words pop up in big 3D letters and little videos play right beside it.",
-    need: "The printed book and a phone camera",
-    loop: 7000,
-  },
-  {
-    key: "inside",
-    name: "Step inside",
-    badge: { label: "Step inside", icon: Orbit },
-    title: "Step inside the story",
-    text: "A story box appears on your floor. Walk through its wall and you're standing in the story's world: look up, down and all around you.",
-    need: "A phone with a camera and a little floor space",
-    loop: 9000,
-  },
-  {
-    key: "360",
-    name: "360° view",
-    badge: { label: "Look around", icon: Orbit },
-    title: "Look all around in 360°",
-    text: "The page opens into the whole scene around you. Turn your phone, or drag with a finger or a mouse, to see what's behind you.",
-    need: "Any phone, tablet or laptop",
-    loop: 9000,
-  },
-  {
-    key: "model",
-    name: "Place model",
-    badge: { label: "Place model", icon: Box },
-    title: "Bring a character home",
-    text: "Put a story character on your floor or table, life size for little hands, and walk all the way around it. No printed book needed.",
-    need: "A phone with a camera",
-    loop: 7000,
-  },
+  { key: "scan", words: "scan", loop: 7000 },
+  { key: "inside", words: "inside", loop: 9000 },
+  { key: "360", words: "panorama", loop: 9000 },
+  { key: "model", words: "model", loop: 7000 },
 ];
 
 const ART = "/experiences";
@@ -71,7 +37,10 @@ export function PageExperiences() {
   const stage = useRef<HTMLDivElement>(null);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const id = useId();
+  const { t } = useI18n();
+  const say = t.experiences;
   const experience = EXPERIENCES[active]!;
+  const words = say[experience.words];
 
   // Scenes only play while they can be seen.
   useEffect(() => {
@@ -106,17 +75,14 @@ export function PageExperiences() {
       <div aria-hidden="true" className="absolute -top-40 left-1/4 size-[520px] rounded-full bg-sky-500/20 blur-[120px]" />
       <div aria-hidden="true" className="absolute -right-24 bottom-0 size-[420px] rounded-full bg-brand-500/20 blur-[110px]" />
       <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="mx-auto max-w-2xl text-center lg:mx-0 lg:text-left">
+        <div className="mx-auto max-w-2xl text-center lg:mx-0 lg:text-start">
           <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-amber-200 ring-1 ring-white/10">
-            <Sparkles aria-hidden="true" className="size-3.5" /> Pages that wake up
+            <Sparkles aria-hidden="true" className="size-3.5" /> {say.badge}
           </span>
           <h2 id={`${id}-title`} className="mt-5 font-display text-3xl font-bold tracking-tight text-balance sm:text-4xl">
-            Scan, Step inside, 360°: what do they mean?
+            {say.title}
           </h2>
-          <p className="mt-3 text-lg text-pretty text-white/70">
-            Some pages carry a little badge. Tap it while reading on a phone, or scan the printed page, and the story jumps off the
-            paper. No app to install.
-          </p>
+          <p className="mt-3 text-lg text-pretty text-white/70">{say.intro}</p>
         </div>
 
         {/* The phone plays one experience at a time; its badges are pinned round it like paper tags, each
@@ -125,7 +91,7 @@ export function PageExperiences() {
         <div className="mt-10 grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-16">
           <div
             role="tablist"
-            aria-label="Page experiences"
+            aria-label={say.tabs}
             className={cn(styles.badgeStage, "relative mx-auto w-full max-w-[380px] lg:col-start-2 lg:row-start-1 lg:max-w-none")}
             onKeyDown={(event) => {
               if (event.key !== "ArrowRight" && event.key !== "ArrowLeft" && event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -137,7 +103,7 @@ export function PageExperiences() {
             <div ref={stage} data-paused={!inView} className={cn(styles.stage, "relative mx-auto w-fit")} aria-hidden="true">
               <Phone sway={experience.key === "360"}>
                 {/* Keyed so each scene starts from its beginning when it's picked. */}
-                <Scene key={experience.key} kind={experience.key} />
+                <Scene key={experience.key} kind={experience.key} say={say} />
               </Phone>
             </div>
             {EXPERIENCES.map((item, index) => {
@@ -162,7 +128,7 @@ export function PageExperiences() {
                   )}
                   style={{ animationDelay: `${index * 180}ms` }}
                 >
-                  <PaperBadge kind={BADGE_KIND[item.key]} label={item.badge.label} size="lg" tilt={index % 2 ? 3 : -3} />
+                  <PaperBadge kind={BADGE_KIND[item.key]} label={say[item.words].badge} size="lg" tilt={index % 2 ? 3 : -3} />
                   {/* How long until the next scene, while the showcase plays by itself. */}
                   {selected && auto && inView && (
                     <span aria-hidden="true" className="absolute inset-x-2 -bottom-2.5 h-[3px] overflow-hidden rounded-full bg-white/15">
@@ -174,12 +140,12 @@ export function PageExperiences() {
             })}
           </div>
 
-          <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-tab-${experience.key}`} className="text-center sm:mx-auto sm:max-w-xl lg:col-start-1 lg:row-start-1 lg:mx-0 lg:text-left">
-            <h3 className="font-display text-2xl font-bold">{experience.title}</h3>
-            <p className="mt-2 text-[17px] leading-relaxed text-pretty text-white/75">{experience.text}</p>
+          <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-tab-${experience.key}`} className="text-center sm:mx-auto sm:max-w-xl lg:col-start-1 lg:row-start-1 lg:mx-0 lg:text-start">
+            <h3 className="font-display text-2xl font-bold">{words.title}</h3>
+            <p className="mt-2 text-[17px] leading-relaxed text-pretty text-white/75">{words.text}</p>
             <p className="mt-4 text-sm font-semibold text-amber-200">
-              <Check aria-hidden="true" className="mr-1.5 inline size-4 align-[-3px]" />
-              You need: {experience.need.toLowerCase()}
+              <Check aria-hidden="true" className="me-1.5 inline size-4 align-[-3px]" />
+              {say.need} {words.need}
             </p>
           </div>
         </div>
@@ -217,14 +183,16 @@ function Chip({ className, children, top }: { className?: string; children: Reac
   );
 }
 
-function Scene({ kind }: { kind: Experience["key"] }) {
-  if (kind === "scan") return <ScanScene />;
-  if (kind === "inside") return <InsideScene />;
-  if (kind === "360") return <PanoramaScene />;
-  return <ModelScene />;
+type Say = Messages["experiences"];
+
+function Scene({ kind, say }: { kind: Experience["key"]; say: Say }) {
+  if (kind === "scan") return <ScanScene say={say} />;
+  if (kind === "inside") return <InsideScene say={say} />;
+  if (kind === "360") return <PanoramaScene say={say} />;
+  return <ModelScene say={say} />;
 }
 
-function ScanScene() {
+function ScanScene({ say }: { say: Say }) {
   const corner = "border-[3px]";
   return (
     <div className={cn("absolute inset-0", styles.desk)}>
@@ -247,7 +215,7 @@ function ScanScene() {
       </div>
       {/* ...then its roar in thick 3D letters... */}
       <div className={cn("absolute top-[10%] left-[7%]", styles.textPop)}>
-        <span className={cn("block font-display text-[30px] leading-none font-black tracking-tight", styles.text3d)}>Roar!</span>
+        <span className={cn("block font-display text-[30px] leading-none font-black tracking-tight", styles.text3d)}>{say.roar}</span>
       </div>
       {/* ...and a little video playing beside the page. */}
       <div className={cn("absolute top-[30%] right-[4%] w-[36%]", styles.videoPop)}>
@@ -267,10 +235,10 @@ function ScanScene() {
       <Star className="top-[34%] right-[16%]" delay={0.45} />
       {/* One label at the bottom, so the top of the screen is free for the 3D words. */}
       <Chip className={styles.chipOut}>
-        <ScanLine className="size-3.5" /> Point at a page marked AR
+        <ScanLine className="size-3.5" /> {say.pointAtPage}
       </Chip>
       <Chip className={styles.chipIn}>
-        <Check className="size-3.5 text-green-400" /> AR page found
+        <Check className="size-3.5 text-green-400" /> {say.pageFound}
       </Chip>
     </div>
   );
@@ -311,7 +279,7 @@ function Room() {
   );
 }
 
-function InsideScene() {
+function InsideScene({ say }: { say: Say }) {
   const faces = [
     { transform: "translateZ(calc(var(--cube) / 2))", position: "0% 0" },
     { transform: "rotateY(90deg) translateZ(calc(var(--cube) / 2))", position: "33.33% 0" },
@@ -332,21 +300,21 @@ function InsideScene() {
           </div>
         </div>
         <Chip className={styles.outsideChip}>
-          <Hand className="size-3.5" /> Step in here
+          <Hand className="size-3.5" /> {say.stepInHere}
         </Chip>
       </div>
       <div className={cn("absolute inset-0 overflow-hidden", styles.inside)}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`${ART}/world-owl.webp`} alt="" width={1200} height={420} className={cn("h-full w-auto max-w-none", styles.insidePan)} />
         <Chip className={styles.insideChip}>
-          <Orbit className="size-3.5" /> You&apos;re inside the story!
+          <Orbit className="size-3.5" /> {say.insideStory}
         </Chip>
       </div>
     </div>
   );
 }
 
-function PanoramaScene() {
+function PanoramaScene({ say }: { say: Say }) {
   return (
     <div className="absolute inset-0 overflow-hidden bg-sky-200">
       <div className={cn("flex h-full w-max", styles.panoTrack)}>
@@ -356,7 +324,7 @@ function PanoramaScene() {
         ))}
       </div>
       <Chip top>
-        <span className="font-bold">360°</span> Turn around to look
+        <span className="font-bold">360°</span> {say.turnToLook}
       </Chip>
       <div className="absolute inset-x-0 bottom-5 flex justify-center">
         <span className="relative grid size-16 place-items-center rounded-full bg-black/55 ring-1 ring-white/20">
@@ -371,7 +339,7 @@ function PanoramaScene() {
   );
 }
 
-function ModelScene() {
+function ModelScene({ say }: { say: Say }) {
   return (
     <div className="absolute inset-0">
       <Room />
@@ -388,10 +356,10 @@ function ModelScene() {
         <img src={`${ART}/tortoise.webp`} alt="" width={212} height={141} className="w-[58px] drop-shadow-[0_6px_6px_rgb(0_0_0/0.3)]" />
       </div>
       <Chip top className={styles.placeChip}>
-        <Hand className="size-3.5" /> Tap the ring to place it
+        <Hand className="size-3.5" /> {say.tapRing}
       </Chip>
       <Chip top className={styles.walkChip}>
-        <Box className="size-3.5" /> Walk all the way around it
+        <Box className="size-3.5" /> {say.walkAround}
       </Chip>
     </div>
   );

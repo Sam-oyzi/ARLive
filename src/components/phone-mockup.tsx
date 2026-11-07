@@ -11,6 +11,7 @@ export function PhoneMockup({
   icon = "book",
   caption = "Point your camera at a page",
   found,
+  foundLabel = "Recognised",
   className,
   children,
 }: {
@@ -18,6 +19,7 @@ export function PhoneMockup({
   icon?: string;
   caption?: string;
   found?: { title: string; subtitle?: string };
+  foundLabel?: string;
   className?: string;
   children?: ReactNode;
 }) {
@@ -95,7 +97,7 @@ export function PhoneMockup({
             {found ? (
               <div className="rounded-2xl bg-white/95 p-3 shadow-lg backdrop-blur">
                 <div className="text-[11px] font-semibold tracking-wide uppercase" style={{ color }}>
-                  Recognised
+                  {foundLabel}
                 </div>
                 <div className="font-display text-sm font-bold text-ink-900">{found.title}</div>
                 {found.subtitle && <div className="text-[11px] text-ink-500">{found.subtitle}</div>}

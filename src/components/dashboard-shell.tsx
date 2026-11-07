@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { I18nProvider } from "@/lib/i18n/client";
 import { Dialog as Sheet } from "radix-ui";
 import {
   BookOpen,
@@ -187,7 +188,10 @@ export function DashboardShell({
   );
 
   return (
-    <div className="min-h-dvh lg:pl-[272px]">
+    // The admin studio and school workspace are in English for now, whatever the public site's language:
+    // marked so, and handed English words for the shared dialogs and menus inside them.
+    <I18nProvider locale="en">
+    <div lang="en" dir="ltr" className="min-h-dvh lg:pl-[272px]">
       <a href="#workspace-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2">Skip to content</a>
       <aside className="fixed inset-y-0 left-0 hidden w-[272px] border-r border-ink-200/70 bg-white lg:block">{sidebar}</aside>
 
@@ -226,5 +230,6 @@ export function DashboardShell({
         {children}
       </main>
     </div>
+    </I18nProvider>
   );
 }

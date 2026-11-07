@@ -25,7 +25,7 @@ export const Select = forwardRef<HTMLSelectElement, ComponentProps<"select">>(fu
   return (
     <select
       ref={ref}
-      className={cn(fieldBase, "h-10 appearance-none bg-[length:16px] bg-[right_0.75rem_center] bg-no-repeat pr-9", className)}
+      className={cn(fieldBase, "h-10 appearance-none bg-[length:16px] bg-[right_0.75rem_center] bg-no-repeat pr-9 rtl:bg-[left_0.75rem_center] rtl:pr-3.5 rtl:pl-9", className)}
       style={{ backgroundImage: chevron, ...style }}
       {...props}
     />
@@ -64,11 +64,5 @@ export function Field({
   );
 }
 
-export function FormError({ message }: { message?: string | null }) {
-  if (!message) return null;
-  return (
-    <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm font-medium text-rose-700">
-      {message}
-    </div>
-  );
-}
+// A client component of its own, so it can speak the visitor's language.
+export { FormError } from "./form-error";

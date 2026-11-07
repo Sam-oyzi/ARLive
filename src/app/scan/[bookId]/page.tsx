@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { getI18n } from "@/lib/i18n/server";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { requireReadableBook } from "@/lib/books";
@@ -11,7 +12,9 @@ import { worldEffectOf } from "@/lib/world-effects";
 import { ARViewer } from "./ar-viewer";
 import { bookReturnHref, withReturnTo } from "@/lib/reader-navigation";
 
-export const metadata: Metadata = { title: "Scan" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getI18n()).t.meta.scan };
+}
 export const viewport: Viewport = { themeColor: "#000000", maximumScale: 1, userScalable: false };
 
 export default async function ScanPage({ params, searchParams }: { params: Promise<{ bookId: string }>; searchParams: Promise<{ preview?: string; returnTo?: string }> }) {

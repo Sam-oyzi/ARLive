@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { getI18n } from "@/lib/i18n/server";
 import { notFound } from "next/navigation";
 import { DirectModelExperience } from "@/components/direct-model-experience";
 import { getCurrentUser } from "@/lib/auth";
@@ -9,7 +10,9 @@ import { soundLayers } from "@/lib/sound-layers";
 import { bookReturnHref, readerHref, withReturnTo } from "@/lib/reader-navigation";
 import { opensModel, placementModel } from "@/lib/scan-actions";
 
-export const metadata: Metadata = { title: "Place model" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getI18n()).t.meta.placeModel };
+}
 export const viewport: Viewport = { themeColor: "#000000", maximumScale: 1, userScalable: false };
 
 export default async function PlacePage({ params, searchParams }: {

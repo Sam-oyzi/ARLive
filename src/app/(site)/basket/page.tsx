@@ -3,9 +3,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { readableWhere } from "@/lib/books";
 import { db } from "@/lib/db";
 import { siteOrigin } from "@/lib/site-url";
+import { getI18n } from "@/lib/i18n/server";
 import { BasketView } from "./basket-view";
 
-export const metadata: Metadata = { title: "Basket" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getI18n()).t.meta.basket };
+}
 
 /**
  * Printed books to order. `?add=<book>` puts a book in (the "Buy" buttons link here); the basket itself

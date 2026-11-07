@@ -4,12 +4,13 @@ import { AlertDialog } from "radix-ui";
 import { useState, useTransition, type ReactNode } from "react";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/client-bits";
+import { useI18n } from "@/lib/i18n/client";
 
 /** Wrap a trigger; asks before running a destructive action. */
 export function Confirm({
   title,
   description,
-  confirmLabel = "Delete",
+  confirmLabel,
   onConfirm,
   children,
   open: controlledOpen,
@@ -23,6 +24,7 @@ export function Confirm({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
+  const { t } = useI18n();
   const [innerOpen, setInnerOpen] = useState(false);
   const open = controlledOpen ?? innerOpen;
   const setOpen = onOpenChange ?? setInnerOpen;
@@ -36,10 +38,10 @@ export function Confirm({
         <AlertDialog.Content className="fixed inset-x-3 bottom-3 z-50 rounded-3xl bg-white p-6 shadow-lift data-[state=open]:animate-fade-up sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2">
           <AlertDialog.Title className="font-display text-lg font-semibold text-ink-900">{title}</AlertDialog.Title>
           <AlertDialog.Description className="mt-2 text-sm text-ink-500">
-            {description ?? "This can't be undone."}
+            {description ?? t.common.cantUndo}
           </AlertDialog.Description>
           <div className="mt-6 flex justify-end gap-2">
-            <AlertDialog.Cancel className={buttonClasses("ghost")}>Cancel</AlertDialog.Cancel>
+            <AlertDialog.Cancel className={buttonClasses("ghost")}>{t.common.cancel}</AlertDialog.Cancel>
             <Button
               variant="danger"
               disabled={pending}
@@ -51,7 +53,7 @@ export function Confirm({
               }
             >
               {pending && <Spinner />}
-              {confirmLabel}
+              {confirmLabel ?? t.common.delete}
             </Button>
           </div>
         </AlertDialog.Content>

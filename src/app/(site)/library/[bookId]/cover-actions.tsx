@@ -7,6 +7,7 @@ import Link from "next/link";
 import { BookOpen, Box, Camera, Hand, MoreHorizontal, ShoppingBasket } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useI18n } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
 import styles from "./cover-actions.module.css";
 
@@ -21,6 +22,7 @@ const OPEN_EVENT = "pagewakes:cover-actions";
 type Spot = { x: number; y: number };
 
 export function CoverActions({ actions, title, children }: { actions: CoverAction[]; title: string; children: ReactNode }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [used, setUsed] = useState(false);
   const [spots, setSpots] = useState<Spot[]>([]);
@@ -141,13 +143,13 @@ export function CoverActions({ actions, title, children }: { actions: CoverActio
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={open ? menuId : undefined}
-        aria-label={open ? `${title}: put the options away` : `${title}: open the book's options`}
+        aria-label={open ? t.book.closeOptions(title) : t.book.openOptions(title)}
         className="absolute inset-0 cursor-pointer rounded-[24px] outline-offset-4 sm:rounded-[28px]"
       />
       {!open && (
         <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center md:hidden">
           <span className="flex items-center gap-1.5 rounded-full bg-ink-950/75 px-3 py-1.5 text-xs font-bold text-white shadow-lift">
-            <Hand className="size-3.5" /> Tap the book
+            <Hand className="size-3.5" /> {t.book.tapBook}
           </span>
         </span>
       )}
@@ -156,7 +158,7 @@ export function CoverActions({ actions, title, children }: { actions: CoverActio
 
       {open && (
         // Taps pass through to the cover underneath: tapping the book again puts the options away.
-        <div id={menuId} role="menu" aria-label={`${title} options`} className="pointer-events-none absolute inset-0">
+        <div id={menuId} role="menu" aria-label={t.book.options(title)} className="pointer-events-none absolute inset-0">
           {ordered.map((action, i) => {
             const Icon = ICONS[action.key];
             const spot = spots[i] ?? { x: 0, y: 0 };

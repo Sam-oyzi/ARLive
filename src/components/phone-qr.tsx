@@ -3,6 +3,7 @@
 import { QRCodeSVG } from "qrcode.react";
 import { ShieldAlert, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useI18n } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
 import { createPhoneHandoff } from "@/server/actions/handoff";
 
@@ -16,9 +17,10 @@ const REFRESH_MS = 4 * 60 * 1000; // tokens live 5 minutes
 export function PhoneQRDisclosure({ path, size, className }: { path: string; size?: number; className?: string }) {
   // The QR code holds a sign-in token, so only ask for one when somebody opens this.
   const [open, setOpen] = useState(false);
+  const { t } = useI18n();
   return (
     <details className={className} onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary className="cursor-pointer rounded-sm font-semibold text-ink-700">Continue on your phone</summary>
+      <summary className="cursor-pointer rounded-sm font-semibold text-ink-700">{t.scan.continueOnPhone}</summary>
       {open && (
         <div className="mt-2">
           <PhoneQR path={path} size={size} />
@@ -29,6 +31,7 @@ export function PhoneQRDisclosure({ path, size, className }: { path: string; siz
 }
 
 export function PhoneQR({ path, size = 96, dark, className }: { path: string; size?: number; dark?: boolean; className?: string }) {
+  const { t } = useI18n();
   const [url, setUrl] = useState("");
   // Only a signed-in visitor's code carries a sign-in.
   const [signedIn, setSignedIn] = useState(false);
@@ -69,10 +72,10 @@ export function PhoneQR({ path, size = 96, dark, className }: { path: string; si
         </div>
         <div className="min-w-0 text-sm">
           <div className={cn("flex items-center gap-1.5 font-semibold", dark ? "text-white" : "text-ink-900")}>
-            <Smartphone className="size-4 text-brand-400" /> Continue on your phone
+            <Smartphone className="size-4 text-brand-400" /> {t.scan.continueOnPhone}
           </div>
           <p className={cn("mt-1 text-xs leading-relaxed", dark ? "text-white/60" : "text-ink-500")}>
-            Scan with your phone&apos;s camera. {signedIn ? "You'll be signed in and the scanner opens there." : "The scanner opens there."}
+            {t.scan.qrHelp(signedIn)}
           </p>
         </div>
       </div>

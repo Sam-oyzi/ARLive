@@ -11,20 +11,24 @@ import { readStoryLayouts } from "@/lib/story-layout";
 import { scanActionOf, isPlaceableModel } from "@/lib/scan-actions";
 import { readerHref, readerPageIndex } from "@/lib/reader-navigation";
 import { visibleReaderPages } from "@/lib/reader-pages";
+import { getI18n } from "@/lib/i18n/server";
+import { categoryName } from "@/lib/i18n/messages";
 import { Reader } from "./reader";
 
 export async function generateMetadata({ params }: { params: Promise<{ bookId: string }> }): Promise<Metadata> {
   const { bookId } = await params;
   const book = await db.book.findFirst({ where: { id: bookId, published: true, ownerId: null }, select: { title: true } });
-  return { title: book ? `Read “${book.title}”` : "Read" };
+  const { t } = await getI18n();
+  return { title: book ? t.meta.read(book.title) : t.meta.readFallback };
 }
 export const viewport: Viewport = { themeColor: "#efe8da" };
 
 export default async function ReadPage({ params, searchParams }: { params: Promise<{ bookId: string }>; searchParams: Promise<{ page?: string; lang?: string }> }) {
   const user = await getCurrentUser();
   const { bookId } = await params;
-  const { page, lang } = await searchParams;
-  await requireReadableBook(user, bookId, readerHref(bookId, page, lang));
+  const { page, lang: requestedLang } = await searchParams;
+  const { locale, t } = await getI18n();
+  await requireReadableBook(user, bookId, readerHref(bookId, page, requestedLang));
 
   const book = await db.book.findUnique({
     where: { id: bookId },
@@ -40,6 +44,8 @@ export default async function ReadPage({ params, searchParams }: { params: Promi
     },
   });
   if (!book) notFound();
+  // No language asked for: open the book in the site's language when it has that translation.
+  const lang = requestedLang ?? (locale !== "en" && book.targets.some((target) => pageTranslationsSchema.safeParse(target.translations).data?.[locale]) ? locale : undefined);
 
   const editable = user?.role === "SUPER_ADMIN";
   const backHref = editable
@@ -67,7 +73,7 @@ export default async function ReadPage({ params, searchParams }: { params: Promi
         title: book.title,
         backCoverImageUrl: backCoverFor(book),
         format: book.format,
-        subject: { name: book.subject.name, color: book.subject.color, icon: book.subject.icon },
+        subject: { name: categoryName(t, book.subject.slug, book.subject.name), color: book.subject.color, icon: book.subject.icon },
         // Students can only scan once the AR data is compiled; admins see the compile status instead.
         canScan: !!book.mindUrl && state !== "empty",
         needsCompile: editable && (state === "stale" || state === "missing"),

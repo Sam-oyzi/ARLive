@@ -4,6 +4,7 @@ import { Check, Copy, LoaderCircle } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n/client";
 import { Button, type ButtonSize, type ButtonVariant } from "./button";
 
 export function SubmitButton({
@@ -32,6 +33,7 @@ export function SubmitButton({
 
 export function CopyButton({ value, label, className }: { value: string; label?: string; className?: string }) {
   const [copied, setCopied] = useState(false);
+  const { t } = useI18n();
   return (
     <Button
       variant="outline"
@@ -40,10 +42,10 @@ export function CopyButton({ value, label, className }: { value: string; label?:
       onClick={async () => {
         await navigator.clipboard.writeText(value);
         setCopied(true);
-        toast.success("Copied to clipboard");
+        toast.success(t.common.copied);
         setTimeout(() => setCopied(false), 1500);
       }}
-      aria-label={label ?? "Copy"}
+      aria-label={label ?? t.common.copy}
     >
       {copied ? <Check className="text-emerald-600" /> : <Copy />}
       {label}

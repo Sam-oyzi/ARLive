@@ -6,31 +6,36 @@ import { z } from "zod";
 import { assertRole } from "@/lib/auth";
 import { db, writeBatch } from "@/lib/db";
 import { goalLabel, STORY_GOAL_KEYS, STORY_LANGUAGES } from "@/lib/stories";
+import { getI18n } from "@/lib/i18n/server";
+import type { Messages } from "@/lib/i18n/messages";
 import { failure, invalid, parseForm, refreshAll, type ActionState } from "../forms";
 
 // A family can have this many requests waiting at once.
 const MAX_OPEN_REQUESTS = 3;
 
-const requestSchema = z.object({
-  childId: z.string().optional(),
-  childName: z.string({ error: "Who is the story for?" }).min(1, "Who is the story for?").max(40),
-  childAge: z.coerce.number().int().min(0, "Age 0 to 14").max(14, "Age 0 to 14").optional(),
-  goal: z.enum(STORY_GOAL_KEYS, { error: "Pick what the story should help with" }),
-  message: z.string({ error: "Tell us what you'd like your child to learn" }).min(10, "Tell us a little more (10 characters or more)").max(1500),
-  interests: z.string().max(300).optional(),
-  language: z.enum(STORY_LANGUAGES).default("en"),
-});
+// Built per request, so its messages come in the parent's language.
+const requestSchema = (say: Messages["server"]) =>
+  z.object({
+    childId: z.string().optional(),
+    childName: z.string({ error: say.whoFor }).min(1, say.whoFor).max(40),
+    childAge: z.coerce.number().int().min(0, say.age).max(14, say.age).optional(),
+    goal: z.enum(STORY_GOAL_KEYS, { error: say.pickGoal }),
+    message: z.string({ error: say.tellLearn }).min(10, say.tellMore).max(1500),
+    interests: z.string().max(300).optional(),
+    language: z.enum(STORY_LANGUAGES).default("en"),
+  });
 
 export async function createStoryRequest(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
     const user = await assertRole(["PARENT"]);
-    const parsed = parseForm(requestSchema, formData);
+    const say = (await getI18n()).t.server;
+    const parsed = parseForm(requestSchema(say), formData);
     if (!parsed.success) return invalid(parsed.error);
     const { childId, ...data } = parsed.data;
 
     const open = await db.storyRequest.count({ where: { userId: user.id, status: { in: ["NEW", "IN_PROGRESS"] } } });
     if (open >= MAX_OPEN_REQUESTS) {
-      return { error: `You already have ${open} stories on the way. You can ask for another once one is ready.` };
+      return { error: say.tooManyStories(open) };
     }
     const child = childId ? await db.child.findFirst({ where: { id: childId, parentId: user.id } }) : null;
     await db.storyRequest.create({
@@ -43,7 +48,7 @@ export async function createStoryRequest(_prev: ActionState, formData: FormData)
       },
     });
     refreshAll();
-    return { ok: true, message: `Request sent! We'll start writing ${data.childName}'s story soon.` };
+    return { ok: true, message: say.requestSent(data.childName) };
   } catch (error) {
     return failure(error);
   }
@@ -54,9 +59,10 @@ export async function cancelStoryRequest(requestId: string): Promise<ActionState
   try {
     const user = await assertRole(["PARENT"]);
     const { count } = await db.storyRequest.deleteMany({ where: { id: requestId, userId: user.id, status: "NEW" } });
-    if (count === 0) return { error: "This request is already being written." };
+    const say = (await getI18n()).t.server;
+    if (count === 0) return { error: say.alreadyWriting };
     refreshAll();
-    return { ok: true, message: "Request withdrawn" };
+    return { ok: true, message: say.withdrawn };
   } catch (error) {
     return failure(error);
   }

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { getI18n } from "@/lib/i18n/server";
 import { worldExperienceOf } from "@/lib/scan-actions";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
@@ -9,7 +10,9 @@ import { worldEffectOf } from "@/lib/world-effects";
 import { WorldViewer } from "@/components/story-world/world-viewer";
 import { bookReturnHref, readerHref } from "@/lib/reader-navigation";
 
-export const metadata: Metadata = { title: "Story world" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getI18n()).t.meta.storyWorld };
+}
 export const viewport: Viewport = { themeColor: "#000000", maximumScale: 1, userScalable: false };
 
 /** Open only the experience selected by the studio for this page. */

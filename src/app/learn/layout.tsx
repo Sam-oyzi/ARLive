@@ -1,5 +1,6 @@
 import { Logo } from "@/components/brand";
 import { requireUser } from "@/lib/auth";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { StudentMenu } from "./student-menu";
 
 export default async function LearnLayout({ children }: { children: React.ReactNode }) {
@@ -11,6 +12,7 @@ export default async function LearnLayout({ children }: { children: React.ReactN
           <Logo href="/learn" />
           <div className="flex items-center gap-3">
             <span className="hidden text-sm font-medium text-ink-500 sm:block">{user.school?.name}</span>
+            <LanguageSwitcher />
             <StudentMenu name={user.name} username={user.username} school={user.school?.name ?? ""} />
           </div>
         </div>

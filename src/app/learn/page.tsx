@@ -6,18 +6,24 @@ import { requireUser } from "@/lib/auth";
 import { playableBooksWhere, readableBooksWhere } from "@/lib/books";
 import { db } from "@/lib/db";
 import { SubjectIcon } from "@/lib/subject-icons";
-import { plural } from "@/lib/utils";
+import { getI18n } from "@/lib/i18n/server";
+import { categoryName, type Messages } from "@/lib/i18n/messages";
+import type { Metadata } from "next";
 import { withReturnTo } from "@/lib/reader-navigation";
 
-export const metadata = { title: "My subjects" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getI18n()).t.meta.subjects };
+}
 
-function greeting() {
+function greeting(t: Messages["learn"]) {
   const h = new Date().getHours();
-  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  return h < 12 ? t.morning : h < 18 ? t.afternoon : t.evening;
 }
 
 export default async function LearnHome() {
   const user = await requireUser(["STUDENT"]);
+  const { locale, t } = await getI18n();
+  const w = t.learn;
   const schoolId = user.schoolId!;
   const readable = readableBooksWhere(schoolId);
   const [subjects, recent] = await Promise.all([
@@ -43,16 +49,16 @@ export default async function LearnHome() {
     <div className="animate-fade-up">
       <section className="relative overflow-hidden rounded-[28px] bg-ink-950 p-6 text-white sm:p-8">
         <div className="absolute inset-0 bg-grid-dark" />
-        <div className="absolute -top-24 -right-16 size-72 rounded-full bg-brand-500/50 blur-3xl" />
-        <div className="absolute -bottom-24 left-10 size-56 rounded-full bg-amber-400/30 blur-3xl" />
+        <div className="absolute -end-16 -top-24 size-72 rounded-full bg-brand-500/50 blur-3xl" />
+        <div className="absolute start-10 -bottom-24 size-56 rounded-full bg-amber-400/30 blur-3xl" />
         <div className="relative">
-          <p className="text-sm font-medium text-white/60">{greeting()},</p>
+          <p className="text-sm font-medium text-white/60">{greeting(w)}{locale === "ar" ? "،" : ","}</p>
           <h1 className="mt-1 font-display text-3xl font-bold tracking-tight sm:text-4xl">{user.name.split(" ")[0]} 👋</h1>
-          <p className="mt-3 max-w-md text-[15px] text-white/75">Choose a subject and read your books online. When a book has AR, you can also scan its pages to explore in 3D.</p>
+          <p className="mt-3 max-w-md text-[15px] text-white/75">{w.intro}</p>
           <div className="mt-6 flex flex-wrap gap-2 text-xs font-semibold">
             {[
-              { icon: BookOpen, label: "Read online" },
-              { icon: Camera, label: "Scan AR pages" },
+              { icon: BookOpen, label: w.readOnline },
+              { icon: Camera, label: w.scanPages },
             ].map((step) => (
               <span key={step.label} className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 backdrop-blur">
                 <step.icon aria-hidden="true" className="size-4" />
@@ -63,12 +69,12 @@ export default async function LearnHome() {
         </div>
       </section>
 
-      <h2 className="mt-10 mb-4 font-display text-xl font-bold text-ink-900">Your subjects</h2>
+      <h2 className="mt-10 mb-4 font-display text-xl font-bold text-ink-900">{w.subjects}</h2>
       {subjects.length === 0 ? (
         <EmptyState
           icon={Sparkles}
-          title="No books yet"
-          description="Your school hasn't enabled any books yet. Ask your teacher — they'll appear here automatically."
+          title={w.noBooks}
+          description={w.noBooksText}
         />
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
@@ -86,16 +92,16 @@ export default async function LearnHome() {
               >
                 <SubjectIcon
                   icon={subject.icon}
-                  className="absolute -right-6 -bottom-6 size-36 rotate-[-12deg] opacity-20 transition duration-500 group-hover:scale-110 group-hover:rotate-0"
+                  className="absolute -end-6 -bottom-6 size-36 rotate-[-12deg] opacity-20 transition duration-500 group-hover:scale-110 group-hover:rotate-0"
                 />
                 <span className="grid size-12 place-items-center rounded-2xl bg-white/20 backdrop-blur">
                   <SubjectIcon icon={subject.icon} className="size-6" />
                 </span>
                 <span className="mt-auto">
-                  <span className="block font-display text-lg leading-tight font-bold sm:text-xl">{subject.name}</span>
+                  <span className="block font-display text-lg leading-tight font-bold sm:text-xl">{categoryName(t, subject.slug, subject.name)}</span>
                   <span className="mt-1 flex items-center gap-1 text-xs font-medium text-white/80">
-                    {plural(subject.books.length, "book")} · {plural(pages, "page")}
-                    <ChevronRight className="size-3.5 transition group-hover:translate-x-0.5" />
+                    {w.books(subject.books.length)} · {w.pages(pages)}
+                    <ChevronRight className="size-3.5 transition group-hover:translate-x-0.5 rtl:-scale-x-100 rtl:group-hover:-translate-x-0.5" />
                   </span>
                 </span>
               </Link>
@@ -106,7 +112,7 @@ export default async function LearnHome() {
 
       {recentPages.length > 0 && (
         <>
-          <h2 className="mt-10 mb-4 font-display text-xl font-bold text-ink-900">Recently explored</h2>
+          <h2 className="mt-10 mb-4 font-display text-xl font-bold text-ink-900">{w.recent}</h2>
           <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-none">
             {recentPages.map((s) => (
               <Link key={s.id} id={`scan-${s.id}`} href={withReturnTo(`/scan/${s.book.id}`, `/learn#scan-${s.id}`)} className="w-32 shrink-0">

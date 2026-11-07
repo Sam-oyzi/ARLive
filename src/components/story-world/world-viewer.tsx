@@ -11,6 +11,7 @@ import { EIGHTH_WALL_CREDIT, EIGHTH_WALL_LICENSE_URL, isTouchPhone, loadEighthWa
 import type { RoomSession } from "@/ar/room-controls";
 import { canPlaceRoom, startRoomSession, type RoomState } from "@/ar/room-session";
 import { disposeRoom, loadStoryPanorama, ROOM } from "@/ar/story-room";
+import { useI18n } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
 import { usePageSounds, type SoundLayer } from "@/lib/page-sound";
 import { requestStoryMotion, storyMotionReady } from "@/lib/story-motion";
@@ -51,6 +52,10 @@ export function WorldViewer({
   const router = useRouter();
   const autoPlace = experience === "box";
   const container = useRef<HTMLDivElement>(null);
+  const { t } = useI18n();
+  const w = t.world;
+  const words = useRef(w);
+  words.current = w;
   const [phase, setPhase] = useState<Phase>(autoPlace ? "camera" : "loading");
   const [failed, setFailed] = useState(false);
   const [mode, setMode] = useState<"motion" | "drag">("drag");
@@ -80,10 +85,10 @@ export function WorldViewer({
         // Warm the engine while the camera starts.
         loadEighthWall().catch(() => {});
       } else {
-        setRoomError("Open this page on a phone with camera and motion support to step inside the story box.");
+        setRoomError(words.current.needsPhone);
       }
     }).catch(() => {
-      if (alive) setRoomError("Camera tracking is unavailable. Open this page on a supported phone to step inside.");
+      if (alive) setRoomError(words.current.noTracking);
     });
     return () => {
       alive = false;
@@ -121,7 +126,7 @@ export function WorldViewer({
     try {
       if (placeWith === "eighthwall") {
         // iPhone only lets a page read the motion sensors after asking, from a tap: first thing.
-        if (!(await storyMotionReady())) throw new Error("Allow motion access, then tap Try again to open the camera.");
+        if (!(await storyMotionReady())) throw new Error(words.current.allowMotion);
         if (!mounted.current) return;
         session.current = await startEighthWallSession(world.url, world.effect, overlay.current!, stage.current!, onState, (message) => {
           if (!mounted.current) return;
@@ -316,17 +321,17 @@ export function WorldViewer({
   }
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-black text-white select-none" style={{ "--accent": world.color } as CSSProperties}>
+    <div dir="ltr" className="fixed inset-0 overflow-hidden bg-black text-white select-none" style={{ "--accent": world.color } as CSSProperties}>
       <div ref={container} className="absolute inset-0 touch-none" />
       {world.narrationUrl && <audio ref={audio} src={world.narrationUrl} preload="none" onEnded={() => setPlaying(false)} />}
 
       <div className="absolute inset-x-0 top-0 z-20 flex items-center gap-3 px-4 safe-top">
         {onExit ? (
-          <button onClick={onExit} className={cn("grid size-11 shrink-0 place-items-center rounded-full", glass)} aria-label="Leave the story world">
+          <button onClick={onExit} className={cn("grid size-11 shrink-0 place-items-center rounded-full", glass)} aria-label={w.leave}>
             <ArrowLeft className="size-5" />
           </button>
         ) : (
-          <Link href={backHref} className={cn("grid size-11 shrink-0 place-items-center rounded-full", glass)} aria-label="Leave the story world">
+          <Link href={backHref} className={cn("grid size-11 shrink-0 place-items-center rounded-full", glass)} aria-label={w.leave}>
             <ArrowLeft className="size-5" />
           </Link>
         )}
@@ -337,11 +342,11 @@ export function WorldViewer({
         {phase === "inside" && (
           <div className="ml-auto flex gap-2">
             {(world.narrationUrl || world.sounds.length > 0) && (
-              <button onClick={toggleSound} className={cn("grid size-11 place-items-center rounded-full", glass)} aria-label={soundOn ? "Turn the sound off" : "Turn the sound on"}>
+              <button onClick={toggleSound} className={cn("grid size-11 place-items-center rounded-full", glass)} aria-label={soundOn ? w.soundOff : w.soundOn}>
                 {soundOn ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
               </button>
             )}
-            <button onClick={recenter} className={cn("grid size-11 place-items-center rounded-full", glass)} aria-label="Look ahead again">
+            <button onClick={recenter} className={cn("grid size-11 place-items-center rounded-full", glass)} aria-label={w.lookAhead}>
               <Compass className="size-5" />
             </button>
           </div>
@@ -354,12 +359,12 @@ export function WorldViewer({
             <div className="flex max-w-sm flex-col items-center">
               <p role="alert" className="text-white/80">{roomError}</p>
               {placeWith && <button onClick={() => { void requestStoryMotion(); void placeRoom(); }} className={primaryButton}>
-                Try again
+                {t.common.tryAgain}
               </button>}
             </div>
           ) : (
             <div role="status" className="flex flex-col items-center gap-3">
-              <LoaderCircle className="size-8 animate-spin" /> Starting the camera…
+              <LoaderCircle className="size-8 animate-spin" /> {w.startingCamera}
             </div>
           )}
         </div>
@@ -368,7 +373,7 @@ export function WorldViewer({
       {phase === "loading" && (
         <div className="absolute inset-0 z-10 grid place-items-center px-6 text-center">
           {failed ? (
-            <p className="text-white/80">This story world couldn&apos;t be loaded. Check your connection and try again.</p>
+            <p className="text-white/80">{w.loadFailed}</p>
           ) : (
             <LoaderCircle className="size-8 animate-spin text-white/80" />
           )}
@@ -382,18 +387,18 @@ export function WorldViewer({
         {roomState && (
           <>
             <div className="absolute inset-x-0 top-0 flex justify-end px-4 safe-top">
-              <button onClick={() => session.current?.end()} className={cn("pointer-events-auto grid size-11 place-items-center rounded-full", glass)} aria-label="Leave AR">
+              <button onClick={() => session.current?.end()} className={cn("pointer-events-auto grid size-11 place-items-center rounded-full", glass)} aria-label={w.leaveAR}>
                 <X className="size-5" />
               </button>
             </div>
             <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 px-6 pb-6 safe-bottom">
               <span className={cn("flex items-center gap-2 rounded-full px-4 py-2.5 text-center text-sm font-semibold", glass)}>
-                {roomState === "starting" && <><LoaderCircle className="size-4 animate-spin" /> Starting the camera…</>}
-                {roomState === "finding" && <><Hand className="size-4" /> Point your phone at the floor to find the ring</>}
-                {roomState === "ready" && <><Hand className="size-4" /> Aim the ring where you want to enter</>}
-                {roomState === "placed" && <><Hand className="size-4 shrink-0" /> You’re inside. Look around with your phone</>}
+                {roomState === "starting" && <><LoaderCircle className="size-4 animate-spin" /> {w.startingCamera}</>}
+                {roomState === "finding" && <><Hand className="size-4" /> {w.findFloor}</>}
+                {roomState === "ready" && <><Hand className="size-4" /> {w.aimRing}</>}
+                {roomState === "placed" && <><Hand className="size-4 shrink-0" /> {w.inside}</>}
               </span>
-              {roomState === "ready" && <button type="button" onClick={() => session.current?.placeAtMarker()} className="pointer-events-auto rounded-full bg-white px-5 py-3 text-sm font-bold text-ink-950 shadow-lift">Step in here</button>}
+              {roomState === "ready" && <button type="button" onClick={() => session.current?.placeAtMarker()} className="pointer-events-auto rounded-full bg-white px-5 py-3 text-sm font-bold text-ink-950 shadow-lift">{w.stepIn}</button>}
               {placeWith === "eighthwall" && <EighthWallCredit className="pointer-events-auto max-w-xs text-white/60 [text-shadow:0_1px_2px_rgb(0_0_0/0.6)]" />}
             </div>
           </>
@@ -404,7 +409,7 @@ export function WorldViewer({
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-6 pb-10 safe-bottom">
           <span className={cn("flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold", glass)}>
             {mode === "motion" ? <Orbit className="size-4" /> : <Hand className="size-4" />}
-            {mode === "motion" ? "Turn around with your phone to look around" : "Drag to look around"}
+            {mode === "motion" ? w.turnAround : w.drag}
           </span>
         </div>
       )}
@@ -414,11 +419,12 @@ export function WorldViewer({
 
 /** The credit the 8th Wall engine's licence asks for wherever its world tracking is used. */
 function EighthWallCredit({ className }: { className?: string }) {
+  const { t } = useI18n();
   return (
     <p className={cn("text-center text-[10px] leading-snug text-white/40", className)}>
       {EIGHTH_WALL_CREDIT}{" "}
       <a href={EIGHTH_WALL_LICENSE_URL} target="_blank" rel="noreferrer" className="underline">
-        License
+        {t.world.license}
       </a>
     </p>
   );

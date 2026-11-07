@@ -45,6 +45,7 @@ import { StoryBackdrop } from "./story-backdrop";
 import { PaperBadge } from "@/components/paper-badge";
 import { requestStoryMotion } from "@/lib/story-motion";
 import { SubjectIcon } from "@/lib/subject-icons";
+import { useI18n } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
 
 type ReaderPage = {
@@ -112,39 +113,41 @@ function AutoReadControl({ reading, onToggle, narrated, voice, onVoice, speed, o
   compact: boolean;
 }) {
   const speaking = narrated && voice;
+  const { t } = useI18n();
+  const w = t.reader;
   return (
     <div className={cn("flex items-center rounded-full", reading ? "bg-sky-600 text-white" : "text-ink-700 ring-1 ring-ink-900/10")}>
       <button
         onClick={onToggle}
         aria-pressed={reading}
-        title={reading ? "Stop turning the pages" : speaking ? "Read the story aloud and turn the pages" : "Turn the pages by themselves, at a child's reading speed"}
-        className={cn(chip, "rounded-r-none pr-2", !reading && "hover:bg-white/60", compact && "pl-2.5")}
+        title={reading ? w.stop : speaking ? w.readAloud : w.turnAlone}
+        className={cn(chip, "rounded-e-none pe-2", !reading && "hover:bg-white/60", compact && "ps-2.5")}
       >
         {reading ? (speaking ? <AudioLines className="size-4 animate-pulse" /> : <Pause className="size-4" />) : speaking ? <Volume2 className="size-4" /> : <BookOpenText className="size-4" />}
-        <span className={cn(compact ? "sr-only" : "hidden sm:inline")}>{reading ? "Reading…" : "Auto read"}</span>
+        <span className={cn(compact ? "sr-only" : "hidden sm:inline")}>{reading ? w.reading : w.autoRead}</span>
       </button>
       {/* Modal, like the language menu: a tap outside only closes it, never turns a page. */}
       <Dropdown>
-        <DropdownTrigger aria-label="Auto read settings" className={cn("grid h-9 place-items-center rounded-r-full pr-2.5 pl-1", !reading && "hover:bg-white/60")}>
+        <DropdownTrigger aria-label={w.autoReadSettings} className={cn("grid h-9 place-items-center rounded-e-full pe-2.5 ps-1", !reading && "hover:bg-white/60")}>
           <ChevronDown aria-hidden="true" className="size-3.5" />
         </DropdownTrigger>
         <DropdownContent align="end" className="min-w-60 border-[#a88b61]/30 bg-[#faf2e4] shadow-[0_10px_26px_rgb(81_58_32_/_0.18)]">
           {narrated && (
             <>
               <DropdownMenu.CheckboxItem checked={voice} onCheckedChange={onVoice} onSelect={(event) => event.preventDefault()} className={menuItem}>
-                Read the words aloud
+                {w.wordsAloud}
                 <span className="size-4 shrink-0"><DropdownMenu.ItemIndicator><Check aria-hidden="true" className="size-4" /></DropdownMenu.ItemIndicator></span>
               </DropdownMenu.CheckboxItem>
               <DropdownMenu.Separator className="my-1 h-px bg-[#a88b61]/20" />
             </>
           )}
           <DropdownMenu.Label className="px-3 pt-1.5 pb-1 text-xs font-semibold text-[#8a7358]">
-            {narrated ? "Reading speed (pages without a voice)" : "Reading speed"}
+            {narrated ? w.speedNarrated : w.speed}
           </DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={speed} onValueChange={(value) => isReadingSpeed(value) && onSpeed(value)}>
             {(Object.keys(READING_SPEED_LABEL) as ReadingSpeed[]).map((key) => (
               <DropdownMenu.RadioItem key={key} value={key} onSelect={(event) => event.preventDefault()} className={menuItem}>
-                {READING_SPEED_LABEL[key]}
+                {w.speeds[key] ?? READING_SPEED_LABEL[key]}
                 <span className="size-4 shrink-0"><DropdownMenu.ItemIndicator><Check aria-hidden="true" className="size-4" /></DropdownMenu.ItemIndicator></span>
               </DropdownMenu.RadioItem>
             ))}
@@ -170,14 +173,15 @@ function LanguageMenu({
   className?: string;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     // Modal, so a tap outside only closes the menu: on a phone it would otherwise turn the page under it.
     <Dropdown>
-      <DropdownTrigger aria-label={`Book language: ${languageLabel(locale)}`} className={className}>
+      <DropdownTrigger aria-label={t.reader.bookLanguageIs(languageLabel(locale))} className={className}>
         {children}
       </DropdownTrigger>
       <DropdownContent align={align} className="max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-36 overflow-y-auto border-[#a88b61]/30 bg-[#faf2e4] shadow-[0_10px_26px_rgb(81_58_32_/_0.18)]">
-        <DropdownMenu.RadioGroup value={locale} onValueChange={onChange} aria-label="Book language">
+        <DropdownMenu.RadioGroup value={locale} onValueChange={onChange} aria-label={t.reader.bookLanguage}>
           {["", ...languages].map((lang) => (
             <DropdownMenu.RadioItem key={lang} value={lang} textValue={languageLabel(lang)} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl px-3 py-2 text-sm text-[#58432f] outline-none select-none data-[state=checked]:bg-[#eee2cb] data-[state=checked]:font-semibold data-[highlighted]:bg-[#e9d9bc]">
               <bdi lang={lang || undefined}>{languageLabel(lang)}</bdi>
@@ -233,7 +237,7 @@ export function Reader({
   // A cached route may still carry its original server props. The return URL owns reader position.
   const searchParams = useSearchParams();
   const [initialPage] = useState(() => searchParams ? readerPageIndex(pages.map((page) => page.id), searchParams.get("page")) : requestedInitialPage);
-  const [initialLanguage] = useState(() => searchParams ? searchParams.get("lang") ?? "" : requestedInitialLanguage);
+  const [initialLanguage] = useState(() => searchParams?.get("lang") ?? requestedInitialLanguage);
   const flipbook = useRef<FlipBookHandle>(null);
   const [visible, setVisible] = useState<number[]>(() => visibleReaderPages(initialPage, pages.length));
   const visibleRef = useRef(visible);
@@ -487,6 +491,8 @@ export function Reader({
   const position = backCover ? pages.length + 1 : (visible[0] ?? 0) + 1;
   // What the reader writes on the page itself follows the book's language.
   const say = readerWords(locale || "en");
+  const { t } = useI18n();
+  const w = t.reader;
   const printHref = `/print/${book.id}${locale ? `?lang=${encodeURIComponent(locale)}` : ""}`;
   const currentPageId = backCover ? "back-cover" : pages[focusedPage]?.id;
   useEffect(() => {
@@ -518,7 +524,7 @@ export function Reader({
         chromeHidden && "pointer-events-none -translate-y-full opacity-0",
       )}
     >
-      <Link href={backHref} className="grid size-10 shrink-0 place-items-center rounded-full text-ink-600 ring-1 ring-ink-900/10 hover:bg-white/60 hover:text-ink-900" aria-label="Back">
+      <Link href={backHref} className="grid size-10 shrink-0 place-items-center rounded-full text-ink-600 ring-1 ring-ink-900/10 hover:bg-white/60 hover:text-ink-900" aria-label={w.back}>
         <ArrowLeft className="size-5" />
       </Link>
       <div className="flex min-w-0 items-center gap-2.5">
@@ -534,7 +540,7 @@ export function Reader({
         <div className="min-w-0 leading-tight">
           <div className="truncate font-serif text-xl"><bdi lang={readingPages[0]?.lang}>{pages[0]?.translations?.[locale]?.title ?? book.title}</bdi></div>
           <div className="truncate text-xs text-ink-500">
-            {book.subject.name} · {pages.length} pages · {arCount} with AR
+            {w.summary(book.subject.name, pages.length, arCount)}
           </div>
         </div>
       </div>
@@ -555,12 +561,12 @@ export function Reader({
           <button
             onClick={() => choose({ music: !music })}
             aria-pressed={music}
-            aria-label="Soundtrack"
-            title={music ? "Turn the soundtrack off" : "Play the soundtrack while reading"}
+            aria-label={w.soundtrack}
+            title={music ? w.soundtrackOff : w.soundtrackOn}
             className={cn(chip, music ? "bg-emerald-600 text-white" : "text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60", single && "px-2.5")}
           >
             <Music className={cn("size-4", music && "animate-pulse")} />
-            <span className={cn(single ? "sr-only" : "hidden lg:inline")}>Soundtrack</span>
+            <span className={cn(single ? "sr-only" : "hidden lg:inline")}>{w.soundtrack}</span>
           </button>
         )}
         {pages.length > 0 && (
@@ -580,9 +586,9 @@ export function Reader({
             onClick={() => setMagnifier((m) => !m)}
             className={cn(chip, magnifier ? "bg-ink-900 text-white" : "text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60")}
             aria-pressed={magnifier}
-            title="Magnifier: move the pointer over a page"
+            title={w.magnifierTitle}
           >
-            <Search className="size-4" /> <span className="hidden sm:inline">Magnifier</span>
+            <Search className="size-4" /> <span className="hidden sm:inline">{w.magnifier}</span>
           </button>
         )}
         {editable && (
@@ -591,14 +597,14 @@ export function Reader({
               <Settings2 className="size-4" /> Studio
             </Link>
             <Link href={printHref} className={cn(chip, "bg-ink-900 text-white hover:bg-ink-800")}>
-              <Printer className="size-4" /> <span className={cn(single && "sr-only")}>Print</span>
+              <Printer className="size-4" /> <span className={cn(single && "sr-only")}>{w.print}</span>
             </Link>
           </>
         )}
         {!editable && pages.length > 0 && (
           // Readers buy the printed book (print files are for admins preparing copies to sell).
-          <Link href={`/basket?add=${book.id}`} className={cn(chip, "text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60")} title="Buy the printed book">
-            <ShoppingBasket className="size-4" /> <span className={cn(single && "sr-only")}>Buy</span>
+          <Link href={`/basket?add=${book.id}`} className={cn(chip, "text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60")} title={w.buyTitle}>
+            <ShoppingBasket className="size-4" /> <span className={cn(single && "sr-only")}>{w.buy}</span>
           </Link>
         )}
 
@@ -613,7 +619,7 @@ export function Reader({
         single && cn("absolute inset-x-0 bottom-0 z-20 flex-col items-stretch gap-2 pt-2", glass),
         chromeHidden && "pointer-events-none translate-y-full opacity-0",
       )}
-      aria-label="Pages"
+      aria-label={w.pages}
     >
       {single && (
         <div className="text-center text-xs font-semibold text-ink-500 tabular-nums">
@@ -646,7 +652,8 @@ export function Reader({
     // Phones read on plain paper so the edge-to-edge page blends into the screen, like a book app.
     // `clip`, not just `hidden`: the page strip slides below the edge when it hides, and a hidden
     // overflow can still be scrolled (focusing a thumbnail did), which lifted the whole page up.
-    <div className="fixed inset-0 flex flex-col overflow-hidden text-ink-900" style={{ background: single ? PAGE_PAPER : DESK, overflow: "clip" }}>
+    // Always left to right: the book opens and turns like the printed one, whatever the site's language.
+    <div dir="ltr" className="fixed inset-0 flex flex-col overflow-hidden text-ink-900" style={{ background: single ? PAGE_PAPER : DESK, overflow: "clip" }}>
       {/* Tablets and laptops: the desk round the book takes the colours of the open pages. */}
       {!single && <StoryBackdrop art={artwork} />}
       {/* Shared by every page so phones keep allowing playback after the first tap. */}
@@ -687,7 +694,7 @@ export function Reader({
           </div>
         )}
         {pages.length === 0 ? (
-          <div className="grid size-full place-items-center font-serif text-xl text-ink-500 italic">This book has no pages yet.</div>
+          <div className="grid size-full place-items-center font-serif text-xl text-ink-500 italic">{w.noPages}</div>
         ) : (
           <FlipBook
             ref={flipbook}
@@ -752,7 +759,7 @@ export function Reader({
               onClick={() => flipbook.current?.prev()}
               disabled={!pages.length || visible.includes(0)}
               className="absolute top-1/2 left-1 grid h-16 w-10 -translate-y-1/2 place-items-center text-ink-400 transition enabled:hover:text-ink-900 disabled:opacity-30 sm:left-4"
-              aria-label="Previous page"
+              aria-label={w.previous}
             >
               <ChevronLeft className="size-8" strokeWidth={1.25} />
             </button>
@@ -760,7 +767,7 @@ export function Reader({
               onClick={() => flipbook.current?.next()}
               disabled={atEnd}
               className="absolute top-1/2 right-1 grid h-16 w-10 -translate-y-1/2 place-items-center text-ink-400 transition enabled:hover:text-ink-900 disabled:opacity-30 sm:right-4"
-              aria-label="Next page"
+              aria-label={w.next}
             >
               <ChevronRight className="size-8" strokeWidth={1.25} />
             </button>

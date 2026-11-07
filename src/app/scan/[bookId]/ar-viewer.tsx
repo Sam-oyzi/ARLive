@@ -27,7 +27,8 @@ import { WorldViewer } from "@/components/story-world/world-viewer";
 import { Thumb } from "@/components/thumb";
 import type { ContentData } from "@/lib/content";
 import { SubjectIcon } from "@/lib/subject-icons";
-import { cn, plural } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/client";
+import { cn } from "@/lib/utils";
 import { storyMotionReady } from "@/lib/story-motion";
 import { worldExperienceOf, opensModel, placementModel, rendersOnTarget, type ScanAction } from "@/lib/scan-actions";
 import { ScanLaunchGate } from "@/lib/scan-launch";
@@ -67,16 +68,11 @@ type Phase = "starting" | "running" | "error";
 /** Pages the studio set to open their story world when scanned (and that have one). */
 const opensWorld = (target: ViewerTarget) => worldExperienceOf(target.scanAction, target.worldUrl) !== null;
 
-const STAGE_TEXT: Record<ARStage, string> = {
-  camera: "Waking up the camera…",
-  targets: "Loading the book's pages…",
-  warmup: "Preparing the AR engine…",
-  running: "Ready",
-};
-
 type Loaded = { anchor: ARAnchor; handles: ContentHandle[]; motions: MotionPlayer[] };
 
 export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }: Props) {
+  const { t } = useI18n();
+  const w = t.scan;
   const containerRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<ARSession | null>(null);
   const loadedRef = useRef(new Map<string, Loaded>());
@@ -414,7 +410,7 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
   const glass = "bg-black/45 text-white backdrop-blur-xl ring-1 ring-white/15";
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-black text-white [overscroll-behavior:none]" style={accent}>
+    <div dir="ltr" className="fixed inset-0 overflow-hidden bg-black text-white [overscroll-behavior:none]" style={accent}>
       {/* camera + 3D layers are injected here by ARSession */}
       <div ref={containerRef} className="absolute inset-0" />
 
@@ -432,7 +428,7 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
       {/* top bar — above the loading/error screens (z-20) so Back is always reachable,
           below the photo preview (z-30) which has its own close button */}
       <div className="absolute inset-x-0 top-0 z-[25] flex items-center gap-3 px-4 safe-top">
-        <Link href={backHref} className={cn("grid size-11 shrink-0 place-items-center rounded-full", glass)} aria-label="Back">
+        <Link href={backHref} className={cn("grid size-11 shrink-0 place-items-center rounded-full", glass)} aria-label={w.back}>
           <ArrowLeft className="size-5" />
         </Link>
         <div className={cn("flex min-w-0 items-center gap-2.5 rounded-full py-1.5 pr-4 pl-1.5", glass)}>
@@ -446,10 +442,10 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
         </div>
         {phase === "running" && (
           <div className="ml-auto flex gap-2">
-            <button onClick={toggleMute} className={cn("grid size-11 place-items-center rounded-full", glass)} aria-label={muted ? "Unmute" : "Mute"}>
+            <button onClick={toggleMute} className={cn("grid size-11 place-items-center rounded-full", glass)} aria-label={muted ? w.unmute : w.mute}>
               {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
             </button>
-            <button onClick={takePhoto} className={cn("grid size-11 place-items-center rounded-full", glass)} aria-label="Take photo">
+            <button onClick={takePhoto} className={cn("grid size-11 place-items-center rounded-full", glass)} aria-label={w.photo}>
               <Camera className="size-5" />
             </button>
           </div>
@@ -471,7 +467,7 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
             <span className="absolute inset-x-3 h-0.5 animate-scan rounded-full bg-[var(--accent)] shadow-[0_0_24px_6px_var(--accent)]" />
           </div>
           <p className={cn("mt-6 rounded-full px-4 py-2 text-sm font-semibold", glass)}>
-            {active ? "Point at the page again" : "Point your camera at a printed page"}
+            {active ? w.pointAgain : w.pointCamera}
           </p>
         </div>
       )}
@@ -479,7 +475,7 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
       {/* page strip while scanning */}
       {phase === "running" && !tracking && !active && (
         <div className="absolute inset-x-0 bottom-0 z-10 safe-bottom">
-          <div className="px-4 pb-2 text-xs font-semibold text-white/70">{plural(targets.length, "page")} with AR in this book</div>
+          <div className="px-4 pb-2 text-xs font-semibold text-white/70">{w.pagesWithAr(targets.length)}</div>
           <div className="flex gap-2.5 overflow-x-auto px-4 pb-1 scrollbar-none">
             {targets.map((t) => (
               <div key={t.id} className="w-16 shrink-0">
@@ -503,7 +499,7 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
                   }}
                   className="flex h-12 items-center gap-2 rounded-full bg-sky-600 px-5 text-sm font-bold text-white shadow-lift active:scale-[0.98]"
                 >
-                  <Orbit className="size-4" /> {active.scanAction === "panorama" ? "Look around 360°" : active.scanAction === "world" ? "Step inside" : active.scanAction === "quicklook" ? "Open AR Quick Look" : "Place the 3D model"}
+                  <Orbit className="size-4" /> {active.scanAction === "panorama" ? w.open.panorama : active.scanAction === "world" ? w.open.world : active.scanAction === "quicklook" ? w.open.quicklook : w.open.model}
                 </button>
               </div>
             )}
@@ -512,14 +508,14 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
                 {active.description && <p className="text-sm leading-relaxed text-ink-600">{active.description}</p>}
                 {rendersOnTarget(active.scanAction) && <>
                   <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-ink-500">
-                    <Hand className="size-3.5" /> Drag to spin · pinch to zoom
+                    <Hand className="size-3.5" /> {w.dragSpin}
                   </p>
                 </>}
               </div>
             ) : (
               showHint && rendersOnTarget(active.scanAction) && (
                 <p className={cn("mx-auto mb-2 flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold", glass)}>
-                  <Hand className="size-3.5" /> Drag to spin · pinch to zoom
+                  <Hand className="size-3.5" /> {w.dragSpin}
                 </p>
               )
             )}
@@ -533,11 +529,11 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
                 <ChevronDown className={cn("size-4 shrink-0 opacity-70 transition", !expanded && "rotate-180")} />
               </button>
               {gestured && (
-                <button onClick={resetGesture} aria-label="Put the model back" className="grid size-9 shrink-0 place-items-center rounded-full bg-white/15 active:bg-white/25">
+                <button onClick={resetGesture} aria-label={w.putBack} className="grid size-9 shrink-0 place-items-center rounded-full bg-white/15 active:bg-white/25">
                   <Hand className="size-4" />
                 </button>
               )}
-              {rendersOnTarget(active.scanAction) && <button onClick={replay} aria-label="Replay" className="grid size-9 shrink-0 place-items-center rounded-full bg-white/15 active:bg-white/25">
+              {rendersOnTarget(active.scanAction) && <button onClick={replay} aria-label={w.replay} className="grid size-9 shrink-0 place-items-center rounded-full bg-white/15 active:bg-white/25">
                 <RotateCcw className="size-4" />
               </button>}
             </div>
@@ -555,7 +551,7 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
                 <LoaderCircle className="size-7 animate-spin" />
               </span>
             </div>
-            <p className="font-semibold">{STAGE_TEXT[stage]}</p>
+            <p className="font-semibold">{w.stages[stage]}</p>
           </div>
         </div>
       )}
@@ -567,15 +563,15 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
             <span className="grid size-16 place-items-center rounded-2xl bg-rose-500/15 text-rose-300">
               <CameraOff className="size-7" />
             </span>
-            <h2 className="mt-5 font-display text-xl font-bold">AR couldn&apos;t start</h2>
-            <p className="mt-2 text-sm leading-relaxed text-white/65">{error.message}</p>
+            <h2 className="mt-5 font-display text-xl font-bold">{w.failed}</h2>
+            <p className="mt-2 text-sm leading-relaxed text-white/65">{(error.code && w.errors[error.code]) || (error.code ? error.message : w.errors.default)}</p>
             <div className="mt-6 flex w-full gap-2">
               <Link href={backHref} className="flex h-12 flex-1 items-center justify-center rounded-2xl bg-white/10 text-sm font-semibold">
-                Go back
+                {w.goBack}
               </Link>
               {error.code !== "insecure" && error.code !== "unsupported" && (
                 <button onClick={start} className="flex h-12 flex-1 items-center justify-center rounded-2xl bg-white text-sm font-bold text-ink-950">
-                  Try again
+                  {t.common.tryAgain}
                 </button>
               )}
             </div>
@@ -589,7 +585,7 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
       {photo && (
         <div className="absolute inset-0 z-30 flex flex-col bg-black/90 p-4 backdrop-blur safe-top safe-bottom">
           <div className="flex justify-end">
-            <button onClick={() => setPhoto(null)} className={cn("grid size-11 place-items-center rounded-full", glass)} aria-label="Close photo">
+            <button onClick={() => setPhoto(null)} className={cn("grid size-11 place-items-center rounded-full", glass)} aria-label={w.closePhoto}>
               <X className="size-5" />
             </button>
           </div>
@@ -599,10 +595,10 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
           </div>
           <div className="mx-auto flex w-full max-w-sm gap-2">
             <a href={photo} download={`pagewakes-${book.id}.jpg`} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-white/10 text-sm font-semibold">
-              <Download className="size-4" /> Save
+              <Download className="size-4" /> {w.savePhoto}
             </a>
             <button onClick={sharePhoto} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-white text-sm font-bold text-ink-950">
-              <Share2 className="size-4" /> Share
+              <Share2 className="size-4" /> {w.share}
             </button>
           </div>
         </div>
@@ -615,6 +611,7 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
           title={modelTarget.name}
           prepare={prepareQuickLook}
           onExit={() => { setModelTarget(null); start(); }}
+          exitLabel={w.backToScanning}
         />
       ) : placementModel(modelTarget.contents) ? (
         <ModelPlacementViewer
@@ -623,10 +620,11 @@ export function ARViewer({ book, targets, backHref, scanHref, previewTargetId }:
           title={modelTarget.name}
           sounds={modelTarget.sounds}
           onExit={() => { setModelTarget(null); start(); }}
+          exitLabel={w.backToScanning}
         />
       ) : (
         <div className="fixed inset-0 z-[60] grid place-items-center bg-black px-6 text-center text-white">
-          <div><p role="alert">This page needs a 3D model. Ask the administrator to add one in Studio.</p><button className="mt-5 rounded-xl bg-white px-5 py-3 font-bold text-black" onClick={() => { setModelTarget(null); start(); }}>Back to scanning</button></div>
+          <div><p role="alert">{w.needsModel}</p><button className="mt-5 rounded-xl bg-white px-5 py-3 font-bold text-black" onClick={() => { setModelTarget(null); start(); }}>{w.backToScanning}</button></div>
         </div>
       ))}
 

@@ -1,8 +1,10 @@
 import { Compass } from "lucide-react";
 import { Logo } from "@/components/brand";
 import { ButtonLink } from "@/components/ui/button";
+import { getI18n } from "@/lib/i18n/server";
 
-export default function NotFound() {
+export default async function NotFound() {
+  const { t } = await getI18n();
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 px-6 text-center">
       <Logo />
@@ -10,10 +12,10 @@ export default function NotFound() {
         <Compass className="size-7" />
       </div>
       <div>
-        <h1 className="font-display text-2xl font-bold text-ink-900">This page doesn&apos;t exist</h1>
-        <p className="mt-2 text-ink-500">Or you don&apos;t have access to it. Check with your school if you think you should.</p>
+        <h1 className="font-display text-2xl font-bold text-ink-900">{t.errors.notFoundTitle}</h1>
+        <p className="mt-2 text-ink-500">{t.errors.notFoundText}</p>
       </div>
-      <ButtonLink href="/">Back home</ButtonLink>
+      <ButtonLink href="/">{t.common.backHome}</ButtonLink>
     </div>
   );
 }

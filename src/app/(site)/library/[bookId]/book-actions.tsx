@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { runAction } from "@/lib/action-client";
-import { cn, compactNumber } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/client";
+import { compactNumber } from "@/lib/i18n/format";
 import { buttonClasses, Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/form";
 import type { Access } from "@/lib/books";
@@ -24,6 +26,7 @@ function useSignInFirst(bookId: string, signedIn: boolean) {
 }
 
 export function LikeButton({ bookId, liked: initialLiked, likes: initialLikes, signedIn }: { bookId: string; liked: boolean; likes: number; signedIn: boolean }) {
+  const { locale, t } = useI18n();
   const [state, setState] = useState({ liked: initialLiked, likes: initialLikes });
   const [pending, start] = useTransition();
   const signInFirst = useSignInFirst(bookId, signedIn);
@@ -48,13 +51,14 @@ export function LikeButton({ bookId, liked: initialLiked, likes: initialLikes, s
       )}
     >
       <Heart aria-hidden="true" className={cn("size-5 transition", state.liked && "scale-110")} fill={state.liked ? "currentColor" : "none"} />
-      {state.liked ? "Liked" : "Like"}
-      <span className="text-sm font-medium tabular-nums opacity-70">{compactNumber(state.likes)}</span>
+      {state.liked ? t.book.liked : t.book.like}
+      <span className="text-sm font-medium tabular-nums opacity-70">{compactNumber(locale, state.likes)}</span>
     </button>
   );
 }
 
 export function RatingInput({ bookId, mine, signedIn }: { bookId: string; mine: number | null; signedIn: boolean }) {
+  const { t } = useI18n();
   const [value, setValue] = useState(mine ?? 0);
   const [hover, setHover] = useState(0);
   const [pending, start] = useTransition();
@@ -63,14 +67,14 @@ export function RatingInput({ bookId, mine, signedIn }: { bookId: string; mine: 
 
   return (
     <div>
-      <div role="radiogroup" aria-label="Your rating" className="flex items-center gap-0.5" onMouseLeave={() => setHover(0)}>
+      <div role="radiogroup" aria-label={t.rating.yours} className="flex items-center gap-0.5" onMouseLeave={() => setHover(0)}>
         {[1, 2, 3, 4, 5].map((stars) => (
           <button
             key={stars}
             type="button"
             role="radio"
             aria-checked={value === stars}
-            aria-label={`${stars} star${stars === 1 ? "" : "s"}`}
+            aria-label={t.rating.stars(stars)}
             disabled={pending}
             onMouseEnter={() => setHover(stars)}
             onFocus={() => setHover(stars)}
@@ -90,13 +94,15 @@ export function RatingInput({ bookId, mine, signedIn }: { bookId: string; mine: 
           </button>
         ))}
       </div>
-      <p className="mt-1 text-xs text-ink-500">{!signedIn ? "Sign in to rate this story" : value ? "Your rating · tap to change" : "Tap a star to rate"}</p>
+      <p className="mt-1 text-xs text-ink-500">{!signedIn ? t.rating.signIn : value ? t.rating.change : t.rating.tap}</p>
     </div>
   );
 }
 
 /** Shown instead of Read / Scan / Download when the viewer can't open the book yet. */
 export function AccessPanel({ bookId, access, visibility }: { bookId: string; access: Exclude<Access, "open">; visibility: Visibility }) {
+  const { t } = useI18n();
+  const a = t.book.access;
   const [message, setMessage] = useState("");
   const [pending, start] = useTransition();
   const router = useRouter();
@@ -106,28 +112,26 @@ export function AccessPanel({ bookId, access, visibility }: { bookId: string; ac
     <div className="mt-8 max-w-2xl rounded-[24px] bg-white p-5 ring-1 ring-[#eadfca] sm:p-6">
       <p className="flex items-center gap-2 font-display text-lg font-bold text-ink-900">
         {access === "pending" ? <Clock aria-hidden="true" className="size-5 text-amber-500" /> : <Lock aria-hidden="true" className="size-5 text-brand-500" />}
-        {access === "sign-in" && (visibility === "MEMBERS" ? "Free with an account" : "For approved readers")}
-        {access === "request" && "Ask to read this book"}
-        {access === "pending" && "Access requested"}
-        {access === "declined" && "Your request wasn't approved"}
+        {access === "sign-in" && (visibility === "MEMBERS" ? a.membersTitle : a.approvedTitle)}
+        {access === "request" && a.requestTitle}
+        {access === "pending" && a.pendingTitle}
+        {access === "declined" && a.declinedTitle}
       </p>
       <p className="mt-1.5 text-[15px] text-ink-600">
         {access === "sign-in" &&
-          (visibility === "MEMBERS"
-            ? "Sign in or create a free account to read, download and scan this story."
-            : "Sign in with your email, then ask for access. Bought the printed book? We'll approve your email.")}
-        {access === "request" && "We'll check your request and let you know. Tell us where you got the book if you bought it."}
-        {access === "pending" && "We'll approve it soon. The book opens here as soon as it is."}
-        {access === "declined" && "You can ask again if something changed, for example after buying the book."}
+          (visibility === "MEMBERS" ? a.membersText : a.approvedText)}
+        {access === "request" && a.requestText}
+        {access === "pending" && a.pendingText}
+        {access === "declined" && a.declinedText}
       </p>
 
       {access === "sign-in" && (
         <div className="mt-5 flex flex-wrap gap-3">
           <Link href={`/login?next=${here}`} className={buttonClasses("primary", "lg")}>
-            Sign in to read
+            {a.signInToRead}
           </Link>
           <Link href={`/signup?next=${here}`} className={buttonClasses("outline", "lg")}>
-            Create a free account
+            {a.createAccount}
           </Link>
         </div>
       )}
@@ -147,12 +151,12 @@ export function AccessPanel({ bookId, access, visibility }: { bookId: string; ac
             value={message}
             onChange={(event) => setMessage(event.target.value)}
             maxLength={300}
-            aria-label="Message for the team (optional)"
-            placeholder="Optional: I bought the printed book at…"
+            aria-label={a.message}
+            placeholder={a.messagePlaceholder}
             className="min-h-20"
           />
           <Button type="submit" size="lg" disabled={pending} className="self-start">
-            {access === "declined" ? "Ask again" : "Ask for access"}
+            {access === "declined" ? a.askAgain : a.ask}
           </Button>
         </form>
       )}

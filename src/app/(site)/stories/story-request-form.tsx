@@ -5,13 +5,17 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { SubmitButton } from "@/components/ui/client-bits";
 import { Field, FormError, Input, Select, Textarea } from "@/components/ui/form";
-import { languageName, STORY_GOALS, STORY_LANGUAGES, type StoryGoal } from "@/lib/stories";
+import { STORY_GOALS, STORY_LANGUAGES, type StoryGoal } from "@/lib/stories";
+import { useI18n } from "@/lib/i18n/client";
+import { languageName } from "@/lib/i18n/format";
 import { cn } from "@/lib/utils";
 import { createStoryRequest } from "@/server/actions/stories";
 
 type Child = { id: string; name: string; age: number | null; interests: string | null };
 
-export function StoryRequestForm({ kids }: { kids: Child[] }) {
+export function StoryRequestForm({ kids, defaultLanguage }: { kids: Child[]; defaultLanguage: string }) {
+  const { locale, t } = useI18n();
+  const f = t.stories.form;
   const [state, action] = useActionState(createStoryRequest, undefined);
   const [childId, setChildId] = useState(kids[0]?.id ?? "");
   const [goal, setGoal] = useState<StoryGoal | "">("");
@@ -30,10 +34,10 @@ export function StoryRequestForm({ kids }: { kids: Child[] }) {
       <FormError message={state?.error} />
 
       <fieldset className="flex flex-col gap-4">
-        <legend className="mb-3 font-display text-lg font-bold text-ink-900">1. Who is the story for?</legend>
+        <legend className="mb-3 font-display text-lg font-bold text-ink-900">{f.who}</legend>
         {kids.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {[...kids, { id: "", name: "Someone else", age: null, interests: null }].map((k) => (
+            {[...kids, { id: "", name: f.someoneElse, age: null, interests: null }].map((k) => (
               <button
                 key={k.id || "new"}
                 type="button"
@@ -53,21 +57,21 @@ export function StoryRequestForm({ kids }: { kids: Child[] }) {
         <input type="hidden" name="childId" value={childId} />
         {/* key: switching child refills the fields from their profile */}
         <div key={childId} className="grid gap-3 sm:grid-cols-[1fr_120px]">
-          <Field label="Child's first name or nickname" htmlFor="childName" error={err("childName")} hint="This is the hero of the story.">
-            <Input id="childName" name="childName" required maxLength={40} defaultValue={child?.name ?? state?.values?.childName} placeholder="Lina" />
+          <Field label={f.childName} htmlFor="childName" error={err("childName")} hint={f.childNameHint}>
+            <Input id="childName" name="childName" required maxLength={40} defaultValue={child?.name ?? state?.values?.childName} placeholder={f.childNamePlaceholder} />
           </Field>
-          <Field label="Age" htmlFor="childAge" error={err("childAge")}>
+          <Field label={f.age} htmlFor="childAge" error={err("childAge")}>
             <Input id="childAge" name="childAge" type="number" min={0} max={14} defaultValue={child?.age ?? state?.values?.childAge} placeholder="5" />
           </Field>
-          <Field label="Things they love" htmlFor="interests" hint="Animals, colours, places, toys… we'll put them in the story." className="sm:col-span-2">
-            <Input id="interests" name="interests" maxLength={300} defaultValue={child?.interests ?? state?.values?.interests} placeholder="Dinosaurs, the sea, her cat Miso" />
+          <Field label={f.loves} htmlFor="interests" hint={f.lovesHint} className="sm:col-span-2">
+            <Input id="interests" name="interests" maxLength={300} defaultValue={child?.interests ?? state?.values?.interests} placeholder={f.lovesPlaceholder} />
           </Field>
         </div>
       </fieldset>
 
       <fieldset>
-        <legend className="mb-3 font-display text-lg font-bold text-ink-900">2. What should the story help with?</legend>
-        <div role="radiogroup" aria-label="Story goal" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <legend className="mb-3 font-display text-lg font-bold text-ink-900">{f.helpWith}</legend>
+        <div role="radiogroup" aria-label={f.goal} className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {(Object.keys(STORY_GOALS) as StoryGoal[]).map((key) => (
             <label
               key={key}
@@ -78,7 +82,7 @@ export function StoryRequestForm({ kids }: { kids: Child[] }) {
             >
               <input type="radio" name="goal" value={key} required checked={goal === key} onChange={() => setGoal(key)} className="sr-only" />
               <span aria-hidden="true" className="text-lg">{STORY_GOALS[key].emoji}</span>
-              {STORY_GOALS[key].label}
+              {t.stories.goals[key]}
             </label>
           ))}
         </div>
@@ -86,12 +90,12 @@ export function StoryRequestForm({ kids }: { kids: Child[] }) {
       </fieldset>
 
       <fieldset className="flex flex-col gap-4">
-        <legend className="mb-3 font-display text-lg font-bold text-ink-900">3. In your own words</legend>
+        <legend className="mb-3 font-display text-lg font-bold text-ink-900">{f.ownWords}</legend>
         <Field
-          label="What would you like your child to learn or think about?"
+          label={f.learn}
           htmlFor="message"
           error={err("message")}
-          hint="A situation at home, a habit, a worry, a value that matters to your family. The more you tell us, the more personal the story."
+          hint={f.learnHint}
         >
           <Textarea
             id="message"
@@ -101,14 +105,14 @@ export function StoryRequestForm({ kids }: { kids: Child[] }) {
             maxLength={1500}
             defaultValue={state?.values?.message}
             className="min-h-32"
-            placeholder="Lina finds it hard to share her toys with her little brother. I'd love a story that shows sharing can be fun and makes friends happy."
+            placeholder={f.learnPlaceholder}
           />
         </Field>
-        <Field label="Story language" htmlFor="language" className="sm:max-w-xs">
-          <Select id="language" name="language" defaultValue={state?.values?.language ?? "en"}>
+        <Field label={f.language} htmlFor="language" className="sm:max-w-xs">
+          <Select id="language" name="language" defaultValue={state?.values?.language ?? defaultLanguage}>
             {STORY_LANGUAGES.map((code) => (
               <option key={code} value={code}>
-                {languageName(code)}
+                {languageName(locale, code)}
               </option>
             ))}
           </Select>
@@ -116,9 +120,9 @@ export function StoryRequestForm({ kids }: { kids: Child[] }) {
       </fieldset>
 
       <div className="flex flex-col gap-3 border-t border-[#eadfca] pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-ink-500">Only you and our story team can see this request and the finished book.</p>
-        <SubmitButton size="lg" pendingText="Sending…">
-          Send my request
+        <p className="text-xs text-ink-500">{f.privacy}</p>
+        <SubmitButton size="lg" pendingText={f.sending}>
+          {f.send}
         </SubmitButton>
       </div>
     </form>

@@ -8,11 +8,13 @@ import { Thumb } from "@/components/thumb";
 import { ButtonLink, buttonClasses } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 import { bookFormat } from "@/lib/book-format";
-import { accessState, libraryBooksWhere, readableWhere, VISIBILITIES } from "@/lib/books";
+import { accessState, libraryBooksWhere, readableWhere } from "@/lib/books";
 import { db } from "@/lib/db";
-import { bookCardSelect, compactNumber, libraryOrderBy, toBookCard } from "@/lib/library";
+import { bookCardSelect, libraryOrderBy, toBookCard } from "@/lib/library";
+import { compactNumber } from "@/lib/i18n/format";
+import { getI18n } from "@/lib/i18n/server";
+import { categoryName, type Messages } from "@/lib/i18n/messages";
 import { SubjectIcon } from "@/lib/subject-icons";
-import { plural } from "@/lib/utils";
 import { AccessPanel, LikeButton, RatingInput } from "./book-actions";
 import { CoverActions, MoreActionsButton, type CoverAction } from "./cover-actions";
 import { PaperBadge, type PaperBadgeKind } from "@/components/paper-badge";
@@ -24,12 +26,14 @@ import { readerHref, withReturnTo } from "@/lib/reader-navigation";
 export async function generateMetadata({ params }: { params: Promise<{ bookId: string }> }): Promise<Metadata> {
   const { bookId } = await params;
   const book = await db.book.findFirst({ where: { id: bookId, ...libraryBooksWhere }, select: { title: true, description: true } });
-  return book ? { title: book.title, description: book.description ?? undefined } : { title: "Story" };
+  const { t } = await getI18n();
+  return book ? { title: book.title, description: book.description ?? undefined } : { title: t.meta.story };
 }
 
 export default async function BookPage({ params }: { params: Promise<{ bookId: string }> }) {
   const { bookId } = await params;
-  const user = await getCurrentUser();
+  const [user, { locale, t }] = await Promise.all([getCurrentUser(), getI18n()]);
+  const b = t.book;
   // Every library book has a page, locked or not, so readers can ask for access. Custom stories
   // only exist for the readers they were shared with.
   const row = await db.book.findFirst({
@@ -64,11 +68,11 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
   const hasDirectExperience = !!modelPage || row.targets.some((target) => worldExperienceOf(target.scanAction, target.worldUrl));
   // What the pages can do, with the names the reader's badges use (explained on the home page).
   const count = (test: (page: NonNullable<typeof row>["targets"][number]) => boolean) => row.targets.filter(test).length;
-  const allExperiences: { kind: PaperBadgeKind; label: string; count: number; unit: string }[] = [
-    { kind: "scan", label: "Scan", count: book.ar ? count((t) => t.ar && scanActionOf(t.scanAction) === "ar") : 0, unit: "page" },
-    { kind: "inside", label: "Step inside", count: count((t) => worldExperienceOf(t.scanAction, t.worldUrl) === "box"), unit: "world" },
-    { kind: "panorama", label: "360° view", count: count((t) => worldExperienceOf(t.scanAction, t.worldUrl) === "panorama"), unit: "scene" },
-    { kind: "model", label: "Place model", count: count((t) => opensModel(t.scanAction) && t.contents.some(isPlaceableModel)), unit: "character" },
+  const allExperiences: { kind: PaperBadgeKind; count: number }[] = [
+    { kind: "scan", count: book.ar ? count((page) => page.ar && scanActionOf(page.scanAction) === "ar") : 0 },
+    { kind: "inside", count: count((page) => worldExperienceOf(page.scanAction, page.worldUrl) === "box") },
+    { kind: "panorama", count: count((page) => worldExperienceOf(page.scanAction, page.worldUrl) === "panorama") },
+    { kind: "model", count: count((page) => opensModel(page.scanAction) && page.contents.some(isPlaceableModel)) },
   ];
   const experiences = allExperiences.filter((experience) => experience.count > 0);
   const translated = new Set(row.targets.flatMap((t) => Object.keys((t.translations ?? {}) as Record<string, unknown>)));
@@ -76,11 +80,11 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
   // Everything a reader can do with the book: buttons from tablets up, circles round the cover on a phone.
   const actions: CoverAction[] = open
     ? [
-        ...(book.pages > 0 ? [{ key: "read" as const, href: `/read/${book.id}`, label: "Read now" }] : []),
-        ...(modelPage ? [{ key: "model" as const, href: withReturnTo(`/place/${book.id}/${modelPage.id}`, `/library/${book.id}`), label: "Place a model" }] : []),
-        ...(book.ar ? [{ key: "scan" as const, href: withReturnTo(`/scan/${book.id}`, `/library/${book.id}`), label: "Scan printed book" }] : []),
+        ...(book.pages > 0 ? [{ key: "read" as const, href: `/read/${book.id}`, label: b.actions.read }] : []),
+        ...(modelPage ? [{ key: "model" as const, href: withReturnTo(`/place/${book.id}/${modelPage.id}`, `/library/${book.id}`), label: b.actions.model }] : []),
+        ...(book.ar ? [{ key: "scan" as const, href: withReturnTo(`/scan/${book.id}`, `/library/${book.id}`), label: b.actions.scan }] : []),
         // Printed copies are ordered from the basket (print files are for admins preparing them).
-        ...(book.pages > 0 ? [{ key: "buy" as const, href: `/basket?add=${book.id}`, label: "Buy printed book" }] : []),
+        ...(book.pages > 0 ? [{ key: "buy" as const, href: `/basket?add=${book.id}`, label: b.actions.buy }] : []),
       ]
     : [];
   const secondary = actions.filter((action) => action.key !== "read");
@@ -88,7 +92,7 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
   return (
     <div className="mx-auto max-w-6xl px-4 pt-6 pb-20 sm:px-6">
       <Link href={custom ? "/account" : "/library"} className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-900">
-        <ArrowLeft aria-hidden="true" className="size-4" /> {custom ? "My account" : "Library"}
+        <ArrowLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" /> {custom ? b.myAccount : t.common.library}
       </Link>
 
       {/* Tablets up: the cover on the left (it stays in view while the details scroll), the details beside it. */}
@@ -106,23 +110,23 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             <Link href={`/library?category=${book.category.slug}`} className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1 ring-1 ring-[#eadfca]" style={{ color: book.category.color }}>
-              <SubjectIcon icon={book.category.icon} className="size-4" /> {book.category.name}
+              <SubjectIcon icon={book.category.icon} className="size-4" /> {categoryName(t, book.category.slug, book.category.name)}
             </Link>
-            {book.ages && <span className="rounded-full bg-white px-3 py-1 text-ink-600 ring-1 ring-[#eadfca]">{book.ages}</span>}
+            {book.ages && <bdi className="rounded-full bg-white px-3 py-1 text-ink-600 ring-1 ring-[#eadfca]">{book.ages}</bdi>}
             {custom ? (
               <span className="flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-amber-800">
-                <Sparkles aria-hidden="true" className="size-4" /> Made for your family
+                <Sparkles aria-hidden="true" className="size-4" /> {b.madeForFamily}
               </span>
             ) : book.visibility === "PUBLIC" ? (
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 ring-1 ring-emerald-100">Free</span>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 ring-1 ring-emerald-100">{b.free}</span>
             ) : (
-              <span className="rounded-full bg-sky-50 px-3 py-1 text-sky-700 ring-1 ring-sky-100">{book.visibility === "MEMBERS" ? "Free with an account" : VISIBILITIES.APPROVED.label}</span>
+              <span className="rounded-full bg-sky-50 px-3 py-1 text-sky-700 ring-1 ring-sky-100">{book.visibility === "MEMBERS" ? b.freeWithAccount : b.forApproved}</span>
             )}
           </div>
 
-          <h1 className="mt-4 font-display text-[34px] leading-tight font-bold tracking-tight text-balance text-ink-900 sm:text-5xl">{book.title}</h1>
+          <h1 dir="auto" className="mt-4 font-display text-[34px] leading-tight font-bold tracking-tight text-balance text-ink-900 sm:text-5xl">{book.title}</h1>
           {!custom && <RatingSummary average={book.rating.average} count={book.rating.count} size="md" className="mt-3 text-sm" />}
-          {book.description && <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-pretty text-ink-600 sm:mt-5 sm:text-lg">{book.description}</p>}
+          {book.description && <p dir="auto" className="mt-4 max-w-2xl text-[17px] leading-relaxed text-pretty text-ink-600 sm:mt-5 sm:text-lg">{book.description}</p>}
 
           {!open && <AccessPanel bookId={book.id} access={access} visibility={custom ? "APPROVED" : book.visibility} />}
 
@@ -130,14 +134,14 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
             <div className="mt-7 max-w-xl sm:mt-8">
               {actions[0]?.key === "read" && (
                 <ButtonLink href={actions[0].href} size="lg" className="h-14 w-full text-[17px] shadow-glow">
-                  <BookOpen /> Read now
+                  <BookOpen /> {b.readNow}
                 </ButtonLink>
               )}
               {secondary.length > 0 && (
                 <>
                   {/* Phones: the rest pop out of the cover. */}
                   <MoreActionsButton className={cn(buttonClasses("outline", "lg"), "mt-3 w-full md:hidden")}>
-                    {secondary.map((action) => SHORT_LABEL[action.key]).join(" · ")}
+                    {secondary.map((action) => b.short[action.key]).join(" · ")}
                   </MoreActionsButton>
                   {/* Tablets up: one even row, however many there are. */}
                   <div className="mt-3 hidden gap-3 md:grid" style={{ gridTemplateColumns: `repeat(${secondary.length}, minmax(0, 1fr))` }}>
@@ -147,7 +151,7 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
                         <ButtonLink key={action.key} href={action.href} size="lg" variant={action.key === "model" ? "secondary" : "outline"} className="h-12 min-w-0 gap-2 px-3 text-[15px]">
                           <Icon />
                           {/* Full names once the row is wide enough for them; short ones until then. */}
-                          <span className="truncate xl:hidden">{SHORT_LABEL[action.key]}</span>
+                          <span className="truncate xl:hidden">{b.short[action.key]}</span>
                           <span className="hidden truncate xl:inline">{action.label}</span>
                         </ButtonLink>
                       );
@@ -161,16 +165,16 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
           {open && (experiences.length > 0 || languages.length > 0) && (
             <div className="mt-6 max-w-2xl">
               <div className="flex items-baseline justify-between gap-3">
-                <h2 className="text-xs font-bold tracking-wide text-ink-500 uppercase">In this book</h2>
+                <h2 className="text-xs font-bold tracking-wide text-ink-500 uppercase">{b.inThisBook}</h2>
                 {experiences.length > 0 && (
                   <Link href="/#experiences" className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700">
-                    What do these mean? <ArrowRight aria-hidden="true" className="size-3.5" />
+                    {b.whatMean} <ArrowRight aria-hidden="true" className="size-3.5 rtl:-scale-x-100" />
                   </Link>
                 )}
               </div>
               <ul className="mt-2.5 flex flex-wrap gap-2">
                 {experiences.map((experience) => (
-                  <Experience key={experience.label} kind={experience.kind} label={experience.label} detail={plural(experience.count, experience.unit)} />
+                  <Experience key={experience.kind} kind={experience.kind} label={b.kinds[experience.kind]} detail={b.units[experience.kind](experience.count)} />
                 ))}
                 {languages.length > 0 && (
                   <li className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-ink-700 ring-1 ring-[#eadfca]">
@@ -188,15 +192,15 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
           )}
 
           <dl className="mt-8 grid max-w-2xl grid-cols-3 gap-3">
-            <Fact icon={Heart} label="Likes" value={compactNumber(book.likes)} />
-            <Fact icon={FileText} label="Pages" value={String(book.pages)} />
-            <Fact icon={ScanLine} label="AR pages" value={String(arPages)} />
+            <Fact icon={Heart} label={b.facts.likes} value={compactNumber(locale, book.likes)} />
+            <Fact icon={FileText} label={b.facts.pages} value={String(book.pages)} />
+            <Fact icon={ScanLine} label={b.facts.arPages} value={String(arPages)} />
           </dl>
 
           {!custom && open && (
             <div className="mt-8 flex max-w-2xl flex-col gap-5 rounded-[24px] bg-white p-5 ring-1 ring-[#eadfca] sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="font-display font-bold text-ink-900">Did you enjoy it?</p>
+                <p className="font-display font-bold text-ink-900">{b.enjoy}</p>
                 <div className="mt-2">
                   <RatingInput bookId={book.id} mine={rating?.stars ?? null} signedIn={!!user} />
                 </div>
@@ -209,9 +213,9 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
             <div className="mt-6 flex max-w-2xl gap-3 rounded-[20px] bg-ink-950 p-4 text-sm text-white/80">
               <Printer aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-amber-300" />
               <p>
-                {hasDirectExperience ? <><span className="font-semibold text-white">Reading on a phone?</span> Tap the blue badge on a page (Step inside, Look around or Place model) to open it straight away. </> : null}
-                <span className="font-semibold text-white">Using a printed book?</span> Tap <span className="font-semibold text-white">Scan printed book</span> and point your phone at a page marked AR.
-                {" "}{bookFormat(row.format).label} pages.
+                {hasDirectExperience ? <><span className="font-semibold text-white">{b.phoneQ}</span> {b.phoneText} </> : null}
+                <span className="font-semibold text-white">{b.printedQ}</span> {b.printedBefore} <span className="font-semibold text-white">«{b.actions.scan}»</span> {b.printedAfter}
+                {" "}{b.format(`\u2068${bookFormat(row.format).label}\u2069`)}
               </p>
             </div>
           )}
@@ -221,27 +225,27 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
       {/* Locked books keep their pages to themselves. */}
       {open && row.targets.length > 1 && (
         <section className="mt-16">
-          <h2 className="font-display text-2xl font-bold text-ink-900">Inside the book</h2>
+          <h2 className="font-display text-2xl font-bold text-ink-900">{b.inside}</h2>
           <div className="-mx-4 mt-5 flex gap-3 overflow-x-auto px-4 pb-3 scrollbar-none sm:mx-0 sm:px-0">
             {row.targets.slice(0, 12).map((page, i) => (
               <Link key={page.id} href={readerHref(book.id, page.id)} className="group w-28 shrink-0 sm:w-32">
                 <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-white shadow-soft ring-1 ring-[#eadfca]">
                   <Thumb src={page.imageUrl} width={128} height={171} className="size-full object-cover transition group-hover:scale-105" />
-                  <PageBadge page={page} />
+                  <PageBadge page={page} words={b.badges} />
                 </div>
                 <p className="mt-1.5 truncate text-xs font-medium text-ink-600">
-                  {i + 1}. {page.name}
+                  {i + 1}. <bdi>{page.name}</bdi>
                 </p>
               </Link>
             ))}
           </div>
-          {row.targets.length > 12 && <p className="text-sm text-ink-500">and {plural(row.targets.length - 12, "more page")}.</p>}
+          {row.targets.length > 12 && <p className="text-sm text-ink-500">{b.morePages(row.targets.length - 12)}</p>}
         </section>
       )}
 
       {related.length > 0 && (
         <section className="mt-16">
-          <h2 className="mb-6 font-display text-2xl font-bold text-ink-900">More {book.category.name.toLowerCase()} stories</h2>
+          <h2 className="mb-6 font-display text-2xl font-bold text-ink-900">{b.more(categoryName(t, book.category.slug, book.category.name))}</h2>
           <BookGrid books={related.map((b) => toBookCard(b))} />
         </section>
       )}
@@ -249,11 +253,11 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
       {!custom && (
         <section className="mt-16 flex flex-col items-start gap-4 rounded-[28px] bg-gradient-to-br from-brand-500 to-brand-700 p-7 text-white sm:flex-row sm:items-center sm:justify-between sm:p-9">
           <div>
-            <h2 className="font-display text-2xl font-bold">Want a story about your child?</h2>
-            <p className="mt-2 max-w-lg text-white/90">Tell us the lesson you have in mind and we&apos;ll write a story starring your child.</p>
+            <h2 className="font-display text-2xl font-bold">{b.customTitle}</h2>
+            <p className="mt-2 max-w-lg text-white/90">{b.customText}</p>
           </div>
           <ButtonLink href="/stories" size="lg" className="bg-white text-brand-700 shadow-none hover:bg-white/90">
-            <Sparkles /> Ask for a custom story
+            <Sparkles /> {b.askCustom}
           </ButtonLink>
         </section>
       )}
@@ -262,11 +266,10 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
 }
 
 const ACTION_ICON: Record<CoverAction["key"], LucideIcon> = { read: BookOpen, model: Box, scan: Camera, buy: ShoppingBasket };
-const SHORT_LABEL: Record<CoverAction["key"], string> = { read: "Read", model: "Place model", scan: "Scan book", buy: "Buy" };
 
 function Experience({ kind, label, detail }: { kind: PaperBadgeKind; label: string; detail: string }) {
   return (
-    <li className="flex items-center gap-2 py-1 pr-1 text-sm">
+    <li className="flex items-center gap-2 py-1 pe-1 text-sm">
       <PaperBadge kind={kind} label={label} size="sm" tilt={-1} />
       <span className="font-medium text-ink-600">{detail}</span>
     </li>
@@ -274,19 +277,11 @@ function Experience({ kind, label, detail }: { kind: PaperBadgeKind; label: stri
 }
 
 /** The badge a page shows in the reader, small, on its thumbnail. */
-function PageBadge({ page }: { page: { ar: boolean; scanAction: string; worldUrl: string | null } }) {
+function PageBadge({ page, words }: { page: { ar: boolean; scanAction: string; worldUrl: string | null }; words: Messages["book"]["badges"] }) {
   const world = worldExperienceOf(page.scanAction, page.worldUrl);
-  const [kind, label]: [PaperBadgeKind, string] | [null, ""] = opensModel(page.scanAction)
-    ? ["model", "Place model"]
-    : world === "box"
-      ? ["inside", "Step inside"]
-      : world === "panorama"
-        ? ["panorama", "360°"]
-        : page.ar
-          ? ["scan", "Scan"]
-          : [null, ""];
+  const kind: PaperBadgeKind | null = opensModel(page.scanAction) ? "model" : world === "box" ? "inside" : world === "panorama" ? "panorama" : page.ar ? "scan" : null;
   if (!kind) return null;
-  return <PaperBadge kind={kind} label={label} size="xs" tilt={2} className="absolute right-2 bottom-2" />;
+  return <PaperBadge kind={kind} label={words[kind]} size="xs" tilt={2} className="absolute end-2 bottom-2" />;
 }
 
 function Fact({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {

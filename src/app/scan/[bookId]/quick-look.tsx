@@ -4,6 +4,7 @@ import { ArrowLeft, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { supportsQuickLook } from "@/ar/quick-look-assets";
 import type { ContentData } from "@/lib/content";
+import { useI18n } from "@/lib/i18n/client";
 
 /** How long Safari gets to bring Quick Look up before we decide it wants a tap first. */
 const OPEN_TIMEOUT_MS = 1500;
@@ -25,13 +26,15 @@ function openQuickLook(url: string) {
  * press. Coming back from Quick Look returns to the caller (scanning, or the book). A button only
  * appears if Safari wouldn't open Quick Look without a tap.
  */
-export function QuickLookLaunch({ content, title, prepare, onExit, exitLabel = "Back to scanning" }: {
+export function QuickLookLaunch({ content, title, prepare, onExit, exitLabel }: {
   content: ContentData | undefined;
   title: string;
   prepare: (content: ContentData) => Promise<string>;
   onExit: () => void;
   exitLabel?: string;
 }) {
+  const { t } = useI18n();
+  const w = t.scan;
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsTap, setNeedsTap] = useState(false);
@@ -46,18 +49,20 @@ export function QuickLookLaunch({ content, title, prepare, onExit, exitLabel = "
     setError(null);
     setNeedsTap(false);
     if (!supportsQuickLook()) {
-      setError("This page uses Apple AR Quick Look. Open it in Safari on an iPhone or iPad.");
+      setError(w.quickLookSafari);
       return;
     }
     if (!content) {
-      setError("This page needs a 3D model. Ask the administrator to add one in Studio.");
+      setError(w.needsModel);
       return;
     }
     // Usually ready already: the scanner prepares it while the book is being scanned.
     prepare(content).then((ready) => { if (alive) setUrl(ready); }).catch(() => {
-      if (alive) setError("The 3D model couldn't be prepared. Check your connection and try again.");
+      if (alive) setError(w.modelFailed);
     });
     return () => { alive = false; };
+    // The words follow the language; they don't restart the preparation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, prepare, attempt]);
 
   useEffect(() => {
@@ -87,16 +92,16 @@ export function QuickLookLaunch({ content, title, prepare, onExit, exitLabel = "
   }, [url]);
 
   return (
-    <div className={error ? "fixed inset-0 z-[60] bg-ink-950 text-white" : "fixed inset-0 z-[60] bg-black/30 text-white"}>
+    <div dir="ltr" className={error ? "fixed inset-0 z-[60] bg-ink-950 text-white" : "fixed inset-0 z-[60] bg-black/30 text-white"}>
       <div className="absolute inset-x-0 top-0 flex items-center gap-3 px-4 safe-top">
-        <button onClick={onExit} aria-label={exitLabel} className="grid size-11 place-items-center rounded-full bg-black/50 backdrop-blur"><ArrowLeft className="size-5" /></button>
+        <button onClick={onExit} aria-label={exitLabel ?? w.backToScanning} className="grid size-11 place-items-center rounded-full bg-black/50 backdrop-blur"><ArrowLeft className="size-5" /></button>
         <span className="rounded-full bg-black/50 px-4 py-2 text-sm font-semibold backdrop-blur">{title}</span>
       </div>
       {error ? (
         <div className="grid size-full place-items-center px-6 text-center">
           <div className="flex max-w-sm flex-col items-center gap-5">
             <p role="alert">{error}</p>
-            {supportsQuickLook() && content && <button onClick={() => setAttempt((value) => value + 1)} className="rounded-xl bg-white px-5 py-3 font-bold text-ink-950">Try again</button>}
+            {supportsQuickLook() && content && <button onClick={() => setAttempt((value) => value + 1)} className="rounded-xl bg-white px-5 py-3 font-bold text-ink-950">{t.common.tryAgain}</button>}
           </div>
         </div>
       ) : (
@@ -105,11 +110,11 @@ export function QuickLookLaunch({ content, title, prepare, onExit, exitLabel = "
         <div className="absolute inset-x-0 bottom-0 flex justify-center px-6 pb-8 safe-bottom">
           {needsTap && url ? (
             <button onClick={() => openQuickLook(url)} className="flex h-12 items-center rounded-full bg-white px-5 text-sm font-bold text-ink-950 shadow-lift">
-              Open in AR Quick Look
+              {w.openQuickLook}
             </button>
           ) : (
             <p role="status" className="flex items-center gap-2 rounded-full bg-black/55 px-4 py-2.5 text-sm font-semibold backdrop-blur">
-              <LoaderCircle className="size-4 animate-spin" /> {url ? "Opening AR Quick Look…" : "Preparing the 3D model…"}
+              <LoaderCircle className="size-4 animate-spin" /> {url ? w.openingQuickLook : w.preparingModel}
             </p>
           )}
         </div>
