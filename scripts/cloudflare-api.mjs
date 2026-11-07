@@ -1,11 +1,16 @@
 // Local deployment tooling only. The OAuth token is never bundled or printed.
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-const configRoot = process.env.APPDATA ? path.join(process.env.APPDATA, "xdg.config") : process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config");
-const configPath = path.join(configRoot, ".wrangler/config/default.toml");
+// Where `wrangler login` keeps its token: XDG/.config on Linux, ~/Library/Preferences on macOS, AppData on Windows.
+const configRoots = process.env.APPDATA
+  ? [path.join(process.env.APPDATA, "xdg.config")]
+  : [process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"), path.join(os.homedir(), "Library", "Preferences")];
+const configPaths = configRoots.map((root) => path.join(root, ".wrangler/config/default.toml"));
+const found = await Promise.all(configPaths.map((candidate) => access(candidate).then(() => candidate, () => null)));
+const configPath = found.find(Boolean) ?? configPaths[0];
 let config = process.env.CLOUDFLARE_API_TOKEN ? "" : await readFile(configPath, "utf8");
 const expiry = config.match(/^expiration_time\s*=\s*"([^"]+)"/m)?.[1];
 if (expiry && Date.parse(expiry) <= Date.now() + 60_000) {
