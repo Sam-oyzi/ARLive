@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BookOpen, Clock, Heart, KeyRound, MessageSquareQuote, Smile, Sparkles } from "lucide-react";
+import { BookOpen, Clock, Heart, KeyRound, MessageSquareQuote, ShoppingBasket, Smile, Sparkles } from "lucide-react";
 import { BookCover, BookGrid } from "@/components/library/book-card";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
@@ -114,8 +114,8 @@ export default async function AccountPage() {
                             <ButtonLink href={`/read/${r.book.id}`} size="sm">
                               <BookOpen /> Read
                             </ButtonLink>
-                            <ButtonLink href={`/print/${r.book.id}`} size="sm" variant="outline">
-                              Download
+                            <ButtonLink href={`/basket?add=${r.book.id}`} size="sm" variant="outline">
+                              <ShoppingBasket /> Buy printed copy
                             </ButtonLink>
                           </>
                         )}

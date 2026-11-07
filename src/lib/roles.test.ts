@@ -16,7 +16,7 @@ test("follows ?next= back to public library pages for every role", () => {
   assert.equal(afterLoginPath("PARENT", "/library/abc"), "/library/abc");
   assert.equal(afterLoginPath("PARENT", "/stories?child=1"), "/stories?child=1");
   assert.equal(afterLoginPath("STUDENT", "/library"), "/library");
-  assert.equal(afterLoginPath("PARENT", "/print/abc"), "/print/abc");
+  assert.equal(afterLoginPath("PARENT", "/basket"), "/basket");
   assert.equal(isPublicPath("/"), true);
   assert.equal(isPublicPath("/libraryx"), false);
 });
@@ -51,4 +51,11 @@ test("only school roles belong to a school", () => {
 test("an unknown role falls back to the student home", () => {
   assert.equal(homeFor("NOPE"), "/learn");
   assert.equal(afterLoginPath("NOPE", "/learn"), "/learn");
+});
+
+test("only admins open print files; readers order printed copies from the basket", () => {
+  assert.deepEqual(rolesForPath("/print/abc"), ["SUPER_ADMIN"]);
+  assert.equal(isPublicPath("/print/abc"), false);
+  assert.equal(afterLoginPath("PARENT", "/print/abc"), "/account");
+  assert.equal(isPublicPath("/basket"), true);
 });

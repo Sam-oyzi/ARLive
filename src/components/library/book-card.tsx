@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Download, Heart, Lock, ScanLine, UserRound } from "lucide-react";
+import { Heart, Lock, ScanLine, UserRound } from "lucide-react";
 import { Thumb } from "@/components/thumb";
 import { compactNumber, type BookCardData } from "@/lib/library";
 import { SubjectIcon } from "@/lib/subject-icons";
@@ -47,10 +47,6 @@ export function BookCard({ book }: { book: BookCardData }) {
         <h3 className="mt-1 line-clamp-2 font-display text-[17px] leading-snug font-bold text-ink-900 group-hover:text-brand-600">{book.title}</h3>
         <RatingSummary average={book.rating.average} count={book.rating.count} className="mt-1.5" />
         <div className="mt-1.5 flex items-center gap-3 text-xs font-medium text-ink-500">
-          <span className="flex items-center gap-1" title={`${book.downloads} downloads`}>
-            <Download aria-hidden="true" className="size-3.5" /> <span className="tabular-nums">{compactNumber(book.downloads)}</span>
-            <span className="sr-only">{book.downloads === 1 ? "download" : "downloads"}</span>
-          </span>
           <span className="flex items-center gap-1" title={`${book.likes} likes`}>
             <Heart aria-hidden="true" className="size-3.5" /> <span className="tabular-nums">{compactNumber(book.likes)}</span>
             <span className="sr-only">{book.likes === 1 ? "like" : "likes"}</span>

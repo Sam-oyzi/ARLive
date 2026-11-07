@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 const STEPS = [
   { icon: PenLine, title: "Tell us about your child", text: "Their name, age and favourite things, and the lesson you have in mind." },
   { icon: Sparkles, title: "We write and illustrate it", text: "Our story team turns it into a picture book, with AR pages that pop out in 3D." },
-  { icon: BookHeart, title: "Read it together", text: "It appears in your account, ready to read on any screen or print at home." },
+  { icon: BookHeart, title: "Read it together", text: "It appears in your account, ready to read on any screen or to order as a printed book." },
 ];
 
 export default async function StoriesPage() {

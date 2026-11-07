@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { backCoverFor, requireReadableBook } from "@/lib/books";
 import { bookFormat } from "@/lib/book-format";
@@ -12,7 +12,7 @@ import { readStoryLayouts } from "@/lib/story-layout";
 import { readerHref, withReturnTo } from "@/lib/reader-navigation";
 import { PrintBook } from "./print-book";
 
-export const metadata: Metadata = { title: "Download" };
+export const metadata: Metadata = { title: "Print" };
 
 export default async function PrintPage({ params, searchParams }: {
   params: Promise<{ bookId: string }>;
@@ -20,6 +20,8 @@ export default async function PrintPage({ params, searchParams }: {
 }) {
   const user = await getCurrentUser();
   const { bookId } = await params;
+  // Print files are for admins preparing books to sell; everyone else buys the printed book.
+  if (user?.role !== "SUPER_ADMIN") redirect(`/basket?add=${encodeURIComponent(bookId)}`);
   const { lang } = await searchParams;
   const requestedLanguage = typeof lang === "string" ? lang : "";
   await requireReadableBook(user, bookId, `/print/${bookId}${requestedLanguage ? `?lang=${encodeURIComponent(requestedLanguage)}` : ""}`);
@@ -41,7 +43,8 @@ export default async function PrintPage({ params, searchParams }: {
       language={language}
       guideQrUrl={`${origin}${guidePath}`}
       // Admins print proofs; everyone else's print or PDF counts as a download.
-      countDownload={user?.role !== "SUPER_ADMIN"}
+      // Only admins print, to prepare copies for sale: that isn't a reader's download.
+      countDownload={false}
       format={{ label: format.label, widthMm: format.widthMm, heightMm: format.heightMm }}
       pages={book.targets.map((t, index) => {
         const translation = translations[index]?.[language];

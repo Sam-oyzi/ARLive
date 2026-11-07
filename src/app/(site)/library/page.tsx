@@ -60,7 +60,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
           <p className="text-sm font-semibold text-brand-600">Free for every family</p>
           <h1 className="mt-1 font-display text-4xl font-bold tracking-tight text-ink-900 sm:text-5xl">{active ? active.name : "The library"}</h1>
           <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-ink-600">
-            {active?.description ?? "Pick a story to read on any screen, download it to print at home, and scan its AR pages with a phone."}
+            {active?.description ?? "Pick a story to read on any screen, order it as a printed book, and scan its AR pages with a phone."}
           </p>
         </div>
         <form action="/library" className="flex w-full gap-2 lg:w-auto">

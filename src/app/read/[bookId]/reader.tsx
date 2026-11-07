@@ -11,7 +11,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Download,
   Languages,
   Lightbulb,
   Music,
@@ -21,6 +20,7 @@ import {
   ScanLine,
   Search,
   Settings2,
+  ShoppingBasket,
   TriangleAlert,
   Volume2,
 } from "lucide-react";
@@ -595,9 +595,10 @@ export function Reader({
             </Link>
           </>
         )}
-        {!editable && pages.length > 0 && !single && (
-          <Link href={printHref} className={cn(chip, "text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60")} title="Download or print this book">
-            <Download className="size-4" /> Download
+        {!editable && pages.length > 0 && (
+          // Readers buy the printed book (print files are for admins preparing copies to sell).
+          <Link href={`/basket?add=${book.id}`} className={cn(chip, "text-ink-700 ring-1 ring-ink-900/10 hover:bg-white/60")} title="Buy the printed book">
+            <ShoppingBasket className="size-4" /> <span className={cn(single && "sr-only")}>Buy</span>
           </Link>
         )}
 

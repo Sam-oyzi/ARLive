@@ -4,15 +4,15 @@
 // below, the others round the sides), so a phone gets every choice in one tap instead of a stack of
 // buttons. It works on any screen; phones also get a "Tap the book" hint, since that's where it matters.
 import Link from "next/link";
-import { BookOpen, Box, Camera, Download, Hand, MoreHorizontal } from "lucide-react";
+import { BookOpen, Box, Camera, Hand, MoreHorizontal, ShoppingBasket } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import styles from "./cover-actions.module.css";
 
-export type CoverAction = { key: "read" | "model" | "scan" | "download"; href: string; label: string };
+export type CoverAction = { key: "read" | "model" | "scan" | "buy"; href: string; label: string };
 
-const ICONS: Record<CoverAction["key"], typeof BookOpen> = { read: BookOpen, model: Box, scan: Camera, download: Download };
+const ICONS: Record<CoverAction["key"], typeof BookOpen> = { read: BookOpen, model: Box, scan: Camera, buy: ShoppingBasket };
 /** While the circles are out the cover steps back a little, to give them room on a narrow phone. */
 const OPEN_SCALE = 0.92;
 /** Anything on the page can open the circles (the "More" button under the description does). */

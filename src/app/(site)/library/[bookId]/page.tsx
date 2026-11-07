@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, BookOpen, Box, Camera, Download, FileText, Heart, Languages, Orbit, Printer, ScanLine, Sparkles, type LucideIcon } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Box, Camera, FileText, Heart, Languages, Orbit, Printer, ScanLine, ShoppingBasket, Sparkles, type LucideIcon } from "lucide-react";
 import { BookCover, BookGrid } from "@/components/library/book-card";
 import { RatingSummary } from "@/components/library/stars";
 import { Thumb } from "@/components/thumb";
@@ -79,7 +79,8 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
         ...(book.pages > 0 ? [{ key: "read" as const, href: `/read/${book.id}`, label: "Read now" }] : []),
         ...(modelPage ? [{ key: "model" as const, href: withReturnTo(`/place/${book.id}/${modelPage.id}`, `/library/${book.id}`), label: "Place a model" }] : []),
         ...(book.ar ? [{ key: "scan" as const, href: withReturnTo(`/scan/${book.id}`, `/library/${book.id}`), label: "Scan printed book" }] : []),
-        ...(book.pages > 0 ? [{ key: "download" as const, href: `/print/${book.id}`, label: "Download PDF" }] : []),
+        // Printed copies are ordered from the basket (print files are for admins preparing them).
+        ...(book.pages > 0 ? [{ key: "buy" as const, href: `/basket?add=${book.id}`, label: "Buy printed book" }] : []),
       ]
     : [];
   const secondary = actions.filter((action) => action.key !== "read");
@@ -186,8 +187,7 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
             </div>
           )}
 
-          <dl className="mt-8 grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
-            <Fact icon={Download} label="Downloads" value={compactNumber(book.downloads)} />
+          <dl className="mt-8 grid max-w-2xl grid-cols-3 gap-3">
             <Fact icon={Heart} label="Likes" value={compactNumber(book.likes)} />
             <Fact icon={FileText} label="Pages" value={String(book.pages)} />
             <Fact icon={ScanLine} label="AR pages" value={String(arPages)} />
@@ -261,8 +261,8 @@ export default async function BookPage({ params }: { params: Promise<{ bookId: s
   );
 }
 
-const ACTION_ICON: Record<CoverAction["key"], LucideIcon> = { read: BookOpen, model: Box, scan: Camera, download: Download };
-const SHORT_LABEL: Record<CoverAction["key"], string> = { read: "Read", model: "Place model", scan: "Scan book", download: "Download" };
+const ACTION_ICON: Record<CoverAction["key"], LucideIcon> = { read: BookOpen, model: Box, scan: Camera, buy: ShoppingBasket };
+const SHORT_LABEL: Record<CoverAction["key"], string> = { read: "Read", model: "Place model", scan: "Scan book", buy: "Buy" };
 
 function Experience({ kind, label, detail }: { kind: PaperBadgeKind; label: string; detail: string }) {
   return (
@@ -289,7 +289,7 @@ function PageBadge({ page }: { page: { ar: boolean; scanAction: string; worldUrl
   return <PaperBadge kind={kind} label={label} size="xs" tilt={2} className="absolute right-2 bottom-2" />;
 }
 
-function Fact({ icon: Icon, label, value }: { icon: typeof Download; label: string; value: string }) {
+function Fact({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-[#eadfca]">
       <dt className="flex items-center gap-1.5 text-xs font-medium text-ink-500">

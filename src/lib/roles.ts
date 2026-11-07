@@ -29,10 +29,12 @@ const AREAS: [prefix: string, roles: Role[]][] = [
   ["/school", ["SCHOOL_ADMIN"]],
   ["/learn", ["STUDENT"]],
   ["/account", ["PARENT"]],
+  // Print-ready files are for preparing books to sell; readers order printed copies from their basket.
+  ["/print", ["SUPER_ADMIN"]],
 ];
 
 /** Open to everyone: the library and its books. Each page still checks the book is one the viewer may open. */
-const PUBLIC_AREAS = ["/library", "/stories", "/read", "/scan", "/print", "/world"];
+const PUBLIC_AREAS = ["/library", "/stories", "/read", "/scan", "/world", "/basket"];
 
 function inArea(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);

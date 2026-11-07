@@ -29,7 +29,7 @@ const EXPERIENCES: Experience[] = [
     name: "Scan",
     badge: { label: "Scan printed book", icon: ScanLine, dark: true },
     title: "Scan the printed page",
-    text: "Print the book, then point a phone at a page marked AR. The phone recognises the page and its characters hop out of the paper in 3D.",
+    text: "Open the printed book, then point a phone at a page marked AR. The phone recognises the page and its characters hop out of the paper in 3D.",
     need: "The printed book and a phone camera",
     loop: 6000,
   },

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Library, Sparkles } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
+import { BasketLink } from "@/components/basket/basket-link";
 import { Logo } from "@/components/brand";
 import { ButtonLink } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
@@ -32,6 +33,7 @@ export async function SiteHeader() {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2">
+          <BasketLink />
           {user ? (
             <AccountMenu name={user.name} username={user.username} home={homeFor(user.role)} homeLabel={HOME_LABEL[user.role] ?? "My account"} />
           ) : (
@@ -65,7 +67,7 @@ export function SiteFooter() {
         <div>
           <Logo />
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-ink-500">
-            Free illustrated stories for kids. Read on any screen, print at home, and scan the pages to see them come alive.
+            Free illustrated stories for kids. Read on any screen, order printed books, and scan the pages to see them come alive.
           </p>
         </div>
         <div className="flex flex-col gap-2 text-sm">

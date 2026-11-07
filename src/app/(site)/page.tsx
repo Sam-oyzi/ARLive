@@ -127,7 +127,7 @@ export default async function Home() {
         <div className="mt-12 grid gap-5 md:grid-cols-3">
           {[
             { icon: Laptop, color: "bg-brand-500", title: "Read anywhere", text: "Open any book for free on a phone, tablet or laptop and turn the pages together at bedtime." },
-            { icon: Printer, color: "bg-sky-500", title: "Print at home", text: "Download a book as a PDF and print it, so little hands can hold a real book." },
+            { icon: Printer, color: "bg-sky-500", title: "Get the printed book", text: "Order printed copies for your school, shop or family, so little hands can hold a real book." },
             { icon: Camera, color: "bg-emerald-500", title: "Scan the AR pages", text: "Point a phone at a page marked AR and see the characters jump out in 3D." },
           ].map((step, i) => (
             <div key={step.title} className="relative rounded-[28px] bg-white p-7 shadow-soft ring-1 ring-[#eadfca]">
