@@ -23,8 +23,8 @@ export async function SiteHeader() {
   const user = await getCurrentUser();
   return (
     <header className="sticky top-0 z-40 border-b border-[#eadfca]/80 bg-[#fbf7ef]/85 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6">
-        <Logo />
+      <div className="mx-auto flex h-16 max-w-6xl items-center gap-2 px-4 sm:gap-3 sm:px-6">
+        <Logo className="gap-2 sm:gap-2.5" />
         <nav aria-label="Main" className="ml-2 hidden items-center gap-1 md:flex">
           {NAV.map((item) => (
             <Link key={item.href} href={item.href} className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-ink-600 transition hover:bg-white/70 hover:text-ink-900">
@@ -32,16 +32,16 @@ export async function SiteHeader() {
             </Link>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1 sm:gap-2">
           <BasketLink />
           {user ? (
             <AccountMenu name={user.name} username={user.username} home={homeFor(user.role)} homeLabel={HOME_LABEL[user.role] ?? "My account"} />
           ) : (
             <>
-              <ButtonLink href="/login" variant="ghost" size="sm">
+              <ButtonLink href="/login" variant="ghost" size="sm" className="px-2 sm:px-3">
                 Sign in
               </ButtonLink>
-              <ButtonLink href="/signup" size="sm">
+              <ButtonLink href="/signup" size="sm" className="px-2.5 sm:px-3">
                 Join free
               </ButtonLink>
             </>

@@ -38,7 +38,7 @@
   opacity: 0;
   background: linear-gradient(90deg, transparent, #7dd3fc, transparent);
   box-shadow: 0 0 14px 2px #38bdf8;
-  animation: scan-sweep 6s ease-in-out infinite;
+  animation: scan-sweep 7s ease-in-out infinite;
 }
 @keyframes scan-sweep {
   0% { top: 0; opacity: 0; }
@@ -53,7 +53,7 @@
   /* Widths come from the markup (one corner = two sides). */
   border-style: solid;
   border-color: #4ade80;
-  animation: corner-found 6s ease-in-out infinite;
+  animation: corner-found 7s ease-in-out infinite;
 }
 @keyframes corner-found {
   0%, 29% { border-color: rgb(255 255 255 / 0.85); scale: 1.08; }
@@ -61,7 +61,7 @@
   100% { border-color: rgb(255 255 255 / 0.85); scale: 1.08; }
 }
 .popUp {
-  animation: pop-up 6s cubic-bezier(0.3, 0.7, 0.3, 1) infinite;
+  animation: pop-up 7s cubic-bezier(0.3, 0.7, 0.3, 1) infinite;
 }
 @keyframes pop-up {
   0%, 33% { transform: translateY(55%) scale(0.15); opacity: 0; }
@@ -78,7 +78,7 @@
   50% { translate: 0 -6px; rotate: 2deg; }
 }
 .shadowGrow {
-  animation: shadow-grow 6s ease-out infinite;
+  animation: shadow-grow 7s ease-out infinite;
 }
 @keyframes shadow-grow {
   0%, 35% { scale: 0; opacity: 0; }
@@ -88,7 +88,7 @@
 .sparkle {
   position: absolute;
   opacity: 0;
-  animation: sparkle 6s ease-out infinite;
+  animation: sparkle 7s ease-out infinite;
 }
 @keyframes sparkle {
   0%, 40% { opacity: 0; scale: 0.2; }
@@ -97,12 +97,98 @@
   100% { opacity: 0; }
 }
 .chipIn {
-  animation: chip-in 6s ease-out infinite;
+  animation: chip-in 7s ease-out infinite;
 }
 @keyframes chip-in {
-  0%, 30% { opacity: 0; translate: 0 -6px; }
+  0%, 30% { opacity: 0; translate: 0 6px; }
   35%, 93% { opacity: 1; translate: 0 0; }
   100% { opacity: 0; }
+}
+.chipOut {
+  opacity: 0;
+  animation: chip-out 7s ease-out infinite;
+}
+@keyframes chip-out {
+  0%, 28% { opacity: 1; }
+  32%, 96% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* ...then the lion's roar in thick 3D letters... */
+.text3d {
+  color: #ffd166;
+  -webkit-text-stroke: 1px #7a4a07;
+  rotate: -9deg;
+  text-shadow:
+    1px 1px 0 #e0a92e,
+    2px 2px 0 #c98f1b,
+    3px 3px 0 #b57a10,
+    4px 4px 0 #9c650a,
+    5px 5px 0 #7d4f06,
+    6px 10px 12px rgb(0 0 0 / 0.45);
+}
+.textPop {
+  animation: text-pop 7s cubic-bezier(0.3, 0.7, 0.3, 1) infinite;
+}
+@keyframes text-pop {
+  0%, 44% { transform: translateY(40%) scale(0.2); opacity: 0; }
+  52% { transform: translateY(-10%) scale(1.15); opacity: 1; }
+  58%, 93% { transform: none; opacity: 1; }
+  100% { transform: none; opacity: 0; }
+}
+/* ...and a little video standing beside the page, playing. */
+.videoPop {
+  transform: perspective(500px) rotateY(-14deg);
+  transform-origin: 20% 100%;
+  animation: video-pop 7s cubic-bezier(0.3, 0.7, 0.3, 1) infinite;
+}
+@keyframes video-pop {
+  0%, 50% { transform: perspective(500px) rotateY(-30deg) scale(0.2); opacity: 0; }
+  60% { transform: perspective(500px) rotateY(-14deg) scale(1.06); opacity: 1; }
+  66%, 93% { transform: perspective(500px) rotateY(-14deg) scale(1); opacity: 1; }
+  100% { transform: perspective(500px) rotateY(-14deg) scale(1); opacity: 0; }
+}
+.videoPan {
+  animation: video-pan 7s linear infinite;
+}
+@keyframes video-pan {
+  from { translate: 0 0; }
+  to { translate: -45% 0; }
+}
+.videoProgress {
+  animation: video-progress 7s linear infinite;
+}
+@keyframes video-progress {
+  0%, 55% { scale: 0 1; }
+  93%, 100% { scale: 1 1; }
+}
+
+/* ---------- The badges, pinned round the phone like paper tags, each in its own spot ---------- */
+/* Phones: two above the phone and two below, staggered. */
+.badgeStage {
+  padding-block: 68px;
+}
+.spot-scan { top: 8px; left: 2px; }
+.spot-inside { top: 34px; right: 2px; }
+.spot-360 { bottom: 34px; left: 2px; }
+.spot-model { bottom: 8px; right: 2px; }
+/* Laptops: two either side, at different heights. */
+@media (min-width: 1024px) {
+  .badgeStage {
+    width: 620px;
+    padding-block: 0;
+  }
+  .spot-scan { top: 20%; left: 0; }
+  .spot-inside { top: 10%; right: 0; }
+  .spot-360 { top: auto; bottom: 24%; left: 28px; }
+  .spot-model { bottom: 14%; right: 16px; }
+}
+/* One by one, the first time the section is seen (back to their own look afterwards). */
+.badgeIn {
+  animation: badge-in 600ms cubic-bezier(0.3, 0.7, 0.3, 1.25) backwards;
+}
+@keyframes badge-in {
+  from { opacity: 0; translate: 0 16px; scale: 0.55; }
 }
 
 /* ---------- Room: a wall and a wooden floor, seen through the camera ---------- */

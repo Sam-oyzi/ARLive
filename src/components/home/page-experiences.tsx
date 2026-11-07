@@ -3,7 +3,7 @@
 // What the badges on a page mean (Scan, Step inside, 360° view, Place model), each acted out in a
 // little phone. The scenes are CSS only, drawn from the Sarra book's own art and 3D characters
 // (public/experiences), so the home page stays light. The badges match the ones in the reader.
-import { Box, Check, Compass, Hand, Orbit, ScanLine, Sparkles, type LucideIcon } from "lucide-react";
+import { Box, Check, Compass, Hand, Orbit, Play, ScanLine, Sparkles, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { PaperBadge, type PaperBadgeKind } from "@/components/paper-badge";
 import { cn } from "@/lib/utils";
@@ -29,9 +29,9 @@ const EXPERIENCES: Experience[] = [
     name: "Scan",
     badge: { label: "Scan printed book", icon: ScanLine, dark: true },
     title: "Scan the printed page",
-    text: "Open the printed book, then point a phone at a page marked AR. The phone recognises the page and its characters hop out of the paper in 3D.",
+    text: "Open the printed book, then point a phone at a page marked AR. The page wakes up: characters hop out in 3D, words pop up in big 3D letters and little videos play right beside it.",
     need: "The printed book and a phone camera",
-    loop: 6000,
+    loop: 7000,
   },
   {
     key: "inside",
@@ -69,7 +69,6 @@ export function PageExperiences() {
   const [auto, setAuto] = useState(true);
   const [inView, setInView] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
-  const tablist = useRef<HTMLDivElement>(null);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const id = useId();
   const experience = EXPERIENCES[active]!;
@@ -90,14 +89,11 @@ export function PageExperiences() {
     return () => window.clearTimeout(timer);
   }, [auto, inView, active, experience.loop]);
 
-  // On a phone the badges scroll sideways: keep the playing one in view, without moving the page.
+  // The badges arrive one by one the first time the section is seen.
+  const [seen, setSeen] = useState(false);
   useEffect(() => {
-    const list = tablist.current;
-    const tab = tabs.current[active];
-    if (!list || !tab || list.scrollWidth <= list.clientWidth) return;
-    const offset = tab.getBoundingClientRect().left - list.getBoundingClientRect().left;
-    list.scrollBy({ left: offset - (list.clientWidth - tab.offsetWidth) / 2, behavior: "smooth" });
-  }, [active]);
+    if (inView) setSeen(true);
+  }, [inView]);
 
   const pick = useCallback((index: number, focus = false) => {
     setAuto(false);
@@ -123,68 +119,62 @@ export function PageExperiences() {
           </p>
         </div>
 
-        {/* Phones: badges, then the scene, then what it means. Laptops: badges and words beside the scene. */}
-        <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_auto] lg:gap-x-16 lg:gap-y-8">
-          <div className="min-w-0 lg:col-start-1 lg:row-start-1 lg:self-end">
-            <div
-              ref={tablist}
-              role="tablist"
-              aria-label="Page experiences"
-              className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none sm:mx-0 sm:flex-wrap sm:justify-center sm:px-0 lg:flex-col lg:gap-3"
-              onKeyDown={(event) => {
-                if (event.key !== "ArrowRight" && event.key !== "ArrowLeft" && event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-                event.preventDefault();
-                const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
-                pick((active + step + EXPERIENCES.length) % EXPERIENCES.length, true);
-              }}
-            >
-              {EXPERIENCES.map((item, index) => {
-                const selected = index === active;
-                return (
-                  <button
-                    key={item.key}
-                    ref={(el) => { tabs.current[index] = el; }}
-                    type="button"
-                    role="tab"
-                    id={`${id}-tab-${item.key}`}
-                    aria-selected={selected}
-                    aria-controls={`${id}-panel`}
-                    tabIndex={selected ? 0 : -1}
-                    onClick={() => pick(index)}
-                    className={cn(
-                      "group relative shrink-0 overflow-hidden rounded-2xl text-left ring-1 transition lg:w-full",
-                      selected ? "bg-white text-ink-900 ring-white" : "bg-white/[0.06] text-white ring-white/10 hover:bg-white/10",
-                    )}
-                  >
-                    <span className="flex items-center gap-3 px-3.5 py-3 lg:px-4 lg:py-4">
-                      <span className="flex shrink-0 lg:w-[172px]">
-                        <PaperBadge kind={BADGE_KIND[item.key]} label={item.badge.label} tilt={index % 2 ? 1.5 : -1.5} />
-                      </span>
-                      <span className="hidden min-w-0 lg:block">
-                        <span className="block font-display text-[17px] font-bold">{item.title}</span>
-                        <span className={cn("block truncate text-sm", selected ? "text-ink-500" : "text-white/60")}>{item.need}</span>
-                      </span>
-                    </span>
-                    {/* How long until the next scene, while the showcase plays by itself. */}
-                    {selected && auto && inView && (
-                      <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-0.5 bg-ink-900/10">
-                        <span key={active} className="block h-full origin-left animate-auto-read bg-brand-500 motion-reduce:hidden" style={{ animationDuration: `${item.loop}ms` }} />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+        {/* The phone plays one experience at a time; its badges are pinned round it like paper tags, each
+            in its own spot. Phones: badges above and below the phone, then what it means. Laptops: the
+            words beside it. */}
+        <div className="mt-10 grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-16">
+          <div
+            role="tablist"
+            aria-label="Page experiences"
+            className={cn(styles.badgeStage, "relative mx-auto w-full max-w-[380px] lg:col-start-2 lg:row-start-1 lg:max-w-none")}
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowRight" && event.key !== "ArrowLeft" && event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+              event.preventDefault();
+              const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
+              pick((active + step + EXPERIENCES.length) % EXPERIENCES.length, true);
+            }}
+          >
+            <div ref={stage} data-paused={!inView} className={cn(styles.stage, "relative mx-auto w-fit")} aria-hidden="true">
+              <Phone sway={experience.key === "360"}>
+                {/* Keyed so each scene starts from its beginning when it's picked. */}
+                <Scene key={experience.key} kind={experience.key} />
+              </Phone>
             </div>
+            {EXPERIENCES.map((item, index) => {
+              const selected = index === active;
+              return (
+                <button
+                  key={item.key}
+                  ref={(el) => { tabs.current[index] = el; }}
+                  type="button"
+                  role="tab"
+                  id={`${id}-tab-${item.key}`}
+                  aria-selected={selected}
+                  aria-controls={`${id}-panel`}
+                  tabIndex={selected ? 0 : -1}
+                  onClick={() => pick(index)}
+                  className={cn(
+                    styles.badgeSpot,
+                    styles[`spot-${item.key}`],
+                    seen ? styles.badgeIn : "opacity-0",
+                    "absolute z-10 rounded-xl outline-offset-4 transition-[opacity,scale,filter] duration-300",
+                    selected ? "scale-110 drop-shadow-[0_10px_18px_rgb(0_0_0/0.45)]" : "scale-90 opacity-75 hover:opacity-100",
+                  )}
+                  style={{ animationDelay: `${index * 180}ms` }}
+                >
+                  <PaperBadge kind={BADGE_KIND[item.key]} label={item.badge.label} size="lg" tilt={index % 2 ? 3 : -3} />
+                  {/* How long until the next scene, while the showcase plays by itself. */}
+                  {selected && auto && inView && (
+                    <span aria-hidden="true" className="absolute inset-x-2 -bottom-2.5 h-[3px] overflow-hidden rounded-full bg-white/15">
+                      <span key={active} className="block h-full origin-left animate-auto-read rounded-full bg-amber-300 motion-reduce:hidden" style={{ animationDuration: `${item.loop}ms` }} />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
-          <div ref={stage} data-paused={!inView} className={cn(styles.stage, "mx-auto lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-center")} aria-hidden="true">
-            <Phone sway={experience.key === "360"}>
-              {/* Keyed so each scene starts from its beginning when it's picked. */}
-              <Scene key={experience.key} kind={experience.key} />
-            </Phone>
-          </div>
-
-          <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-tab-${experience.key}`} className="text-center sm:mx-auto sm:max-w-xl lg:col-start-1 lg:row-start-2 lg:mx-0 lg:self-start lg:text-left">
+          <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-tab-${experience.key}`} className="text-center sm:mx-auto sm:max-w-xl lg:col-start-1 lg:row-start-1 lg:mx-0 lg:text-left">
             <h3 className="font-display text-2xl font-bold">{experience.title}</h3>
             <p className="mt-2 text-[17px] leading-relaxed text-pretty text-white/75">{experience.text}</p>
             <p className="mt-4 text-sm font-semibold text-amber-200">
@@ -247,22 +237,40 @@ function ScanScene() {
         <span className={cn(styles.corner, corner, "-bottom-2 -left-2 rounded-bl-lg border-t-0 border-r-0")} />
         <span className={cn(styles.corner, corner, "-right-2 -bottom-2 rounded-br-lg border-t-0 border-l-0")} />
       </div>
-      {/* the lion, out of the page */}
-      <div className={cn("absolute top-[45%] left-1/2 h-[7%] w-[42%] -translate-x-1/2 rounded-[50%] bg-black/45 blur-md", styles.shadowGrow)} />
-      <div className="absolute inset-x-0 top-[17%] flex justify-center">
+      {/* Three kinds of AR on one page: a 3D character, 3D words and a video. First the lion... */}
+      <div className={cn("absolute top-[45%] left-[37%] h-[7%] w-[42%] -translate-x-1/2 rounded-[50%] bg-black/45 blur-md", styles.shadowGrow)} />
+      <div className="absolute top-[19%] left-[37%] -translate-x-1/2">
         <div className={styles.bob}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`${ART}/lion-front.webp`} alt="" width={234} height={284} className={cn("w-[112px] drop-shadow-[0_10px_14px_rgb(0_0_0/0.35)]", styles.popUp)} />
+          <img src={`${ART}/lion-front.webp`} alt="" width={234} height={284} className={cn("w-[104px] drop-shadow-[0_10px_14px_rgb(0_0_0/0.35)]", styles.popUp)} />
+        </div>
+      </div>
+      {/* ...then its roar in thick 3D letters... */}
+      <div className={cn("absolute top-[10%] left-[7%]", styles.textPop)}>
+        <span className={cn("block font-display text-[30px] leading-none font-black tracking-tight", styles.text3d)}>Roar!</span>
+      </div>
+      {/* ...and a little video playing beside the page. */}
+      <div className={cn("absolute top-[30%] right-[4%] w-[36%]", styles.videoPop)}>
+        <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-ink-900 shadow-[0_14px_24px_-8px_rgb(0_0_0/0.6)] ring-2 ring-white/85">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`${ART}/world-forest.webp`} alt="" width={1600} height={560} className={cn("h-full w-auto max-w-none", styles.videoPan)} />
+          <span className="absolute top-1 left-1 grid size-4 place-items-center rounded-full bg-black/55">
+            <Play className="size-2 text-white" fill="currentColor" />
+          </span>
+          <span className="absolute inset-x-1.5 bottom-1.5 h-[3px] overflow-hidden rounded-full bg-white/35">
+            <span className={cn("block h-full origin-left rounded-full bg-white", styles.videoProgress)} />
+          </span>
         </div>
       </div>
       <Star className="top-[18%] left-[22%]" delay={0} />
       <Star className="top-[14%] right-[20%]" delay={0.25} />
       <Star className="top-[34%] right-[16%]" delay={0.45} />
-      <Chip top className={styles.chipIn}>
-        <Check className="size-3.5 text-green-400" /> AR page found
-      </Chip>
-      <Chip>
+      {/* One label at the bottom, so the top of the screen is free for the 3D words. */}
+      <Chip className={styles.chipOut}>
         <ScanLine className="size-3.5" /> Point at a page marked AR
+      </Chip>
+      <Chip className={styles.chipIn}>
+        <Check className="size-3.5 text-green-400" /> AR page found
       </Chip>
     </div>
   );

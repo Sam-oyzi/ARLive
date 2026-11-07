@@ -28,6 +28,7 @@ const SIZES = {
   xs: { front: "gap-0.5 py-px pr-1.5 pl-px", dot: "size-3.5", icon: "size-2", text: "text-[9px]", lift: 1.5 },
   sm: { front: "gap-1 py-px pr-1.5 pl-px", dot: "size-4", icon: "size-2.5", text: "text-[10.5px]", lift: 2 },
   md: { front: "gap-1.5 py-0.5 pr-2 pl-0.5", dot: "size-5", icon: "size-3", text: "text-[12px]", lift: 2 },
+  lg: { front: "gap-2 py-1 pr-3 pl-1", dot: "size-7", icon: "size-4", text: "text-[15px]", lift: 3 },
 } as const;
 
 export function PaperBadge({

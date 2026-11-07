@@ -13,7 +13,7 @@ export function BasketLink({ className }: { className?: string }) {
     <Link
       href="/basket"
       aria-label={copies ? `Basket, ${copies} printed ${copies === 1 ? "book" : "books"}` : "Basket"}
-      className={cn("relative grid size-10 place-items-center rounded-xl text-ink-600 transition hover:bg-white/70 hover:text-ink-900", className)}
+      className={cn("relative grid size-9 shrink-0 place-items-center rounded-xl sm:size-10 text-ink-600 transition hover:bg-white/70 hover:text-ink-900", className)}
     >
       <ShoppingBasket aria-hidden="true" className="size-5" />
       {copies > 0 && (
