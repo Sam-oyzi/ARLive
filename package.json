@@ -23,7 +23,8 @@
     "dev:worker": "prisma generate --generator workerClient && vite dev --port 3001",
     "build:worker": "prisma generate --generator workerClient && vite build",
     "preview:worker": "vite preview",
-    "deploy:worker": "npm run build:worker && node scripts/cloudflare-run.mjs cf deploy --prebuilt",
+    "db:migrate:cloud": "node scripts/cloudflare-run.mjs wrangler d1 migrations apply pagewakes-db --remote --config cloudflare/wrangler.jsonc",
+    "deploy:worker": "npm run build:worker && npm run db:migrate:cloud && node scripts/cloudflare-run.mjs cf deploy --prebuilt",
     "typecheck:worker": "tsc --noEmit -p tsconfig.worker.json"
   },
   "prisma": {

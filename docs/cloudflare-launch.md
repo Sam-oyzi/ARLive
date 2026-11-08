@@ -38,9 +38,13 @@ Use Node 24.22 or later within the supported engines range in package.json.
 1. Run `npm ci`, then `npx wrangler login` and sign in to the account owning the domain.
 2. Run `npm run build:worker`. This generates the Worker-specific Prisma client and Cloudflare types.
 3. Run `npm run typecheck` and `npm run typecheck:worker`, then `npm test`.
-4. Run `node scripts/cloudflare-run.mjs cf deploy --prebuilt`.
+4. Run `npm run db:migrate:cloud` to apply new files in `cloudflare/migrations/` to D1.
+5. Run `node scripts/cloudflare-run.mjs cf deploy --prebuilt`.
 
-`npm run deploy:worker` combines the build and deployment steps. The launcher reuses the existing
+`npm run deploy:worker` combines the build, migration and deployment steps. Migrations run before
+the new code goes live, so keep them additive (new tables, or columns with a default). A schema
+change in `prisma/schema.prisma` needs a matching numbered file in `cloudflare/migrations/`, or the
+live site fails with `no such column`. The launcher reuses the existing
 Wrangler OAuth login, or `CLOUDFLARE_API_TOKEN` in CI. It never prints authentication tokens.
 Existing Worker secrets are retained during deployment.
 
@@ -55,7 +59,8 @@ an empty schema and dedicated bucket. Keep exported files in the ignored `output
 because they contain account records, password hashes and family requests.
 
 1. Run `node scripts/export-cloudflare.mjs prisma/dev.db output/new-import`.
-2. Apply `cloudflare/migrations/0001_initial.sql` to the new empty D1 database with Wrangler.
+2. Run `npm run db:migrate:cloud` on the new empty D1 database. It applies every file in
+   `cloudflare/migrations/` and records it in `d1_migrations`, so later deploys only run new files.
 3. Import `output/new-import/data.sql` using `wrangler d1 execute --remote --file`.
 4. Run `node scripts/import-r2-worker.mjs output/new-import/media.json --apply`. It verifies source
    hashes, refuses differing existing objects, resumes matching imports, and downloads every
