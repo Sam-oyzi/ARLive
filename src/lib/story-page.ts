@@ -492,6 +492,20 @@ export function freeCorner(words: WordBox[] | undefined, side: "left" | "right",
   return hits(prefer) && !hits(other) ? other : prefer;
 }
 
+/**
+ * How high a badge in a page's bottom corner sits (share of the page height from the bottom edge) so it
+ * stays clear of the words drawn there: 0 when that corner is free, null when the words fill the lower
+ * half and the badge belongs in the top corner instead.
+ */
+export function bottomBadgeLift(words: WordBox[] | undefined, side: "left" | "right"): number | null {
+  const [left, right] = side === "left" ? [0, 0.42] : [0.58, 1];
+  // A small badge reaches about an eighth of the way up a phone page.
+  const tops = (words ?? []).filter((w) => w.left < right && w.right > left && w.bottom > 0.86).map((w) => w.top);
+  if (tops.length === 0) return 0;
+  const lift = 1 - Math.min(...tops);
+  return lift > 0.5 ? null : lift;
+}
+
 // Pages already drawn for the reader, by what went into them. The URLs live as long as the page does,
 // so turning back or switching language back is instant.
 const drawn = new Map<string, Promise<StoryPage | null>>();

@@ -33,7 +33,7 @@ import { worldExperienceOf, opensModel, type ScanAction } from "@/lib/scan-actio
 import type { PageTranslations } from "@/lib/page-translations";
 import { storyBlockText, type StoryBlock } from "@/lib/story-layout";
 import { nativeLanguageName, readerWords } from "@/lib/reader-words";
-import { composeStoryPageCached, freeCorner, whenIdle, type StoryPage } from "@/lib/story-page";
+import { bottomBadgeLift, composeStoryPageCached, freeCorner, whenIdle, type StoryPage } from "@/lib/story-page";
 import { plainStory, type TextPosition } from "@/lib/story-text";
 import { isReadingSpeed, READING_SPEED_LABEL, readingSeconds, type ReadingSpeed } from "@/lib/reading-time";
 import { stopSoundGroup, usePageSounds } from "@/lib/page-sound";
@@ -712,8 +712,11 @@ export function Reader({
               const page = pages[index]!;
               const ar = isAr(page);
               const words = composed[page.id]?.words;
-              // Badges sit in a top corner, or a bottom one when the words drawn on the page are up there.
+              // The language chip sits in a top corner, or a bottom one when the words drawn on the page are up there.
               const at = (edge: "left" | "right") => cn(edge === "left" ? "left-3" : "right-3", freeCorner(words, edge) === "top" ? "top-3" : "bottom-3");
+              // The experience badge sits in the bottom outer corner (bottom right on a phone), as on the book's
+              // page list, just above the words when they reach that corner.
+              const lift = bottomBadgeLift(words, side);
               const experience = worldExperienceOf(page.scanAction, page.worldUrl);
               const returnTo = readerHref(book.id, page.id, locale);
               const badge = opensModel(page.scanAction) && page.hasModel ? (
@@ -733,7 +736,14 @@ export function Reader({
               const other = side === "left" ? "right" : "left";
               return (
                 <>
-                  {badge && <div className={cn("absolute flex flex-col gap-1.5", at(side), side === "left" ? "items-start" : "items-end")}>{badge}</div>}
+                  {badge && (
+                    <div
+                      className={cn("absolute flex flex-col gap-1.5", side === "left" ? "left-3 items-start" : "right-3 items-end", lift === null ? "top-3" : lift === 0 && "bottom-3")}
+                      style={lift ? { bottom: `calc(${(lift * 100).toFixed(1)}% + 0.5rem)` } : undefined}
+                    >
+                      {badge}
+                    </div>
+                  )}
                   {single && languages.length > 0 && (
                     <LanguageMenu
                       locale={locale}
