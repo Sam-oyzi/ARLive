@@ -6,7 +6,9 @@ import { Logo } from "@/components/brand";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/client";
 
-export default function ErrorPage({ error, retry }: { error: unknown; retry: () => void }) {
+// Next.js 16 hands error pages `retry`. vinext, which serves pagewakes.com, only hands them `reset`, which
+// re-renders the same failed server response, so there a reload is the real retry.
+export default function ErrorPage({ error, retry }: { error: unknown; retry?: () => void }) {
   const { t } = useI18n();
   useEffect(() => {
     console.error(error);
@@ -23,7 +25,7 @@ export default function ErrorPage({ error, retry }: { error: unknown; retry: () 
         <p className="mt-2 text-ink-500">{t.errors.text}</p>
       </div>
       <div className="flex gap-3">
-        <Button onClick={() => retry()}>{t.common.tryAgain}</Button>
+        <Button onClick={() => (retry ?? (() => window.location.reload()))()}>{t.common.tryAgain}</Button>
         <ButtonLink href="/" variant="outline">
           {t.common.backHome}
         </ButtonLink>
